@@ -1,0 +1,23 @@
+[project]
+name = "far_comms"
+version = "0.1.0"
+description = "far_comms using crewAI"
+authors = [
+    { name = "ChengCheng Tan", email = "chengcheng@far.ai" },
+]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "crewai[tools]>=0.28.8",
+    "fastapi",
+    "uvicorn[standard]",
+]
+
+[project.scripts]
+far_comms = "far_comms.main:run"
+run_crew = "far_comms.main:run"
+
+[build-system]
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"

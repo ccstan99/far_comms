@@ -1,0 +1,202 @@
+generate_summary_task:
+  description: >
+    Carefully summarize {speaker}'s talk, preserving the speaker’s natural words, structure, flow, and emphasis.
+    ===
+    transcript: 
+    {transcript}
+    ===
+    Your summary should:
+    - Be a rich, 3-5 sentence paragraph
+    - Reflect the speaker’s organization (e.g., 3-part method, multiple papers, core themes)
+    - Highlight key findings, examples, and surprising or provocative claims
+    - Use clear, accessible language with academic accuracy
+    - Preserve the speaker’s voice and tone
+
+    Also:
+    - Propose 5 strong hook options
+    - Each hook must be a **complete sentence**, not a phrase or title
+    - Use sentence case (not Title Case)
+    - Hooks should be surprising, specific, and reflect the speaker’s voice
+    - Avoid vague or hyped language (e.g., "exciting", "groundbreaking")
+    - Briefly explain why each hook might resonate with a professional audience
+  expected_output: >
+    - A faithful, detailed 3-5 sentence paragraph summarizing the talk
+    - 5 complete-sentence hook options, each with a short justification
+  inputs:
+  agent: summarizer_agent
+
+generate_linkedin_post_task:
+  description: >
+    Based on the transcript from {speaker}'s talk, create a LinkedIn post that follows the structure and tone outlined below.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_LI: 
+    {style_LI}
+    ===
+    transcript: 
+    {transcript}
+    ===
+    Your output must:
+    - Choose the best hook and explain why
+    - Build a LinkedIn post with:
+      - Hook
+      - One summary paragraph
+      - 3–4 🔹 bullets
+      - CTA
+    - 1st comment:
+      - ▶️ Watch the recording: {video_url}
+      - 📄 Read the paper: {paper_url}
+    - Score using the rubric
+    - Revise if score < 14
+
+    - Avoid:
+      - Repeating full summary verbatim in the post
+      - Passive voice or hedging language (“might suggest”, “perhaps implies”)
+  expected_output: >
+    LinkedIn post + rubric score + accuracy check + final revision if needed.
+  context: ["generate_summary_task"]
+  agent: li_writer_agent
+
+generate_twitter_thread_task:
+  description: >
+    Write a 2-tweet Twitter/Bluesky thread based on {speaker}’s talk.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_X: 
+    {style_X}
+    ===
+    transcript: 
+    {transcript}
+    ===
+    Your output must:
+    - Select the best hook and explain why
+    - Write:
+      - Tweet 1: hook + compressed findings + 👇
+      - Tweet 2: ▶️ {event_name} recording + 📄 Paper link
+    - Score using the rubric
+    - Revise if score < 14
+
+    Avoid:
+    - Repeating the summary exactly
+    - Oversimplifying or hyping the content
+
+  expected_output: >
+    Final Twitter/Bluesky thread + rubric evaluation + revision if needed.
+  context: ["generate_summary_task"]
+  agent: twitter_writer_agent
+
+fact_check_comms_task:
+  description: >
+    Review the LinkedIn and Twitter posts for fidelity to {speaker}’s talk.
+    ===
+    transcript: 
+    {transcript}
+    ===
+    You must:
+    - Compare each post to the actual transcript
+    - Ensure tone, claims, and structure align with the speaker’s intent
+    - Flag anything exaggerated, misleading, or off-tone
+    - Suggest edits as needed
+    - Give each post a “speaker would reshare” confidence score (out of 5)
+
+    ✅ Say “Ready to share” if posts are accurate and compelling
+
+  expected_output: >
+    - Fidelity issues or confirmation
+    - Suggested rewrites (if needed)
+    - Reshare confidence scores for each post
+  context: ["generate_linkedin_post_task", "generate_twitter_thread_task"]
+  agent: fact_checker_agent
+
+tighten_linkedin_post_task:
+  description: >
+    Edit the LinkedIn post for clarity, conciseness, and tone.
+    Your goal is to improve fluency and punch while maintaining research accuracy and the speaker’s voice.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_LI: 
+    {style_LI}
+    ===
+    Your output must:
+    - Sharpen language without exaggeration
+    - Preserve the speaker’s meaning
+    - Tighten any rambling, exaggeration, awkwardness or wordy phrasing
+    Avoid:
+    - Adding new claims or interpretations
+    - Rewriting for flair at the expense of clarity
+    - Over-formalizing or diluting the tone
+  context: ["generate_linkedin_post_task"]
+  expected_output: >
+    Revised LinkedIn post text with changes clearly applied (or rationale if no changes needed).
+  agent: editor_agent
+
+tighten_twitter_thread_task:
+  description: >
+    Edit the Twitter thread for clarity, tone, and compression.
+    Keep Tweet 1 punchy but grounded; Tweet 2 informative and clean.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_X: 
+    {style_X}
+    ===
+    Your output must:
+    - Remove filler or vague phrases
+    - Improve rhythm and word economy
+    - Retain all factual accuracy and nuance
+    Avoid:
+    - Adding new claims or interpretations
+    - Rewriting for flair at the expense of clarity
+    - Over-formalizing or diluting the tone
+  expected_output: >
+    Revised thread + rationale for key changes
+  context: ["generate_twitter_thread_task"]
+  agent: editor_agent
+
+qa_review_task:
+  description: >
+    Review the LinkedIn and Twitter outputs for tone, clarity, and adherence to the relevant style guides.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_LI: 
+    {style_LI}
+    ===
+    style_X: 
+    {style_X}
+    ===
+    transcript: 
+    {transcript}
+    ===
+    You must:
+    - Score each using the 14-point rubric
+    - Check these 6 compliance items:
+      - Event mentioned only once (CTA only) ✓/✗
+      - No hashtags ✓/✗
+      - Only allowed emojis in allowed places ✓/✗
+      - Each bullet ≤ 10 words ✓/✗
+      - No vague/fluffy hook terms ✓/✗
+      - Final voice: Clear, sharp, grounded ✓/✗
+    - If score < 14:
+      - Include revision notes
+      - Clearly indicate which agent should revise (e.g., writer, fact checker, editor)
+ 
+  expected_output: >
+    {
+      "summary": Summary paragraph,
+      "hooks": 5 hooks,
+      "linkedin_post": Final LinkedIn text,
+      "twitter_thread": Final Twitter thread,
+      "eval_notes": Rubric breakdown and checklist with 6 compliance items with revision notes
+    }
+  context: ["tighten_linkedin_post_task", "tighten_twitter_thread_task"]
+  output_file: "{speaker}_final.json"
+  agent: qa_agent
