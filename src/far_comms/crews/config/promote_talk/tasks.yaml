@@ -198,5 +198,5 @@ qa_review_task:
       "eval_notes": Rubric breakdown and checklist with 6 compliance items with revision notes
     }
   context: ["tighten_linkedin_post_task", "tighten_twitter_thread_task"]
-  output_file: "{speaker}_final.json"
+  output_file: "output/{speaker}_final.json"
   agent: qa_agent
