@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from far_comms.crews.promote_talk_crew import FarCommsCrew
 import uvicorn
 import os
@@ -25,7 +25,7 @@ And let me know if I did a good job in persuading you that AI driven persuasion 
 
 @app.get("/")
 def home():
-    return "welcome to FAR.AI comms automations API"
+    return RedirectResponse(url="/docs")
 
 @app.post("/promote_talk")
 async def kickoff_crew(request: Request):
@@ -50,6 +50,7 @@ async def kickoff_crew(request: Request):
     crew_result = FarCommsCrew().crew().kickoff(inputs=data)
     return {"result": crew_result}
 
+@app.get("/test")
 def run():
     # Replace with your inputs, it will automatically interpolate any tasks and agents information
     inputs = {
