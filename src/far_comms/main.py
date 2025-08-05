@@ -3,10 +3,26 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from far_comms.crews.promote_talk_crew import FarCommsCrew
+from pydantic import BaseModel, HttpUrl
 import uvicorn
 import os
+from dotenv import load_dotenv
 
 from pathlib import Path
+
+# Load environment variables from .env file
+load_dotenv()
+
+class PromoteTalkRequest(BaseModel):
+    transcript: str
+    speaker: str
+    video_url: HttpUrl
+    paper_url: HttpUrl
+    event_name: str
+    affiliation: str | None = None
+    style_LI: str | None = None
+    style_X: str | None = None
+    style_shared: str | None = None
 
 app = FastAPI()
 
@@ -28,29 +44,64 @@ def home():
     return RedirectResponse(url="/docs")
 
 @app.post("/promote_talk")
-async def kickoff_crew(request: Request):
-    data = await request.json()
-
-    # Required fields — minimal validation
-    required = ["transcript", "speaker", "video_url", "paper_url", "event_name"]
-    missing = [f for f in required if f not in data]
-    if missing:
-        return JSONResponse(
-            status_code=422,
-            content={"error": f"Missing required fields: {', '.join(missing)}"}
-        )
+async def kickoff_crew(request: PromoteTalkRequest, include_raw: bool = False):
+    # Convert to dict for crew input, converting URLs to strings
+    data = request.model_dump()
+    data["video_url"] = str(data["video_url"])
+    data["paper_url"] = str(data["paper_url"])
 
     # Add markdown styles if not present
-    style_dir = Path(__file__).parent.parent / "docs"
-    data.setdefault("style_LI", (style_dir / "style_LI.md").read_text())
-    data.setdefault("style_X", (style_dir / "style_X.md").read_text())
-    data.setdefault("style_shared", (style_dir / "style_shared.md").read_text())
+    # Find project root by looking for pyproject.toml
+    project_dir = Path(__file__).parent
+    while project_dir != project_dir.parent and not (project_dir / "pyproject.toml").exists():
+        project_dir = project_dir.parent
+    docs_dir = project_dir / "docs"
+    if not data.get("style_LI"):
+        data["style_LI"] = (docs_dir / "style_LI.md").read_text()
+    if not data.get("style_X"):
+        data["style_X"] = (docs_dir / "style_X.md").read_text()
+    if not data.get("style_shared"):
+        data["style_shared"] = (docs_dir / "style_shared.md").read_text()
 
     # Kickoff crew
+    distribute_inputs=True
     crew_result = FarCommsCrew().crew().kickoff(inputs=data)
-    return {"result": crew_result}
+    
+    # Try to read the output file and extract final JSON
+    output_file = None
+    final_json = None
+    
+    try:
+        import json
+        # Try to read the output file
+        output_path = project_dir / "output" / f"{data['speaker']}_final.json"
+        if output_path.exists():
+            final_json = json.loads(output_path.read_text())
+            output_file = str(output_path)
+        else:
+            # Fallback: extract from last task
+            final_task = crew_result.tasks_output[-1]
+            if hasattr(final_task, 'raw'):
+                raw_output = final_task.raw
+                if raw_output.startswith('{') and raw_output.endswith('}'):
+                    final_json = json.loads(raw_output)
+    except Exception as e:
+        print(f"Error extracting final JSON: {e}")
+    
+    # Return structured response
+    response = {
+        "final_output": final_json,
+        "execution_details": {
+            "token_usage": crew_result.token_usage if hasattr(crew_result, 'token_usage') else None,
+            "tasks_completed": len(crew_result.tasks_output) if hasattr(crew_result, 'tasks_output') else 0
+        }
+    }
+    
+    if include_raw:
+        response["raw_crew_result"] = crew_result
+    
+    return response
 
-@app.get("/test")
 def run():
     # Replace with your inputs, it will automatically interpolate any tasks and agents information
     inputs = {
