@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import requests
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from far_comms.crews.promote_talk_crew import FarCommsCrew
@@ -12,6 +13,7 @@ from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
+coda_headers = {'Authorization': f'Bearer {os.getenv("CODA_API_TOKEN")}'}
 
 class PromoteTalkRequest(BaseModel):
     transcript: str
@@ -101,6 +103,58 @@ async def kickoff_crew(request: PromoteTalkRequest, include_raw: bool = False):
         response["raw_crew_result"] = crew_result
     
     return response
+
+@app.get("/test-coda")
+async def test_coda_get(
+    thisRow: str = None,
+    docId: str = None,
+    speaker: str = None
+):
+    print("=== CODA GET REQUEST ===")
+    print(f"thisRow: {thisRow}")
+    print(f"docId: {docId}")
+    print(f"speaker: {speaker}")
+    tableId, rowId = thisRow.split('/')
+
+    # docUrl = 'https://coda.io/d/_dJv4r8SGAJp#_tuUB2/r2'
+    # thisRow = 'grid-LcVoQIcUB2/i-aUPxnb_Ycn'
+    # docId = 'Jv4r8SGAJp'
+    # tableId = 'grid-LcVoQIcUB2'
+    # rowId = 'i-aUPxnb_Ycn'
+
+    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
+    res = requests.get(uri, headers=coda_headers).json()
+
+    print(f'Row {res["name"]} has {res["values"]}')
+    # print(f'Table {res["name"]} has {res["rowCount"]} rows')
+
+    return {
+        "status": "GET received", 
+        "thisRow": thisRow,
+        "docId": docId,
+        "speaker": speaker
+    }
+
+@app.post("/test-coda")
+async def test_coda_data(request: Request):
+    # Get raw body
+    body = await request.body()
+
+    # Get headers
+    headers = dict(request.headers)
+
+    # Log everything
+    print("=== CODA DATA ===")
+    print("Headers:", headers)
+    print("Body:", body.decode())
+
+    try:
+        json_data = await request.json()
+        print("JSON:", json_data)
+    except:
+        print("Not valid JSON")
+
+    return {"status": "received", "data_logged": True}
 
 def run():
     # Replace with your inputs, it will automatically interpolate any tasks and agents information
