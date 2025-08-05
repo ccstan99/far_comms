@@ -1,4 +1,4 @@
-from crewai import Agent, Crew, Process, Task
+from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
 
 @CrewBase
@@ -6,12 +6,19 @@ class FarCommsCrew():
   """Crew to generate summary + social content for FAR.AI event talks"""
   agents_config = 'config/promote_talk/agents.yaml'
   tasks_config = 'config/promote_talk/tasks.yaml'
+  
+  def __init__(self):
+    self.llm = LLM(
+      model="anthropic/claude-opus-4-20250514",
+      max_retries=3
+    )
 
   # Agents
   @agent
   def summarizer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['summarizer_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=False
     )
@@ -20,6 +27,7 @@ class FarCommsCrew():
   def li_writer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['li_writer_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=False
     )
@@ -28,6 +36,7 @@ class FarCommsCrew():
   def twitter_writer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['twitter_writer_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=False
     )
@@ -36,6 +45,7 @@ class FarCommsCrew():
   def fact_checker_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['fact_checker_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=False
     )
@@ -44,6 +54,7 @@ class FarCommsCrew():
   def editor_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['editor_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=False
     )
@@ -52,6 +63,7 @@ class FarCommsCrew():
   def qa_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['qa_agent'],
+      llm=self.llm,
       verbose=True,
       allow_delegation=True
     )
