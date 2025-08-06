@@ -10,6 +10,7 @@ import os
 import json
 from dotenv import load_dotenv
 from pathlib import Path
+from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -42,22 +43,34 @@ async def get_column_names(docId: str, tableId: str) -> dict:
     
     # Check cache first
     if cache_file.exists():
-        return json.loads(cache_file.read_text())
+        cached = json.loads(cache_file.read_text())
+        return cached['columns']
     
-    # Fetch from API
-    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/columns'
-    response = requests.get(uri, headers=coda_headers)
-    response.raise_for_status()
+    # Fetch table info and columns
+    table_uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}'
+    table_response = requests.get(table_uri, headers=coda_headers)
+    table_response.raise_for_status()
+    table_name = table_response.json().get('name', tableId)
     
-    columns_data = response.json()
+    columns_uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/columns'
+    columns_response = requests.get(columns_uri, headers=coda_headers)
+    columns_response.raise_for_status()
+    
+    columns_data = columns_response.json()
     
     # Create mapping: column_id -> human_name
     column_mapping = {}
     for column in columns_data.get('items', []):
         column_mapping[column['id']] = column['name']
     
-    # Cache the mapping
-    cache_file.write_text(json.dumps(column_mapping, indent=2))
+    # Cache with table metadata
+    cache_data = {
+        'table_name': table_name,
+        'table_id': tableId,
+        'columns': column_mapping,
+        'cached_at': datetime.now().isoformat()
+    }
+    cache_file.write_text(json.dumps(cache_data, indent=2))
     
     return column_mapping
 
