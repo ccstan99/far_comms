@@ -172,14 +172,14 @@ async def run_crew_background(docId: str, tableId: str, rowId: str, crew_data: d
         coda_updates = {}
         if "summary" in result_data:
             coda_updates["Paragraph (AI)"] = result_data["summary"]
+        if "hooks" in result_data:
+            # Convert hooks array to string
+            hooks_text = "\n".join(result_data["hooks"]) if isinstance(result_data["hooks"], list) else str(result_data["hooks"])
+            coda_updates["Hooks (AI)"] = hooks_text
         if "twitter_thread" in result_data:
             coda_updates["X content"] = result_data["twitter_thread"]
         if "linkedin_post" in result_data:
             coda_updates["LI content"] = result_data["linkedin_post"]
-        if "hooks" in result_data:
-            # Convert hooks array to string
-            hooks_text = "\n".join(result_data["hooks"]) if isinstance(result_data["hooks"], list) else str(result_data["hooks"])
-            coda_updates["Hooks"] = hooks_text
         
         # Update all columns at once
         await update_multiple_coda_columns(docId, tableId, rowId, coda_updates, columns)
