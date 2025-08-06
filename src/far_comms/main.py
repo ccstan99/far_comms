@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import requests
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse, RedirectResponse
 from far_comms.crews.promote_talk_crew import FarCommsCrew
 from pydantic import BaseModel, HttpUrl
@@ -11,6 +11,7 @@ import json
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime
+import asyncio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -126,6 +127,68 @@ async def update_coda_row(docId: str, tableId: str, rowId: str, column_name: str
     response.raise_for_status()
     return response.json()
 
+async def update_multiple_coda_columns(docId: str, tableId: str, rowId: str, updates: dict, columns: dict):
+    """Update multiple columns in a Coda row at once"""
+    cells = []
+    for column_name, value in updates.items():
+        column_id = get_column_id(column_name, columns)
+        if column_id:
+            cells.append({"column": column_id, "value": value})
+            print(f"Will update {column_name}: {str(value)[:100]}...")
+    
+    if not cells:
+        print("No valid columns to update")
+        return
+    
+    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
+    payload = {"row": {"cells": cells}}
+    
+    response = requests.put(uri, headers=coda_headers, json=payload)
+    if not response.ok:
+        print(f"Error updating Coda: {response.status_code} - {response.text}")
+    else:
+        print(f"Successfully updated {len(cells)} columns")
+    response.raise_for_status()
+
+async def run_crew_background(docId: str, tableId: str, rowId: str, crew_data: dict, columns: dict):
+    """Run crew in background and update Coda when complete"""
+    try:
+        print("Starting FarComms crew in background...")
+        crew_result = FarCommsCrew().crew().kickoff(inputs=crew_data)
+        print("Crew completed successfully!")
+        
+        # Parse final output JSON
+        try:
+            # Try to get final task output if it's JSON
+            final_task = crew_result.tasks_output[-1] if hasattr(crew_result, 'tasks_output') else None
+            if final_task and hasattr(final_task, 'raw'):
+                result_data = json.loads(final_task.raw)
+            else:
+                result_data = json.loads(str(crew_result))
+        except:
+            result_data = {"summary": str(crew_result)[:500]}
+        
+        # Map crew results to Coda columns
+        coda_updates = {}
+        if "summary" in result_data:
+            coda_updates["Paragraph (AI)"] = result_data["summary"]
+        if "twitter_thread" in result_data:
+            coda_updates["X content"] = result_data["twitter_thread"]
+        if "linkedin_post" in result_data:
+            coda_updates["LI content"] = result_data["linkedin_post"]
+        if "hooks" in result_data:
+            # Convert hooks array to string
+            hooks_text = "\n".join(result_data["hooks"]) if isinstance(result_data["hooks"], list) else str(result_data["hooks"])
+            coda_updates["Hooks"] = hooks_text
+        
+        # Update all columns at once
+        await update_multiple_coda_columns(docId, tableId, rowId, coda_updates, columns)
+        print("Updated Coda with all crew results")
+        
+    except Exception as e:
+        print(f"Background crew error: {e}")
+        await update_coda_row(docId, tableId, rowId, "LI text (AI)", f"Error: {str(e)}", columns)
+
 # Required columns for the crew
 REQUIRED_COLUMNS = ["Speaker", "Title", "Affiliation", "Transcript", "Event", "YT full link"]
 
@@ -202,6 +265,7 @@ async def kickoff_crew(request: PromoteTalkRequest, include_raw: bool = False):
 
 @app.get("/test-coda")
 async def test_coda_get(
+    background_tasks: BackgroundTasks,
     thisRow: str = None,
     docId: str = None,
     speaker: str = None
@@ -235,15 +299,41 @@ async def test_coda_get(
         if column_name != "Transcript":
             extracted_data[key] = value
 
-    # Test writing to LI text (AI) column
-    try:
-        await update_coda_row(docId, tableId, rowId, "LI text (AI)", "Hello world!", columns)
-        print("Successfully wrote 'Hello world!' to LI text (AI) column")
-    except Exception as e:
-        print(f"Error writing to Coda: {e}")
+    # Get full data for crew
+    speaker = lookup(row, "Speaker", columns)
+    title = lookup(row, "Title", columns)
+    transcript = lookup(row, "Transcript", columns)
+    affiliation = lookup(row, "Affiliation", columns)
+    event = lookup(row, "Event", columns)
+    yt_link = lookup(row, "YT full link", columns)
+    
+    # Prepare crew data
+    crew_data = {
+        "transcript": transcript or "",
+        "speaker": speaker or "",
+        "video_url": yt_link or "",
+        "paper_url": "",  # Leave blank for now
+        "event_name": event or "",
+        "affiliation": affiliation or ""
+    }
+    
+    # Add markdown styles
+    if not crew_data.get("style_LI"):
+        crew_data["style_LI"] = (DOCS_DIR / "style_LI.md").read_text()
+    if not crew_data.get("style_X"):
+        crew_data["style_X"] = (DOCS_DIR / "style_X.md").read_text()
+    if not crew_data.get("style_shared"):
+        crew_data["style_shared"] = (DOCS_DIR / "style_shared.md").read_text()
+    
+    # Start crew in background
+    background_tasks.add_task(run_crew_background, docId, tableId, rowId, crew_data, columns)
+    
+    # Update Coda immediately to show processing started
+    await update_coda_row(docId, tableId, rowId, "Summaries status", "Processing...", columns)
 
     return {
-        "status": "GET received",
+        "status": "Crew started in background",
+        "message": "Processing will complete asynchronously",
         **extracted_data
     }
 

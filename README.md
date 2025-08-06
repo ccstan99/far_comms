@@ -57,6 +57,7 @@ For support, questions, or feedback regarding the FarComms Crew or crewAI.
 Let's create wonders together with the power and simplicity of crewAI.
 
 ## Getting Started
-
+```
 conda activate llm-agents
 PYTHONPATH=src uvicorn far_comms.main:app --reload
+```
