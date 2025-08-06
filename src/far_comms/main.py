@@ -181,6 +181,9 @@ async def run_crew_background(docId: str, tableId: str, rowId: str, crew_data: d
         if "linkedin_post" in result_data:
             coda_updates["LI content"] = result_data["linkedin_post"]
         
+        # Mark processing as complete
+        coda_updates["Summaries status"] = "Done"
+        
         # Update all columns at once
         await update_multiple_coda_columns(docId, tableId, rowId, coda_updates, columns)
         print("Updated Coda with all crew results")
@@ -329,7 +332,7 @@ async def test_coda_get(
     background_tasks.add_task(run_crew_background, docId, tableId, rowId, crew_data, columns)
     
     # Update Coda immediately to show processing started
-    await update_coda_row(docId, tableId, rowId, "Summaries status", "Processing...", columns)
+    await update_coda_row(docId, tableId, rowId, "Summaries status", "Processing", columns)
 
     return {
         "status": "Crew started in background",
