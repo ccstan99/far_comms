@@ -74,6 +74,13 @@ async def get_column_names(docId: str, tableId: str) -> dict:
     
     return column_mapping
 
+def validate_table_columns(column_mapping: dict) -> list:
+    """Check if table has all required columns, return missing ones"""
+    available_columns = set(column_mapping.values())
+    required_columns = set(REQUIRED_COLUMNS)
+    missing = required_columns - available_columns
+    return list(missing)
+
 def lookup(row_data: dict, column_name: str, column_mapping: dict) -> str:
     """Lookup a column value by human-readable name"""
     # Find the column ID for this human name
@@ -81,6 +88,43 @@ def lookup(row_data: dict, column_name: str, column_mapping: dict) -> str:
         if name == column_name:
             return row_data.get("values", {}).get(col_id)
     return None
+
+def get_column_id(column_name: str, column_mapping: dict) -> str:
+    """Get column ID by human-readable name"""
+    for col_id, name in column_mapping.items():
+        if name == column_name:
+            return col_id
+    return None
+
+async def update_coda_row(docId: str, tableId: str, rowId: str, column_name: str, value: str, column_mapping: dict):
+    """Update a specific cell in a Coda row"""
+    column_id = get_column_id(column_name, column_mapping)
+    if not column_id:
+        raise ValueError(f"Column '{column_name}' not found")
+    
+    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
+    payload = {
+        "row": {
+            "cells": [
+                {
+                    "column": column_id,
+                    "value": value
+                }
+            ]
+        }
+    }
+    
+    print(f"Updating column_id: {column_id} with value: {value}")
+    print(f"Payload: {payload}")
+    
+    response = requests.put(uri, headers=coda_headers, json=payload)
+    
+    if not response.ok:
+        print(f"Response status: {response.status_code}")
+        print(f"Response text: {response.text}")
+    
+    response.raise_for_status()
+    return response.json()
 
 # Required columns for the crew
 REQUIRED_COLUMNS = ["Speaker", "Title", "Affiliation", "Transcript", "Event", "YT full link"]
@@ -171,29 +215,36 @@ async def test_coda_get(
     # Get column names (cached)
     columns = await get_column_names(docId, tableId)
     
+    # Validate table has required columns
+    missing_columns = validate_table_columns(columns)
+    if missing_columns:
+        return {"error": f"Table missing required columns: {missing_columns}"}
+    
     # Get row data
     uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
     row = requests.get(uri, headers=coda_headers).json()
 
-    # Extract required fields
-    speaker = lookup(row, "Speaker", columns)
-    title = lookup(row, "Title", columns)
-    transcript = lookup(row, "Transcript", columns)
-    affiliation = lookup(row, "Affiliation", columns)
-    event = lookup(row, "Event", columns)
-    yt_link = lookup(row, "YT full link", columns)
-    
-    print(f'Speaker: {speaker}')
-    print(f'Title: {title}')
-    # print(f'Transcript: {transcript[:100]}...' if transcript else 'None')
+    # Extract required fields dynamically
+    extracted_data = {}
+    for column_name in REQUIRED_COLUMNS:
+        value = lookup(row, column_name, columns)
+        key = column_name.lower().replace(" ", "_")
+        print(f'{column_name}: {value[:100] if value and len(str(value)) > 100 else value}')
+        
+        # Don't include transcript in return data (too large)
+        if column_name != "Transcript":
+            extracted_data[key] = value
+
+    # Test writing to LI text (AI) column
+    try:
+        await update_coda_row(docId, tableId, rowId, "LI text (AI)", "Hello world!", columns)
+        print("Successfully wrote 'Hello world!' to LI text (AI) column")
+    except Exception as e:
+        print(f"Error writing to Coda: {e}")
 
     return {
-        "status": "GET received", 
-        "speaker": speaker,
-        "title": title,
-        "affiliation": affiliation,
-        "event": event,
-        "yt_link": yt_link
+        "status": "GET received",
+        **extracted_data
     }
 
 @app.post("/test-coda")
