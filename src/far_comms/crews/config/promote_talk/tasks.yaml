@@ -25,7 +25,7 @@ analyze_transcript_task:
 
 generate_hooks_task:
   description: >
-    Generate platform-optimized hooks based on {speaker}'s talk content.
+    Generate 5-7 platform-optimized hook options based on {speaker}'s talk content.
     ===
     transcript: 
     {transcript}
@@ -35,17 +35,25 @@ generate_hooks_task:
     - Twitter/X: Target ML researchers, AI alignment professionals
     - Are surprising, specific, and avoid hype language
     - Use complete sentences, not phrases or titles
-    - Reflect findings from the transcript analysis
-    - Include brief reasoning for why each hook would resonate
+    - Start with concrete, counterintuitive findings
+    - Lead with the most surprising or important insight
+    - Include brief reasoning for why each hook would capture attention
+    - Provide variety: different angles, approaches, and emphasis
   expected_output: >
     {
       "li_hooks": [
-        {"text": "Hook for LinkedIn audience", "reasoning": "Why effective for professionals"},
-        {"text": "Alternative LinkedIn hook", "reasoning": "Different angle/approach"}
+        {"text": "Most surprising finding hook", "reasoning": "Why this surprises professionals"},
+        {"text": "Technical implications hook", "reasoning": "Why this matters for policy"},
+        {"text": "Counterintuitive result hook", "reasoning": "Why this challenges assumptions"},
+        {"text": "Practical impact hook", "reasoning": "Why this affects business/decisions"},
+        {"text": "Research breakthrough hook", "reasoning": "Why this advances the field"}
       ],
       "x_hooks": [
-        {"text": "Hook for Twitter/X audience", "reasoning": "Why effective for ML researchers"},
-        {"text": "Alternative X hook", "reasoning": "Different technical angle"}
+        {"text": "Technical precision hook", "reasoning": "Why this interests ML researchers"},
+        {"text": "Methodological innovation hook", "reasoning": "Why this matters for research"},
+        {"text": "Surprising result hook", "reasoning": "Why this challenges current thinking"},
+        {"text": "Alignment implication hook", "reasoning": "Why this matters for AI safety"},
+        {"text": "Implementation insight hook", "reasoning": "Why this helps practitioners"}
       ]
     }
   context: ["analyze_transcript_task"]
@@ -65,17 +73,17 @@ create_li_content_task:
     {style_li}
     ===
     Your content should:
-    - Select the best LinkedIn hook and explain your choice
-    - Write a rich 3-5 sentence paragraph summary suitable for non-ML professionals
-    - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 10 words each
+    - Select the strongest LinkedIn hook from the 5 options and explain your choice
+    - Write a tight 2-3 sentence paragraph summary suitable for non-ML professionals  
+    - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 8 words each
     - Focus on implications, applications, and broader significance
     - Maintain accessibility while preserving technical accuracy
-    - Use the speaker's voice and findings from the transcript
+    - Use FAR.AI's professional voice with speaker's factual content
   expected_output: >
     {
-      "selected_hook": "Chosen hook with selection reasoning",
-      "paragraph_summary": "Rich summary paragraph for LinkedIn audience", 
-      "bullets": ["Bullet point 1", "Bullet point 2", "Bullet point 3", "Bullet point 4"]
+      "selected_hook": "Chosen hook with detailed selection reasoning",
+      "paragraph_summary": "Tight 2-3 sentence summary for LinkedIn audience", 
+      "bullets": ["≤8 word bullet 1", "≤8 word bullet 2", "≤8 word bullet 3", "≤8 word bullet 4"]
     }
   context: ["analyze_transcript_task", "generate_hooks_task"]
   agent: li_content_writer_agent
@@ -94,16 +102,16 @@ create_x_content_task:
     {style_x}
     ===
     Your content should:
-    - Select the best X hook and explain your choice
+    - Select the strongest X hook from the 5 options and explain your choice
     - Write complete tweet content that includes hook + core findings
     - Optimize for 280 character limit while maximizing information density
     - Include specific technical details, methods, and results
     - Target ML researchers who appreciate precision and nuance
-    - Avoid oversimplification while remaining accessible to technical audience
+    - Use FAR.AI's professional voice with speaker's technical accuracy
   expected_output: >
     {
-      "selected_hook": "Chosen hook with selection reasoning",
-      "x_content": "Complete optimized tweet content (hook + core content)"
+      "selected_hook": "Chosen hook with detailed selection reasoning",
+      "x_content": "Complete optimized tweet content (hook + core findings)"
     }
   context: ["analyze_transcript_task", "generate_hooks_task"]
   agent: x_content_writer_agent
@@ -152,54 +160,54 @@ fact_check_content_task:
 
 voice_authenticity_check_task:
   description: >
-    Ensure content matches the speaker's voice while being concise and impactful.
+    Ensure content uses FAR.AI's professional brand voice while being maximally concise and factually accurate.
     ===
-    ORIGINAL TRANSCRIPT (SPEAKER'S VOICE): 
+    ORIGINAL TRANSCRIPT (FOR FACTUAL ACCURACY): 
     {transcript}
     ===
     SPEAKER: {speaker}
     AFFILIATION: {affiliation}
     ===
     Review the LinkedIn and Twitter/X content and fact check results from previous tasks.
-    STEP 1 - VOICE AUTHENTICITY:
-    - Sounds like something the speaker would naturally say
-    - Matches their tone, formality level, and phrasing patterns
-    - Preserves their unique communication characteristics
-    - Would make the speaker want to reshare the content
-    - Feels authentic rather than corporate or generic
+    STEP 1 - FAR.AI BRAND VOICE:
+    - Uses FAR.AI's conversational yet authoritative tone
+    - Professional and credible, never mimicking speaker's personal style
+    - Preserves speaker's exact technical terms and key insights for accuracy
+    - Sounds like FAR.AI content, not a speaker quote
+    - Maintains FAR.AI's brand consistency and standards
     
-    STEP 2 - CONCISENESS EDITING:
-    - Remove unnecessary words while preserving speaker's voice
+    STEP 2 - MAXIMUM CONCISENESS:
+    - Cut every unnecessary word ruthlessly
     - Tighten sentence structure for maximum impact
-    - LinkedIn: Target <200 words, bullets <10 words each
-    - Twitter/X: Maximize information density
-    - Cut fluff while maintaining speaker's authentic style
+    - LinkedIn: <150 words total, bullets ≤8 words each
+    - Twitter/X: Maximize information density, eliminate fluff
+    - Every word must earn its place - no exceptions
     
     IF CONTENT FAILS:
-    1. Fix voice issues using speaker's actual phrases from transcript
-    2. Cut wordiness while preserving authentic voice
-    3. Re-assess both voice match and conciseness
+    1. Rewrite in FAR.AI's professional voice using factual content
+    2. Cut wordiness aggressively while preserving meaning
+    3. Re-assess both brand voice and conciseness
     4. Maximum 1 revision attempt to avoid loops
   expected_output: >
     {
-      "voice_match_score": 8,
-      "conciseness_score": 8,
-      "authenticity_assessment": "Does this sound like the speaker?",
-      "wordiness_assessment": "Content is concise and impactful?",
-      "speaker_would_share": true,
-      "corrections_made": "Description of voice and conciseness corrections applied",
-      "revised_li_content": "Voice-authentic and concise LinkedIn content (if revised)",
-      "revised_x_content": "Voice-authentic and concise X content (if revised)",
+      "brand_voice_score": 9,
+      "conciseness_score": 9,
+      "brand_voice_assessment": "Does this sound like professional FAR.AI content?",
+      "conciseness_assessment": "Content is maximally tight and impactful?",
+      "far_ai_would_publish": true,
+      "corrections_made": "Description of brand voice and conciseness corrections applied",
+      "revised_li_content": "FAR.AI-voiced and maximally concise LinkedIn content (if revised)",
+      "revised_x_content": "FAR.AI-voiced and maximally concise X content (if revised)",
       "approved_for_next_step": false
     }
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
-    - Voice match score is 8/10 or higher
-    - Conciseness score is 8/10 or higher
-    - Speaker would definitely reshare (not just "maybe")
-    - Content feels authentic, not corporate or generic
-    - LinkedIn <200 words, bullets <10 words each
-    - No unnecessary words remain
+    - Brand voice score is 9/10 or higher (FAR.AI professional tone)
+    - Conciseness score is 9/10 or higher (maximum tightness)
+    - FAR.AI would confidently publish this content
+    - Content sounds like FAR.AI, not speaker mimicry
+    - LinkedIn <150 words, bullets ≤8 words each
+    - Zero unnecessary words remain
   context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task"]
   agent: voice_checker_agent
 
