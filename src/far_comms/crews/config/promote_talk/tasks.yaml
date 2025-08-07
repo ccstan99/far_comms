@@ -33,10 +33,12 @@ generate_hooks_task:
     Create compelling opening lines that:
     - LinkedIn: Appeal to policymakers, industry leaders, tech professionals
     - Twitter/X: Target ML researchers, AI alignment professionals
-    - Are surprising, specific, and avoid hype language
-    - Use complete sentences, not phrases or titles
-    - Start with concrete, counterintuitive findings
-    - Lead with the most surprising or important insight
+    - LEAD WITH THE CORE INSIGHT IMMEDIATELY - no setup or context
+    - Start with concrete, specific, counterintuitive findings
+    - Avoid corporate speak ("researchers discovered that", "new framework")
+    - State the surprising result first, attribution second
+    - Use active voice and direct statements
+    - Be punchy and immediate - grab attention in first 5 words
     - Include brief reasoning for why each hook would capture attention
     - Provide variety: different angles, approaches, and emphasis
   expected_output: >
@@ -75,6 +77,7 @@ create_li_content_task:
     Your content should:
     - Select the strongest LinkedIn hook from the 5 options and explain your choice
     - Write a tight 2-3 sentence paragraph summary suitable for non-ML professionals  
+    - Use concise attribution format: "{speaker} ({affiliation}) presents..." not "from"
     - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 8 words each
     - Focus on implications, applications, and broader significance
     - Maintain accessibility while preserving technical accuracy
@@ -103,11 +106,13 @@ create_x_content_task:
     ===
     Your content should:
     - Select the strongest X hook from the 5 options and explain your choice
-    - Write complete tweet content that includes hook + core findings
-    - Optimize for 280 character limit while maximizing information density
+    - Write ULTRA-DENSE tweet content that packs maximum insight into 280 chars
+    - Use abbreviations: "w/" not "with", "&" not "and", numbers not words
+    - Cut ALL unnecessary words - every character must add value
     - Include specific technical details, methods, and results
     - Target ML researchers who appreciate precision and nuance
     - Use FAR.AI's professional voice with speaker's technical accuracy
+    - COUNT CHARACTERS - must be ≤280 including spaces and punctuation
   expected_output: >
     {
       "selected_hook": "Chosen hook with detailed selection reasoning",
