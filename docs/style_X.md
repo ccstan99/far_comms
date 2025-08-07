@@ -8,7 +8,7 @@
 
 - **Tweet 2**:  
   - ▶️ Watch {event_name} recording: {video_url}  
-  - 📄 Read paper: {paper_url}
+  - 📄 Read paper: {resource_url}
 
 ## Formatting Instructions
 - Output both tweets separated by a line containing only `---`

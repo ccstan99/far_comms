@@ -10,7 +10,7 @@
    - “Link to {event_name} recording & resources in comments 👇”
 5. First comment:
    - ▶️ Watch video: {video_url}  
-   - 📄 Read paper: {paper_url}
+   - 📄 Read paper: {resource_url}
 
 ## Style Notes
 - Max length: **200 words**

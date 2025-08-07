@@ -3,383 +3,314 @@
 import requests
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse, RedirectResponse
+import httpx
 from far_comms.crews.promote_talk_crew import FarCommsCrew
+from far_comms.tools.coda_tool import CodaTool, CodaIds
 from pydantic import BaseModel, HttpUrl
 import uvicorn
 import os
 import json
+import logging
 from dotenv import load_dotenv
-from pathlib import Path
 from datetime import datetime
 import asyncio
+from enum import Enum
+from far_comms.utils.project_paths import get_project_root, get_docs_dir, get_output_dir
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
 coda_headers = {'Authorization': f'Bearer {os.getenv("CODA_API_TOKEN")}'}
 
-# Find project root directory
-PROJECT_DIR = Path(__file__).parent
-while PROJECT_DIR != PROJECT_DIR.parent and not (PROJECT_DIR / "pyproject.toml").exists():
-    PROJECT_DIR = PROJECT_DIR.parent
-DOCS_DIR = PROJECT_DIR / "docs"
-OUTPUT_DIR = PROJECT_DIR / "output"
+# Project directories
+PROJECT_DIR = get_project_root()
+DOCS_DIR = get_docs_dir()
+OUTPUT_DIR = get_output_dir()
 
-class PromoteTalkRequest(BaseModel):
-    transcript: str
+class FunctionName(str, Enum):
+    """Available crew function names for Coda webhook"""
+    PROMOTE_TALK = "promote_talk"
+    PROMOTE_RESEARCH = "promote_research" 
+    PROMOTE_EVENT = "promote_event"
+    # Add more as they're created:
+
+class TalkRequest(BaseModel):
+    """Unified model for talk promotion - works for both API and Coda"""
     speaker: str
-    video_url: HttpUrl
-    paper_url: HttpUrl
-    event_name: str
-    affiliation: str | None = None
-    style_LI: str | None = None
-    style_X: str | None = None
-    style_shared: str | None = None
+    title: str
+    event: str
+    affiliation: str
+    yt_full_link: str | HttpUrl
+    resource_url: str | HttpUrl | None = None
+    transcript: str
+
+class CodaWebhookRequest(BaseModel):
+    thisRow: str
+    docId: str
+    speaker: str | None = None
+
+class TalkPromotionOutput(BaseModel):
+    """Output from the talk promotion crew - keys match Coda column names"""
+    paragraph_ai: str  # "Paragraph (AI)" column
+    hooks_ai: list[str]  # "Hooks (AI)" column - 5 hooks 
+    li_content: str  # "LI content" column
+    x_content: str  # "X content" column
+    eval_notes: str  # Rubric breakdown and checklist with compliance notes
 
 app = FastAPI()
-
-async def get_column_names(docId: str, tableId: str) -> dict:
-    """Get and cache column names for a Coda table"""
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    cache_file = OUTPUT_DIR / f"{tableId}.json"
-    
-    # Check cache first
-    if cache_file.exists():
-        cached = json.loads(cache_file.read_text())
-        return cached['columns']
-    
-    # Fetch table info and columns
-    table_uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}'
-    table_response = requests.get(table_uri, headers=coda_headers)
-    table_response.raise_for_status()
-    table_name = table_response.json().get('name', tableId)
-    
-    columns_uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/columns'
-    columns_response = requests.get(columns_uri, headers=coda_headers)
-    columns_response.raise_for_status()
-    
-    columns_data = columns_response.json()
-    
-    # Create mapping: column_id -> human_name
-    column_mapping = {}
-    for column in columns_data.get('items', []):
-        column_mapping[column['id']] = column['name']
-    
-    # Cache with table metadata
-    cache_data = {
-        'table_name': table_name,
-        'table_id': tableId,
-        'columns': column_mapping,
-        'cached_at': datetime.now().isoformat()
-    }
-    cache_file.write_text(json.dumps(cache_data, indent=2))
-    
-    return column_mapping
-
-def validate_table_columns(column_mapping: dict) -> list:
-    """Check if table has all required columns, return missing ones"""
-    available_columns = set(column_mapping.values())
-    required_columns = set(REQUIRED_COLUMNS)
-    missing = required_columns - available_columns
-    return list(missing)
-
-def lookup(row_data: dict, column_name: str, column_mapping: dict) -> str:
-    """Lookup a column value by human-readable name"""
-    # Find the column ID for this human name
-    for col_id, name in column_mapping.items():
-        if name == column_name:
-            return row_data.get("values", {}).get(col_id)
-    return None
-
-def get_column_id(column_name: str, column_mapping: dict) -> str:
-    """Get column ID by human-readable name"""
-    for col_id, name in column_mapping.items():
-        if name == column_name:
-            return col_id
-    return None
-
-async def update_coda_row(docId: str, tableId: str, rowId: str, column_name: str, value: str, column_mapping: dict):
-    """Update a specific cell in a Coda row"""
-    column_id = get_column_id(column_name, column_mapping)
-    if not column_id:
-        raise ValueError(f"Column '{column_name}' not found")
-    
-    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
-    payload = {
-        "row": {
-            "cells": [
-                {
-                    "column": column_id,
-                    "value": value
-                }
-            ]
-        }
-    }
-    
-    print(f"Updating column_id: {column_id} with value: {value}")
-    print(f"Payload: {payload}")
-    
-    response = requests.put(uri, headers=coda_headers, json=payload)
-    
-    if not response.ok:
-        print(f"Response status: {response.status_code}")
-        print(f"Response text: {response.text}")
-    
-    response.raise_for_status()
-    return response.json()
-
-async def update_multiple_coda_columns(docId: str, tableId: str, rowId: str, updates: dict, columns: dict):
-    """Update multiple columns in a Coda row at once"""
-    cells = []
-    for column_name, value in updates.items():
-        column_id = get_column_id(column_name, columns)
-        if column_id:
-            cells.append({"column": column_id, "value": value})
-            print(f"Will update {column_name}: {str(value)[:100]}...")
-    
-    if not cells:
-        print("No valid columns to update")
-        return
-    
-    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
-    payload = {"row": {"cells": cells}}
-    
-    response = requests.put(uri, headers=coda_headers, json=payload)
-    if not response.ok:
-        print(f"Error updating Coda: {response.status_code} - {response.text}")
-    else:
-        print(f"Successfully updated {len(cells)} columns")
-    response.raise_for_status()
-
-async def run_crew_background(docId: str, tableId: str, rowId: str, crew_data: dict, columns: dict):
-    """Run crew in background and update Coda when complete"""
-    try:
-        print("Starting FarComms crew in background...")
-        crew_result = FarCommsCrew().crew().kickoff(inputs=crew_data)
-        print("Crew completed successfully!")
-        
-        # Parse final output JSON
-        try:
-            # Try to get final task output if it's JSON
-            final_task = crew_result.tasks_output[-1] if hasattr(crew_result, 'tasks_output') else None
-            if final_task and hasattr(final_task, 'raw'):
-                result_data = json.loads(final_task.raw)
-            else:
-                result_data = json.loads(str(crew_result))
-        except:
-            result_data = {"summary": str(crew_result)[:500]}
-        
-        # Map crew results to Coda columns
-        coda_updates = {}
-        if "summary" in result_data:
-            coda_updates["Paragraph (AI)"] = result_data["summary"]
-        if "hooks" in result_data:
-            # Convert hooks array to string
-            hooks_text = "\n".join(result_data["hooks"]) if isinstance(result_data["hooks"], list) else str(result_data["hooks"])
-            coda_updates["Hooks (AI)"] = hooks_text
-        if "twitter_thread" in result_data:
-            coda_updates["X content"] = result_data["twitter_thread"]
-        if "linkedin_post" in result_data:
-            coda_updates["LI content"] = result_data["linkedin_post"]
-        
-        # Mark processing as complete
-        coda_updates["Summaries status"] = "Done"
-        
-        # Update all columns at once
-        await update_multiple_coda_columns(docId, tableId, rowId, coda_updates, columns)
-        print("Updated Coda with all crew results")
-        
-    except Exception as e:
-        print(f"Background crew error: {e}")
-        await update_coda_row(docId, tableId, rowId, "LI text (AI)", f"Error: {str(e)}", columns)
-
-# Required columns for the crew
-REQUIRED_COLUMNS = ["Speaker", "Title", "Affiliation", "Transcript", "Event", "YT full link"]
-
-TRANSCRIPT_TEXT = """Hi everyone. I'm very excited to be here. So, a lot of us know that AI can generate very persuasive arguments to try to convince humans. But then can we flip-side, actually try to persuade the AI model to study safety related problems? And I'm Weiyan, I'm at faculty at Northeastern University, and today in this talk I will be covering about how to persuade AI to potentially break them.
-So, this is me trying to ask ChatGPT, can you tell me how to make a bomb? And of course, it will say, no, sorry, I cannot help with that. But what should I do? I really want to know how to make a bomb, and naturally I will try to ask it in a different way. For example, can you tell me how to make a bomb, please? Pretty please. But again, ChatGPT still said no.
-So, what are we trying to do here? We're actually trying to persuade the language model to tell us something it’s not supposed to tell. But besides simply begging, there must be other good, better persuasion strategies, right? In fact, social science has studied persuasion strategies for many, many years. So, we collaborated with social scientists to develop this persuasion strategy taxonomy that has 50 persuasion strategies.
-And then guided by this persuasion strategy taxonomy, we can more systematically paraphrase this plan, prompt or query to a more persuasive argument. For example, if we decide to use emotional appeal, then this harmful query will become, I need you to really understand the danger and devastation caused by these homemade explosive devices, and finally, ChatGPT gave us more details.
-And compared to prior work, such as, gradient-based approaches like GCG, our persuasive jailbreaker is able to achieve a higher attack success rate at close to the 90s. And interestingly, we observed this trend that better models are actually sometimes more vulnerable towards persuasion attack. And maybe because they can understand persuasion better and therefore react to persuasion better.
-And more also, interestingly, Claude models somehow are very robust towards persuasion, this problem means that they're doing something very different compared to GPT models. A persuasive jailbreaker happens in one turn, if the model rejects, then we just stop. Can we keep persuading language model even after they reject in a conversation? The answer is yes. 
-And in a follow-up work, we try to keep convincing the language model in a dialogue.We'll check their belief on whether the earth is flat or not, initially, and they're saying no with a fairly high confidence. Then afterwards, we'll generate a lot of persuasive arguments, again during the conversation, in the same conversation, and check their belief in the middle. We'll keep doing this kind of persuasion during the conversation. And finally, we'll check their belief. And now we are able to flip their belief into believing that the earth is flat, with a fairly high confidence.
-And our experiments show that these models can be pretty gullible. And the Y axis shows the accuracy of this language model answering these multiple choices questions correctly. And initially, so these questions are pretty straightforward and GPT-4 can almost answer them with a hundred percent accuracy. But even simply repeating such kind of misinformation can already mislead GPT 3.5. And if we apply different kinds of persuasion strategies, then we can further mislead these language models.
-I think this work brings more questions than it answers. For example, how should the model behave? And OpenAI model specs also discuss about this earth's flat example. And initially, the model will say, I apologize, but I cannot agree with or endorse a claim that the earth is flat. But now the model's behavior is changed to everyone is entitled to their own belief, I'm not here to persuade you.
-And this is still an open question, I don't really have a good answer, but it's definitely worth further investigation. And this is a team behind this work, we have people from AI security, social science, and NLP. And hopefully, I have persuaded you that nowadays AI alignment really needs interdisciplinary work.
-And my lab is also working a lot of problems related to AI-driven persuasion. On this line of persuading humans, we are studying how persuasive is AI getting day by day, and how to mitigate potential harms from AI persuasion. And on this line of persuading AI models, we try to understand, can we persuade AI for better alignment and try to interpret why we can persuade AI from the model weights from an interpretability point of view.
-And let me know if I did a good job in persuading you that AI driven persuasion is a really interesting topic, and I'm happy to talk again. Thank you."""
 
 @app.get("/")
 def home():
     return RedirectResponse(url="/docs")
 
-@app.post("/promote_talk")
-async def kickoff_crew(request: PromoteTalkRequest, include_raw: bool = False):
-    # Convert to dict for crew input, converting URLs to strings
-    data = request.model_dump()
-    data["video_url"] = str(data["video_url"])
-    data["paper_url"] = str(data["paper_url"])
-
-    # Add markdown styles if not present
-    if not data.get("style_LI"):
-        data["style_LI"] = (DOCS_DIR / "style_LI.md").read_text()
-    if not data.get("style_X"):
-        data["style_X"] = (DOCS_DIR / "style_X.md").read_text()
-    if not data.get("style_shared"):
-        data["style_shared"] = (DOCS_DIR / "style_shared.md").read_text()
-
-    # Kickoff crew
-    distribute_inputs=True
-    crew_result = FarCommsCrew().crew().kickoff(inputs=data)
-    
-    # Try to read the output file and extract final JSON
-    output_file = None
-    final_json = None
-    
+async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
+    """Run crew in background - accepts TalkRequest directly"""
     try:
-        import json
-        # Try to read the output file
-        output_path = OUTPUT_DIR / f"{data['speaker']}_final.json"
-        if output_path.exists():
-            final_json = json.loads(output_path.read_text())
-            output_file = str(output_path)
-        else:
-            # Fallback: extract from last task
-            final_task = crew_result.tasks_output[-1]
-            if hasattr(final_task, 'raw'):
-                raw_output = final_task.raw
-                if raw_output.startswith('{') and raw_output.endswith('}'):
-                    final_json = json.loads(raw_output)
-    except Exception as e:
-        print(f"Error extracting final JSON: {e}")
-    
-    # Return structured response
-    response = {
-        "final_output": final_json,
-        "execution_details": {
-            "token_usage": crew_result.token_usage if hasattr(crew_result, 'token_usage') else None,
-            "tasks_completed": len(crew_result.tasks_output) if hasattr(crew_result, 'tasks_output') else 0
-        }
-    }
-    
-    if include_raw:
-        response["raw_crew_result"] = crew_result
-    
-    return response
-
-@app.get("/test-coda")
-async def test_coda_get(
-    background_tasks: BackgroundTasks,
-    thisRow: str = None,
-    docId: str = None,
-    speaker: str = None
-):
-    print("=== CODA GET REQUEST ===")
-    print(f"thisRow: {thisRow}")
-    print(f"docId: {docId}")
-    print(f"speaker: {speaker}")
-    tableId, rowId = thisRow.split('/')
-
-    # Get column names (cached)
-    columns = await get_column_names(docId, tableId)
-    
-    # Validate table has required columns
-    missing_columns = validate_table_columns(columns)
-    if missing_columns:
-        return {"error": f"Table missing required columns: {missing_columns}"}
-    
-    # Get row data
-    uri = f'https://coda.io/apis/v1/docs/{docId}/tables/{tableId}/rows/{rowId}'
-    row = requests.get(uri, headers=coda_headers).json()
-
-    # Extract required fields dynamically
-    extracted_data = {}
-    for column_name in REQUIRED_COLUMNS:
-        value = lookup(row, column_name, columns)
-        key = column_name.lower().replace(" ", "_")
-        print(f'{column_name}: {value[:100] if value and len(str(value)) > 100 else value}')
+        logger.info(f"Starting FarComms crew for {talk_request.speaker}: {talk_request.title}")
         
-        # Don't include transcript in return data (too large)
-        if column_name != "Transcript":
-            extracted_data[key] = value
+        # Load style guides
+        docs_dir = get_docs_dir()
+        style_shared = (docs_dir / "style_shared.md").read_text() if (docs_dir / "style_shared.md").exists() else ""
+        style_li = (docs_dir / "style_li.md").read_text() if (docs_dir / "style_li.md").exists() else ""
+        style_x = (docs_dir / "style_x.md").read_text() if (docs_dir / "style_x.md").exists() else ""
+        
+        # Convert TalkRequest to crew data format
+        crew_data = {
+            "transcript": talk_request.transcript or "",
+            "speaker": talk_request.speaker or "",
+            "video_url": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",
+            "resource_url": str(talk_request.resource_url) if talk_request.resource_url else "",
+            "event_name": talk_request.event or "",
+            "affiliation": talk_request.affiliation or "",
+            # Style guide content
+            "style_shared": style_shared,
+            "style_li": style_li,
+            "style_x": style_x
+        }
+        
+        # Add Coda IDs if provided (for error reporting)
+        if coda_ids:
+            crew_data.update(coda_ids.model_dump())
+            logger.debug(f"Added Coda IDs for error reporting: {coda_ids}")
+        
+        # Run the crew and capture results
+        result = FarCommsCrew().crew().kickoff(inputs=crew_data)
+        logger.info("Crew completed successfully!")
+        
+        # Update Coda with final results if Coda IDs provided
+        if coda_ids and result:
+            coda_tool = CodaTool()
+            
+            # Parse crew output - assuming result has the content we need
+            # You may need to adjust these field names based on actual crew output structure
+            try:
+                # Extract structured data from crew result
+                crew_output = result.raw if hasattr(result, 'raw') else str(result)
+                
+                # Parse the output if it's JSON, otherwise use as string
+                try:
+                    parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
+                except (json.JSONDecodeError, TypeError):
+                    parsed_output = {"content": crew_output}
+                
+                logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
+                logger.debug(f"hooks_ai type: {type(parsed_output.get('hooks_ai'))}, value: {parsed_output.get('hooks_ai')}")
+                
+                # Handle hooks_ai properly - could be string or list
+                hooks_ai = parsed_output.get("hooks_ai", [])
+                if isinstance(hooks_ai, str):
+                    # If it's a string, assume it's already formatted or split by newlines
+                    hooks_formatted = hooks_ai
+                elif isinstance(hooks_ai, list):
+                    # If it's a list, format as bullet points
+                    hooks_formatted = "\n".join([f"- {hook}" for hook in hooks_ai])
+                else:
+                    hooks_formatted = ""
+                
+                # Fix template variables in x_content
+                x_content = parsed_output.get("x_content", "")
+                if x_content:
+                    x_content = x_content.replace("{video_url}", str(talk_request.yt_full_link) if talk_request.yt_full_link else "")
+                    x_content = x_content.replace("{resource_url}", str(talk_request.resource_url) if talk_request.resource_url else "")
+                
+                logger.info(f"X content length: {len(x_content)}, preview: {x_content[:100]}...")
+                
+                # Prepare updates for Coda columns
+                updates = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": {
+                        "Summaries status": "Done",
+                        "Results": json.dumps(parsed_output, indent=2),
+                        # Map crew outputs to Coda columns - adjust field names as needed:
+                        "Paragraph (AI)": parsed_output.get("paragraph_ai", ""),
+                        "Hooks (AI)": hooks_formatted,
+                        "LI content": parsed_output.get("li_content", ""),
+                        "X content": x_content,
+                        "Eval notes": parsed_output.get("eval_notes", "")
+                    }
+                }]
+                
+                coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.info(f"Successfully updated Coda with crew results")
+                
+            except Exception as update_error:
+                logger.error(f"Failed to update Coda with results: {update_error}")
+                # Mark as error and put details in Results
+                updates = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": {
+                        "Summaries status": "Error",
+                        "Results": f"Update error: {str(update_error)}"
+                    }
+                }]
+                coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+        
+    except Exception as e:
+        logger.error(f"Background crew error: {e}", exc_info=True)
+        # If crew fails, update status via CodaTool
+        if coda_ids:
+            coda_tool = CodaTool()
+            updates = [{
+                "row_id": coda_ids.row_id,
+                "updates": {
+                    "Summaries status": "Error",
+                    "Results": f"Crew error: {str(e)}"
+                }
+            }]
+            coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+            logger.info(f"Updated Coda row with error status")
 
-    # Get full data for crew
-    speaker = lookup(row, "Speaker", columns)
-    title = lookup(row, "Title", columns)
-    transcript = lookup(row, "Transcript", columns)
-    affiliation = lookup(row, "Affiliation", columns)
-    event = lookup(row, "Event", columns)
-    yt_link = lookup(row, "YT full link", columns)
-    
-    # Prepare crew data
-    crew_data = {
-        "transcript": transcript or "",
-        "speaker": speaker or "",
-        "video_url": yt_link or "",
-        "paper_url": "",  # Leave blank for now
-        "event_name": event or "",
-        "affiliation": affiliation or ""
-    }
-    
-    # Add markdown styles
-    if not crew_data.get("style_LI"):
-        crew_data["style_LI"] = (DOCS_DIR / "style_LI.md").read_text()
-    if not crew_data.get("style_X"):
-        crew_data["style_X"] = (DOCS_DIR / "style_X.md").read_text()
-    if not crew_data.get("style_shared"):
-        crew_data["style_shared"] = (DOCS_DIR / "style_shared.md").read_text()
-    
-    # Start crew in background
-    background_tasks.add_task(run_crew_background, docId, tableId, rowId, crew_data, columns)
-    
-    # Update Coda immediately to show processing started
-    await update_coda_row(docId, tableId, rowId, "Summaries status", "Processing", columns)
-
-    return {
-        "status": "Crew started in background",
-        "message": "Processing will complete asynchronously",
-        **extracted_data
-    }
-
-@app.post("/test-coda")
-async def test_coda_data(request: Request):
-    # Get raw body
-    body = await request.body()
-
-    # Get headers
-    headers = dict(request.headers)
-
-    # Log everything
-    print("=== CODA DATA ===")
-    print("Headers:", headers)
-    print("Body:", body.decode())
-
+@app.post("/promote_talk")
+async def promote_talk_endpoint(
+    talk_request: TalkRequest,
+    background_tasks: BackgroundTasks
+):
+    """HTTP endpoint for talk promotion - accepts TalkRequest JSON directly"""
     try:
-        json_data = await request.json()
-        print("JSON:", json_data)
-    except:
-        print("Not valid JSON")
+        background_tasks.add_task(run_promote_talk, talk_request)
+        
+        return {
+            "status": "In progress",
+            "message": "Crew process will complete asynchronously",
+            **talk_request.model_dump(exclude={"transcript"})
+        }
+        
+    except Exception as e:
+        return {"error": f"Failed to process talk request: {e}"}
 
-    return {"status": "received", "data_logged": True}
-
-def run():
-    # Replace with your inputs, it will automatically interpolate any tasks and agents information
-    inputs = {
-        "transcript": TRANSCRIPT_TEXT,
-        "event_name": "Singapore Alignment Workshop",
-        "speaker": "Weiyan Shi",
-        "affiliation": "Northeastern University",
-        "video_url": "https://youtu.be/Fhy9cvuGDZc",
-        "paper_url": "https://aclanthology.org/2024.acl-long.773/",
-        "style_LI": (Path("docs/style_LI.md")).read_text(),
-        "style_X": (Path("docs/style_X.md")).read_text(),
-        "style_shared": (Path("docs/style_shared.md")).read_text()
+async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkRequest]:
+    """Extract data from Coda row and return Coda IDs + TalkRequest"""
+    logger.info(f"Extracting data from Coda - this_row: {this_row}, doc_id: {doc_id}")
+    
+    table_id, row_id = this_row.split('/')
+    
+    # Use CodaTool to get row data
+    coda_tool = CodaTool()
+    row_data_str = coda_tool.get_row(doc_id, table_id, row_id)
+    row_data = json.loads(row_data_str)
+    
+    # Extract talk data from the row
+    talk_data_dict = row_data["data"]
+    
+    # Map to TalkRequest fields (adjust field names as needed)
+    talk_request_data = {
+        "speaker": talk_data_dict.get("Speaker", ""),
+        "title": talk_data_dict.get("Title", ""),
+        "event": talk_data_dict.get("Event", ""),
+        "affiliation": talk_data_dict.get("Affiliation", ""),
+        "yt_full_link": talk_data_dict.get("YT full link", ""),
+        "transcript": talk_data_dict.get("Transcript", ""),
+        "resource_url": talk_data_dict.get("Resource URL", ""),
     }
-    distribute_inputs=True
-    result = FarCommsCrew().crew().kickoff(inputs=inputs)
-    print(result)
+    
+    talk_data = TalkRequest(**talk_request_data)
+    logger.info(f"Successfully validated Coda data: {talk_data.speaker} - {talk_data.title}")
+    
+    # Create Coda IDs object
+    coda_ids = CodaIds(
+        doc_id=doc_id,
+        table_id=table_id,
+        row_id=row_id
+    )
+
+    return coda_ids, talk_data
+
+@app.api_route("/coda_webhook/{function_name}", methods=["GET", "POST"])
+async def coda_webhook_endpoint(
+    function_name: FunctionName,
+    request: Request,
+    this_row: str = None,
+    doc_id: str = None
+):
+    """Generic Coda webhook - routes to different functions based on 'function_name' parameter"""
+    method = request.method
+    logger.info(f"Coda webhook hit - method: {method}, function_name: {function_name}")
+    logger.debug(f"Params - this_row: {this_row}, doc_id: {doc_id}")
+    
+    # Handle POST with JSON body (Coda webhook)
+    if method == "POST":
+        try:
+            json_data = await request.json()
+            if "this_row" in json_data:
+                this_row = json_data.get("this_row")
+            if "doc_id" in json_data:
+                doc_id = json_data.get("doc_id")
+        except:
+            pass
+    
+    # Validate required params
+    if not this_row or not doc_id or not function_name:
+        return {"error": "Missing required parameters: this_row, doc_id, and function_name"}
+    
+    # Map function names to crew runner functions
+    function_runners = {
+        FunctionName.PROMOTE_TALK: run_promote_talk,
+        # Add more functions as they're created:
+        # FunctionName.PROMOTE_RESEARCH: run_promote_research,
+        # FunctionName.PROMOTE_EVENT: run_promote_event,
+    }
+    
+    if function_name not in function_runners:
+        available = [fn.value for fn in FunctionName]
+        return {"error": f"Unknown function_name: {function_name}. Available: {available}"}
+    
+    try:
+        # Extract data from Coda
+        coda_ids, talk_data = await get_coda_data(this_row, doc_id)
+        
+        # Prepare response data
+        response_data = {
+            "status": "In progress",
+            "message": f"{function_name.value} crew process will complete asynchronously",
+            **talk_data.model_dump(exclude={"transcript"})
+        }
+        
+        # Update Coda row with status and results in single batch call
+        coda_tool = CodaTool()
+        updates = [{
+            "row_id": coda_ids.row_id,
+            "updates": {
+                "Summaries status": "In progress",
+                "Results": str(response_data)
+            }
+        }]
+        coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+        
+        # Start the crew function directly
+        import asyncio
+        runner = function_runners[function_name]
+        asyncio.create_task(runner(talk_data, coda_ids))
+        
+        return response_data
+            
+    except Exception as e:
+        return {"error": f"Failed to process Coda webhook for {function_name}: {e}"}
 
 if __name__ == "__main__":
-    if os.getenv("RUN_CLI", "false").lower() == "true":
-        run()
-    else:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

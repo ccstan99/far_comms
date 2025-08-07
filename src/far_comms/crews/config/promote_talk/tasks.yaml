@@ -32,8 +32,8 @@ generate_linkedin_post_task:
     style_shared: 
     {style_shared}
     ===
-    style_LI: 
-    {style_LI}
+    style_li: 
+    {style_li}
     ===
     transcript: 
     {transcript}
@@ -47,7 +47,7 @@ generate_linkedin_post_task:
       - CTA
     - 1st comment:
       - ▶️ Watch the recording: {video_url}
-      - 📄 Read the paper: {paper_url}
+      - 📄 Read the paper: {resource_url}
     - Score using the rubric
     - Revise if score < 14
 
@@ -66,8 +66,8 @@ generate_twitter_thread_task:
     style_shared: 
     {style_shared}
     ===
-    style_X: 
-    {style_X}
+    style_x: 
+    {style_x}
     ===
     transcript: 
     {transcript}
@@ -120,8 +120,8 @@ tighten_linkedin_post_task:
     style_shared: 
     {style_shared}
     ===
-    style_LI: 
-    {style_LI}
+    style_li: 
+    {style_li}
     ===
     Your output must:
     - Sharpen language without exaggeration
@@ -144,8 +144,8 @@ tighten_twitter_thread_task:
     style_shared: 
     {style_shared}
     ===
-    style_X: 
-    {style_X}
+    style_x: 
+    {style_x}
     ===
     Your output must:
     - Remove filler or vague phrases
@@ -167,11 +167,11 @@ qa_review_task:
     style_shared: 
     {style_shared}
     ===
-    style_LI: 
-    {style_LI}
+    style_li: 
+    {style_li}
     ===
-    style_X: 
-    {style_X}
+    style_x: 
+    {style_x}
     ===
     transcript: 
     {transcript}
@@ -191,10 +191,10 @@ qa_review_task:
  
   expected_output: >
     {
-      "summary": Summary paragraph,
-      "hooks": 5 hooks,
-      "linkedin_post": Final LinkedIn text,
-      "twitter_thread": Final Twitter thread,
+      "paragraph_ai": Summary paragraph,
+      "hooks_ai": 5 hooks,
+      "li_content": Final LinkedIn text,
+      "x_content": Final Twitter thread,
       "eval_notes": Rubric breakdown and checklist with 6 compliance items with revision notes
     }
   context: ["tighten_linkedin_post_task", "tighten_twitter_thread_task"]

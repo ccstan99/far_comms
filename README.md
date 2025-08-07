@@ -60,4 +60,5 @@ Let's create wonders together with the power and simplicity of crewAI.
 ```
 conda activate llm-agents
 PYTHONPATH=src uvicorn far_comms.main:app --reload
+cloudflared tunnel --url http://localhost:8000
 ```
