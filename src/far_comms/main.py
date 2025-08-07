@@ -4,7 +4,7 @@ import requests
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse, RedirectResponse
 import httpx
-from far_comms.crews.promote_talk_crew import FarCommsCrew
+from far_comms.crews.promote_talk_crew import PromoteTalkCrew
 from far_comms.tools.coda_tool import CodaTool, CodaIds
 from pydantic import BaseModel, HttpUrl
 import uvicorn
@@ -69,10 +69,38 @@ app = FastAPI()
 def home():
     return RedirectResponse(url="/docs")
 
+def assemble_li_post(content: dict, talk_request: TalkRequest) -> str:
+    """Assemble LinkedIn post from components"""
+    bullets_formatted = "\n".join(content.get("bullets", []))
+    
+    li_post = f"""{content.get("li_hook", "")}
+
+{content.get("paragraph_summary", "")}
+
+{bullets_formatted}
+
+Link to {talk_request.event} recording & resources in comments 👇"""
+
+    # First comment
+    first_comment = f"""▶️ Watch video: {talk_request.yt_full_link}
+📄 Read paper: {talk_request.resource_url}"""
+    
+    return f"{li_post}\n\n**First Comment:**\n{first_comment}"
+
+def assemble_x_post(content: dict, talk_request: TalkRequest) -> str:
+    """Assemble Twitter/X post from components"""
+    return f"""{content.get("x_content", "")} 👇
+
+---
+
+▶️ Watch {talk_request.event} recording: {talk_request.yt_full_link}
+📄 Read paper: {talk_request.resource_url}"""
+
 async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
     """Run crew in background - accepts TalkRequest directly"""
     try:
-        logger.info(f"Starting FarComms crew for {talk_request.speaker}: {talk_request.title}")
+        logger.info(f"Starting PromoteTalk crew for {talk_request.speaker}: {talk_request.title}")
+        logger.debug(f"Input transcript length: {len(talk_request.transcript or '')}")
         
         # Load style guides
         docs_dir = get_docs_dir()
@@ -99,8 +127,11 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
             crew_data.update(coda_ids.model_dump())
             logger.debug(f"Added Coda IDs for error reporting: {coda_ids}")
         
+        logger.debug(f"Final crew data keys: {list(crew_data.keys())}")
+        logger.debug(f"Final transcript length being sent to crew: {len(crew_data.get('transcript', ''))}")
+        
         # Run the crew and capture results
-        result = FarCommsCrew().crew().kickoff(inputs=crew_data)
+        result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
         logger.info("Crew completed successfully!")
         
         # Update Coda with final results if Coda IDs provided
@@ -122,35 +153,27 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 logger.debug(f"hooks_ai type: {type(parsed_output.get('hooks_ai'))}, value: {parsed_output.get('hooks_ai')}")
                 
-                # Handle hooks_ai properly - could be string or list
-                hooks_ai = parsed_output.get("hooks_ai", [])
-                if isinstance(hooks_ai, str):
-                    # If it's a string, assume it's already formatted or split by newlines
-                    hooks_formatted = hooks_ai
-                elif isinstance(hooks_ai, list):
-                    # If it's a list, format as bullet points
-                    hooks_formatted = "\n".join([f"- {hook}" for hook in hooks_ai])
-                else:
-                    hooks_formatted = ""
+                # Handle hooks - crew outputs li_hook as single string
+                hooks_formatted = parsed_output.get("li_hook", "")
                 
-                # Fix template variables in x_content
+                # Assemble final posts from components
+                li_content = assemble_li_post(parsed_output, talk_request)
+                # X content is already fully assembled by the crew
                 x_content = parsed_output.get("x_content", "")
-                if x_content:
-                    x_content = x_content.replace("{video_url}", str(talk_request.yt_full_link) if talk_request.yt_full_link else "")
-                    x_content = x_content.replace("{resource_url}", str(talk_request.resource_url) if talk_request.resource_url else "")
                 
-                logger.info(f"X content length: {len(x_content)}, preview: {x_content[:100]}...")
+                logger.info(f"Assembled LI content length: {len(li_content)}")
+                logger.info(f"Assembled X content length: {len(x_content)}")
                 
-                # Prepare updates for Coda columns
+                # Prepare final updates for Coda columns
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
                         "Summaries status": "Done",
-                        "Results": json.dumps(parsed_output, indent=2),
-                        # Map crew outputs to Coda columns - adjust field names as needed:
-                        "Paragraph (AI)": parsed_output.get("paragraph_ai", ""),
+                        "Progress": json.dumps(parsed_output, indent=2),
+                        # Map assembled content to Coda columns:
+                        "Paragraph (AI)": parsed_output.get("paragraph_summary", ""),
                         "Hooks (AI)": hooks_formatted,
-                        "LI content": parsed_output.get("li_content", ""),
+                        "LI content": li_content,
                         "X content": x_content,
                         "Eval notes": parsed_output.get("eval_notes", "")
                     }
@@ -161,12 +184,12 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 
             except Exception as update_error:
                 logger.error(f"Failed to update Coda with results: {update_error}")
-                # Mark as error and put details in Results
+                # Mark as error and put details in Progress
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
                         "Summaries status": "Error",
-                        "Results": f"Update error: {str(update_error)}"
+                        "Progress": f"Update error: {str(update_error)}"
                     }
                 }]
                 coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
@@ -180,7 +203,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 "row_id": coda_ids.row_id,
                 "updates": {
                     "Summaries status": "Error",
-                    "Results": f"Crew error: {str(e)}"
+                    "Progress": f"Crew error: {str(e)}"
                 }
             }]
             coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
@@ -291,13 +314,13 @@ async def coda_webhook_endpoint(
             **talk_data.model_dump(exclude={"transcript"})
         }
         
-        # Update Coda row with status and results in single batch call
+        # Update Coda row with status and progress in single batch call
         coda_tool = CodaTool()
         updates = [{
             "row_id": coda_ids.row_id,
             "updates": {
                 "Summaries status": "In progress",
-                "Results": str(response_data)
+                "Progress": "Starting crew workflow..."
             }
         }]
         coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)

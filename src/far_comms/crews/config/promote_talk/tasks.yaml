@@ -1,202 +1,316 @@
-generate_summary_task:
+analyze_transcript_task:
   description: >
-    Carefully summarize {speaker}'s talk, preserving the speaker’s natural words, structure, flow, and emphasis.
+    Analyze {speaker}'s talk transcript to extract core findings, technical details, and key insights.
     ===
     transcript: 
     {transcript}
     ===
-    Your summary should:
-    - Be a rich, 3-5 sentence paragraph
-    - Reflect the speaker’s organization (e.g., 3-part method, multiple papers, core themes)
-    - Highlight key findings, examples, and surprising or provocative claims
-    - Use clear, accessible language with academic accuracy
-    - Preserve the speaker’s voice and tone
-
-    Also:
-    - Propose 5 strong hook options
-    - Each hook must be a **complete sentence**, not a phrase or title
-    - Use sentence case (not Title Case)
-    - Hooks should be surprising, specific, and reflect the speaker’s voice
-    - Avoid vague or hyped language (e.g., "exciting", "groundbreaking")
-    - Briefly explain why each hook might resonate with a professional audience
-  expected_output: >
-    - A faithful, detailed 3-5 sentence paragraph summarizing the talk
-    - 5 complete-sentence hook options, each with a short justification
-  inputs:
-  agent: summarizer_agent
-
-generate_linkedin_post_task:
-  description: >
-    Based on the transcript from {speaker}'s talk, create a LinkedIn post that follows the structure and tone outlined below.
-    ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_li: 
-    {style_li}
-    ===
-    transcript: 
-    {transcript}
-    ===
-    Your output must:
-    - Choose the best hook and explain why
-    - Build a LinkedIn post with:
-      - Hook
-      - One summary paragraph
-      - 3–4 🔹 bullets
-      - CTA
-    - 1st comment:
-      - ▶️ Watch the recording: {video_url}
-      - 📄 Read the paper: {resource_url}
-    - Score using the rubric
-    - Revise if score < 14
-
-    - Avoid:
-      - Repeating full summary verbatim in the post
-      - Passive voice or hedging language (“might suggest”, “perhaps implies”)
-  expected_output: >
-    LinkedIn post + rubric score + accuracy check + final revision if needed.
-  context: ["generate_summary_task"]
-  agent: li_writer_agent
-
-generate_twitter_thread_task:
-  description: >
-    Write a 2-tweet Twitter/Bluesky thread based on {speaker}’s talk.
-    ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_x: 
-    {style_x}
-    ===
-    transcript: 
-    {transcript}
-    ===
-    Your output must:
-    - Select the best hook and explain why
-    - Write:
-      - Tweet 1: hook + compressed findings + 👇
-      - Tweet 2: ▶️ {event_name} recording + 📄 Paper link
-    - Score using the rubric
-    - Revise if score < 14
-
-    Avoid:
-    - Repeating the summary exactly
-    - Oversimplifying or hyping the content
-
-  expected_output: >
-    Final Twitter/Bluesky thread + rubric evaluation + revision if needed.
-  context: ["generate_summary_task"]
-  agent: twitter_writer_agent
-
-fact_check_comms_task:
-  description: >
-    Review the LinkedIn and Twitter posts for fidelity to {speaker}’s talk.
-    ===
-    transcript: 
-    {transcript}
-    ===
-    You must:
-    - Compare each post to the actual transcript
-    - Ensure tone, claims, and structure align with the speaker’s intent
-    - Flag anything exaggerated, misleading, or off-tone
-    - Suggest edits as needed
-    - Give each post a “speaker would reshare” confidence score (out of 5)
-
-    ✅ Say “Ready to share” if posts are accurate and compelling
-
-  expected_output: >
-    - Fidelity issues or confirmation
-    - Suggested rewrites (if needed)
-    - Reshare confidence scores for each post
-  context: ["generate_linkedin_post_task", "generate_twitter_thread_task"]
-  agent: fact_checker_agent
-
-tighten_linkedin_post_task:
-  description: >
-    Edit the LinkedIn post for clarity, conciseness, and tone.
-    Your goal is to improve fluency and punch while maintaining research accuracy and the speaker’s voice.
-    ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_li: 
-    {style_li}
-    ===
-    Your output must:
-    - Sharpen language without exaggeration
-    - Preserve the speaker’s meaning
-    - Tighten any rambling, exaggeration, awkwardness or wordy phrasing
-    Avoid:
-    - Adding new claims or interpretations
-    - Rewriting for flair at the expense of clarity
-    - Over-formalizing or diluting the tone
-  context: ["generate_linkedin_post_task"]
-  expected_output: >
-    Revised LinkedIn post text with changes clearly applied (or rationale if no changes needed).
-  agent: editor_agent
-
-tighten_twitter_thread_task:
-  description: >
-    Edit the Twitter thread for clarity, tone, and compression.
-    Keep Tweet 1 punchy but grounded; Tweet 2 informative and clean.
-    ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_x: 
-    {style_x}
-    ===
-    Your output must:
-    - Remove filler or vague phrases
-    - Improve rhythm and word economy
-    - Retain all factual accuracy and nuance
-    Avoid:
-    - Adding new claims or interpretations
-    - Rewriting for flair at the expense of clarity
-    - Over-formalizing or diluting the tone
-  expected_output: >
-    Revised thread + rationale for key changes
-  context: ["generate_twitter_thread_task"]
-  agent: editor_agent
-
-qa_review_task:
-  description: >
-    Review the LinkedIn and Twitter outputs for tone, clarity, and adherence to the relevant style guides.
-    ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_li: 
-    {style_li}
-    ===
-    style_x: 
-    {style_x}
-    ===
-    transcript: 
-    {transcript}
-    ===
-    You must:
-    - Score each using the 14-point rubric
-    - Check these 6 compliance items:
-      - Event mentioned only once (CTA only) ✓/✗
-      - No hashtags ✓/✗
-      - Only allowed emojis in allowed places ✓/✗
-      - Each bullet ≤ 10 words ✓/✗
-      - No vague/fluffy hook terms ✓/✗
-      - Final voice: Clear, sharp, grounded ✓/✗
-    - If score < 14:
-      - Include revision notes
-      - Clearly indicate which agent should revise (e.g., writer, fact checker, editor)
- 
+    Your analysis should:
+    - Identify the main thesis and supporting arguments
+    - Extract specific technical details, numbers, and metrics
+    - Find surprising or counterintuitive claims
+    - Collect impactful direct quotes from the speaker
+    - Note the speaker's communication style and tone
+    - Highlight key findings that would interest both technical and non-technical audiences
   expected_output: >
     {
-      "paragraph_ai": Summary paragraph,
-      "hooks_ai": 5 hooks,
-      "li_content": Final LinkedIn text,
-      "x_content": Final Twitter thread,
-      "eval_notes": Rubric breakdown and checklist with 6 compliance items with revision notes
+      "core_thesis": "Main argument in 1 sentence",
+      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
+      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["...", "..."]},
+      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
+      "impactful_quotes": ["Direct quote 1", "Direct quote 2"],
+      "speaker_voice": "Description of communication style and tone characteristics"
     }
-  context: ["tighten_linkedin_post_task", "tighten_twitter_thread_task"]
+  agent: transcript_analyzer_agent
+
+generate_hooks_task:
+  description: >
+    Generate platform-optimized hooks based on {speaker}'s talk content.
+    ===
+    transcript: 
+    {transcript}
+    ===
+    Create compelling opening lines that:
+    - LinkedIn: Appeal to policymakers, industry leaders, tech professionals
+    - Twitter/X: Target ML researchers, AI alignment professionals
+    - Are surprising, specific, and avoid hype language
+    - Use complete sentences, not phrases or titles
+    - Reflect findings from the transcript analysis
+    - Include brief reasoning for why each hook would resonate
+  expected_output: >
+    {
+      "li_hooks": [
+        {"text": "Hook for LinkedIn audience", "reasoning": "Why effective for professionals"},
+        {"text": "Alternative LinkedIn hook", "reasoning": "Different angle/approach"}
+      ],
+      "x_hooks": [
+        {"text": "Hook for Twitter/X audience", "reasoning": "Why effective for ML researchers"},
+        {"text": "Alternative X hook", "reasoning": "Different technical angle"}
+      ]
+    }
+  context: ["analyze_transcript_task"]
+  agent: hook_specialist_agent
+
+create_li_content_task:
+  description: >
+    Create LinkedIn post content optimized for policymakers and tech professionals.
+    ===
+    transcript: 
+    {transcript}
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_li: 
+    {style_li}
+    ===
+    Your content should:
+    - Select the best LinkedIn hook and explain your choice
+    - Write a rich 3-5 sentence paragraph summary suitable for non-ML professionals
+    - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 10 words each
+    - Focus on implications, applications, and broader significance
+    - Maintain accessibility while preserving technical accuracy
+    - Use the speaker's voice and findings from the transcript
+  expected_output: >
+    {
+      "selected_hook": "Chosen hook with selection reasoning",
+      "paragraph_summary": "Rich summary paragraph for LinkedIn audience", 
+      "bullets": ["Bullet point 1", "Bullet point 2", "Bullet point 3", "Bullet point 4"]
+    }
+  context: ["analyze_transcript_task", "generate_hooks_task"]
+  agent: li_content_writer_agent
+
+create_x_content_task:
+  description: >
+    Create Twitter/X thread content optimized for ML researchers and technical audiences.
+    ===
+    transcript: 
+    {transcript}
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_x: 
+    {style_x}
+    ===
+    Your content should:
+    - Select the best X hook and explain your choice
+    - Write complete tweet content that includes hook + core findings
+    - Optimize for 280 character limit while maximizing information density
+    - Include specific technical details, methods, and results
+    - Target ML researchers who appreciate precision and nuance
+    - Avoid oversimplification while remaining accessible to technical audience
+  expected_output: >
+    {
+      "selected_hook": "Chosen hook with selection reasoning",
+      "x_content": "Complete optimized tweet content (hook + core content)"
+    }
+  context: ["analyze_transcript_task", "generate_hooks_task"]
+  agent: x_content_writer_agent
+
+fact_check_content_task:
+  description: >
+    Verify all content claims against the original transcript for accuracy.
+    ===
+    ORIGINAL TRANSCRIPT (SOURCE OF TRUTH): 
+    {transcript}
+    ===
+    SPEAKER: {speaker}
+    EVENT: {event_name}
+    ===
+    Review the LinkedIn and Twitter/X content from previous tasks to ensure:
+    - Every claim is supported by the transcript
+    - Technical details and numbers are precisely accurate
+    - No exaggerations or misrepresentations exist
+    - Tone matches the speaker's original communication style
+    - Content represents findings the speaker would endorse
+    
+    IF CONTENT FAILS ACCURACY CHECK:
+    1. Rewrite the problematic sections using only verified transcript information
+    2. Re-assess your corrections against the transcript
+    3. Maximum 1 revision attempt to avoid loops
+    4. If still failing after revision, reject with detailed notes
+  expected_output: >
+    {
+      "accuracy_score": 9,
+      "fact_issues": ["Issue description if any"],
+      "technical_accuracy": "Assessment of numbers/methods accuracy", 
+      "speaker_alignment": "Would speaker endorse this content?",
+      "corrections_made": "Description of any corrections applied",
+      "revised_li_content": "Corrected LinkedIn content (if revised)",
+      "revised_x_content": "Corrected X content (if revised)",
+      "approved_for_next_step": false
+    }
+    
+    APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
+    - Accuracy score is PERFECT 10/10 (no tolerance for inaccuracy)
+    - Zero factual errors or misrepresentations 
+    - Speaker would confidently endorse and reshare
+    - All technical details are precisely correct
+  context: ["create_li_content_task", "create_x_content_task"]
+  agent: fact_checker_agent
+
+voice_authenticity_check_task:
+  description: >
+    Ensure content matches the speaker's voice while being concise and impactful.
+    ===
+    ORIGINAL TRANSCRIPT (SPEAKER'S VOICE): 
+    {transcript}
+    ===
+    SPEAKER: {speaker}
+    AFFILIATION: {affiliation}
+    ===
+    Review the LinkedIn and Twitter/X content and fact check results from previous tasks.
+    STEP 1 - VOICE AUTHENTICITY:
+    - Sounds like something the speaker would naturally say
+    - Matches their tone, formality level, and phrasing patterns
+    - Preserves their unique communication characteristics
+    - Would make the speaker want to reshare the content
+    - Feels authentic rather than corporate or generic
+    
+    STEP 2 - CONCISENESS EDITING:
+    - Remove unnecessary words while preserving speaker's voice
+    - Tighten sentence structure for maximum impact
+    - LinkedIn: Target <200 words, bullets <10 words each
+    - Twitter/X: Maximize information density
+    - Cut fluff while maintaining speaker's authentic style
+    
+    IF CONTENT FAILS:
+    1. Fix voice issues using speaker's actual phrases from transcript
+    2. Cut wordiness while preserving authentic voice
+    3. Re-assess both voice match and conciseness
+    4. Maximum 1 revision attempt to avoid loops
+  expected_output: >
+    {
+      "voice_match_score": 8,
+      "conciseness_score": 8,
+      "authenticity_assessment": "Does this sound like the speaker?",
+      "wordiness_assessment": "Content is concise and impactful?",
+      "speaker_would_share": true,
+      "corrections_made": "Description of voice and conciseness corrections applied",
+      "revised_li_content": "Voice-authentic and concise LinkedIn content (if revised)",
+      "revised_x_content": "Voice-authentic and concise X content (if revised)",
+      "approved_for_next_step": false
+    }
+    
+    APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
+    - Voice match score is 8/10 or higher
+    - Conciseness score is 8/10 or higher
+    - Speaker would definitely reshare (not just "maybe")
+    - Content feels authentic, not corporate or generic
+    - LinkedIn <200 words, bullets <10 words each
+    - No unnecessary words remain
+  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task"]
+  agent: voice_checker_agent
+
+compliance_audit_task:
+  description: >
+    Audit content for style compliance and assemble final publication-ready posts.
+    ===
+    style_shared: 
+    {style_shared}
+    ===
+    style_li: 
+    {style_li}
+    ===
+    style_x: 
+    {style_x}
+    ===
+    Review the LinkedIn and Twitter/X content and all quality control results from previous tasks.
+    STEP 1 - COMPLIANCE AUDIT:
+    - Emoji usage (only 🔹 👇 ▶️ 📄 in designated places)
+    - Character limits and word counts
+    - Structural requirements (hook, paragraph, bullets, CTA)
+    - Attribution and event mention rules
+    - 14-point rubric scoring
+    - Style guide violations
+    
+    STEP 2 - CONTENT ASSEMBLY:
+    - Combine approved components using FAR.AI templates
+    - LinkedIn: Hook + Paragraph + Bullets + CTA + First Comment
+    - Twitter/X: Optimized content + CTA with links
+    - Apply proper formatting and structure
+    
+    IF COMPLIANCE FAILS:
+    1. Fix format violations (emojis, structure, character counts)
+    2. Re-audit against style guide requirements
+    3. Assemble only if fully compliant
+    4. Maximum 1 revision attempt to avoid loops
+  expected_output: >
+    {
+      "li_compliance_score": 14,
+      "x_compliance_score": 14,
+      "style_violations": ["Violation description if any"],
+      "rubric_breakdown": {
+        "content_quality": 8,
+        "style_quality": 6,
+        "specific_scores": "Detailed breakdown"
+      },
+      "corrections_made": "Description of compliance fixes applied",
+      "li_hook": "Final LinkedIn hook",
+      "paragraph_summary": "Final paragraph summary",
+      "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+      "x_content": "Final Twitter/X content",
+      "approved_for_final_review": false
+    }
+    
+    APPROVAL CRITERIA: Only approve (set approved_for_final_review: true) if:
+    - Both LinkedIn AND X scores are perfect 14/14
+    - Zero style guide violations
+    - Zero compliance issues
+    - Content exceeds professional publication standards
+    - Assembly completed successfully
+  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
+  agent: compliance_auditor_agent
+
+
+final_review_task:
+  description: >
+    Make final publication decision based on all quality control reports.
+    ===
+    ORIGINAL TRANSCRIPT (FOR FINAL ACCURACY CHECK): 
+    {transcript}
+    ===
+    STYLE GUIDES (FOR FINAL COMPLIANCE CHECK):
+    {style_shared}
+    
+    {style_li}
+    
+    {style_x}
+    ===
+    SPEAKER: {speaker}
+    EVENT: {event_name}
+    AFFILIATION: {affiliation}
+    ===
+    Review the final assembled content and all quality control outputs from previous tasks.
+    Review all previous quality control outputs:
+    - Fact checking results and accuracy scores
+    - Voice authenticity assessment
+    - Style guide compliance audit
+    - Assembled post quality
+    - Overall readiness for publication
+    
+    PUBLICATION STANDARDS (VERY HIGH BAR):
+    - Accuracy score must be 10/10 or higher
+    - Voice match score must be 8/10 or higher  
+    - Compliance score must be 14/14 (perfect)
+    - Zero blocking issues allowed
+    - Speaker must be willing to reshare (confident assessment)
+    - Content must exceed industry standards for research communication
+    
+    Reject content that doesn't meet these strict criteria. FAR.AI's reputation depends on exceptional quality.
+  expected_output: >
+    {
+      "li_hook": "Final approved LinkedIn hook",
+      "paragraph_summary": "Final approved summary paragraph",
+      "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+      "x_content": "Final approved Twitter/X content",
+      "publication_decision": "APPROVED/NEEDS_REVISION",
+      "final_quality_score": 14,
+      "blocking_issues": [],
+      "revision_notes": "Specific feedback if revision needed",
+      "eval_notes": "Complete quality assessment and rubric breakdown"
+    }
+  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task", "compliance_audit_task"]
   output_file: "output/{speaker}_final.json"
-  agent: qa_agent
+  agent: final_reviewer_agent
