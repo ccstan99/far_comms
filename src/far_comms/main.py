@@ -89,32 +89,7 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-def assemble_li_post(content: dict, talk_request: TalkRequest) -> str:
-    """Assemble LinkedIn post from components"""
-    bullets_formatted = "\n".join(content.get("bullets", []))
-    
-    li_post = f"""{content.get("li_hook", "")}
-
-{content.get("paragraph_summary", "")}
-
-{bullets_formatted}
-
-Link to {talk_request.event} recording & resources in comments 👇"""
-
-    # First comment
-    first_comment = f"""▶️ Watch video: {talk_request.yt_full_link}
-📄 Read paper: {talk_request.resource_url}"""
-    
-    return f"{li_post}\n\n**First Comment:**\n{first_comment}"
-
-def assemble_x_post(content: dict, talk_request: TalkRequest) -> str:
-    """Assemble Twitter/X post from components"""
-    return f"""{content.get("x_content", "")} 👇
-
----
-
-▶️ Watch {talk_request.event} recording: {talk_request.yt_full_link}
-📄 Read paper: {talk_request.resource_url}"""
+# Assembly functions removed - now handled by compliance_auditor_agent in the crew
 
 async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
     """Run crew in background - accepts TalkRequest directly"""
@@ -132,7 +107,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         crew_data = {
             "transcript": talk_request.transcript or "",
             "speaker": talk_request.speaker or "",
-            "video_url": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",
+            "yt_full_link": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",
             "resource_url": str(talk_request.resource_url) if talk_request.resource_url else "",
             "event_name": talk_request.event or "",
             "affiliation": talk_request.affiliation or "",
@@ -171,20 +146,26 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                     parsed_output = {"content": crew_output}
                 
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
-                logger.info(f"li_hook value: {parsed_output.get('li_hook', 'MISSING')}")
-                logger.info(f"x_content value: {parsed_output.get('x_content', 'MISSING')}")
-                logger.debug(f"Full parsed_output: {parsed_output}")
                 
-                # Handle hooks - compliance_auditor_agent outputs final li_hook
-                hooks_formatted = parsed_output.get("li_hook", "")
+                # Extract components and assembled content from new crew structure
+                components = parsed_output.get("components", {})
+                assembled = parsed_output.get("assembled_content", {})
                 
-                # Assemble final posts from components
-                li_content = assemble_li_post(parsed_output, talk_request)
-                # X content is already fully assembled by the crew
-                x_content = parsed_output.get("x_content", "")
+                # Use assembled content directly (no more assembly in main.py)
+                hooks_formatted = components.get("li_hook", "")
+                paragraph_summary = components.get("paragraph_summary", "")
+                li_content = assembled.get("li_content", "")
+                x_content = assembled.get("x_content", "")
                 
-                logger.info(f"Assembled LI content length: {len(li_content)}")
-                logger.info(f"Assembled X content length: {len(x_content)}")
+                logger.info(f"li_hook value: {hooks_formatted if hooks_formatted else 'MISSING'}")
+                logger.info(f"paragraph_summary value: {paragraph_summary if paragraph_summary else 'MISSING'}")
+                logger.info(f"x_content value: {x_content if x_content else 'MISSING'}")
+                logger.debug(f"Components keys: {list(components.keys())}")
+                logger.debug(f"Assembled keys: {list(assembled.keys())}")
+                
+                logger.info(f"Final LI content length: {len(li_content)}")
+                logger.info(f"Final X content length: {len(x_content)}")
+                logger.debug(f"X content preview: {x_content[:100]}..." if len(x_content) > 100 else f"Full X content: {x_content}")
                 
                 # Prepare final updates for Coda columns
                 updates = [{
@@ -193,7 +174,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                         "Summaries status": "Done",
                         "Progress": json.dumps(parsed_output, indent=2),
                         # Map assembled content to Coda columns:
-                        "Paragraph (AI)": parsed_output.get("paragraph_summary", ""),
+                        "Paragraph (AI)": paragraph_summary,
                         "Hooks (AI)": hooks_formatted,
                         "LI content": li_content,
                         "X content": x_content,
@@ -201,7 +182,11 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                     }
                 }]
                 
-                coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.debug(f"Updating Coda columns: {list(updates[0]['updates'].keys())}")
+                logger.debug(f"X content being sent to Coda: '{updates[0]['updates']['X content']}'")
+                
+                result = coda_tool.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.debug(f"Coda update result: {result}")
                 logger.info(f"Successfully updated Coda with crew results")
                 
             except Exception as update_error:

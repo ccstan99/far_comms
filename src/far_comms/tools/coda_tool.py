@@ -160,36 +160,50 @@ class CodaTool:
             "matching_rows": matching_rows
         }, indent=2, default=str)
 
-    def update_row(self, doc_id: str, table_id: str, row_id: str, column_name: str, value: str) -> str:
-        """Update a single cell in a single row"""
+    def update_row(self, doc_id: str, table_id: str, row_id: str, column_updates: dict) -> str:
+        """Update multiple columns in a single row with one API call"""
         # Get column mapping
         columns_data = json.loads(self.get_columns(doc_id, table_id))
         columns = columns_data["columns"]
         
-        # Find column ID by name
-        column_id = None
-        for col_id, name in columns.items():
-            if name == column_name:
-                column_id = col_id
-                break
+        # Build cells array for all columns
+        cells = []
+        not_found_columns = []
         
-        if not column_id:
-            return f"Error: Column '{column_name}' not found in table"
+        for column_name, value in column_updates.items():
+            # Find column ID by name
+            column_id = None
+            for col_id, name in columns.items():
+                if name == column_name:
+                    column_id = col_id
+                    break
+            
+            if column_id:
+                cells.append({"column": column_id, "value": value})
+            else:
+                not_found_columns.append(column_name)
         
-        # Update the cell
+        if not cells:
+            return f"Error: No valid columns found. Missing: {not_found_columns}"
+        
+        # Update all cells in one API call
         uri = f'https://coda.io/apis/v1/docs/{doc_id}/tables/{table_id}/rows/{row_id}'
         payload = {
             "row": {
-                "cells": [{"column": column_id, "value": value}]
+                "cells": cells
             }
         }
         
         response = requests.put(uri, headers=self.coda_headers, json=payload)
         
         if response.ok:
-            return f"Successfully updated '{column_name}' to '{value}'"
+            updated_columns = [col for col in column_updates.keys() if col not in not_found_columns]
+            result = f"Successfully updated {len(updated_columns)} columns: {updated_columns}"
+            if not_found_columns:
+                result += f". Not found: {not_found_columns}"
+            return result
         else:
-            return f"Error updating cell: {response.status_code} - {response.text}"
+            return f"Error updating cells: {response.status_code} - {response.text}"
 
     def update_rows(self, doc_id: str, table_id: str, updates: List[Dict[str, Any]]) -> str:
         """
@@ -216,15 +230,15 @@ class CodaTool:
                 results.append(f"Skipped invalid update item: {update_item}")
                 continue
             
-            # Update each column by calling the single update method
-            for column_name, value in row_updates.items():
-                try:
-                    result = self.update_row(doc_id, table_id, row_id, column_name, value)
-                    if "Successfully" in result:
-                        successful_updates += 1
-                    results.append(f"Row {row_id}, {column_name}: {result}")
-                except Exception as e:
-                    results.append(f"✗ Error updating row {row_id}, {column_name}: {str(e)}")
+            # Update all columns for this row in a single API call
+            try:
+                result = self.update_row(doc_id, table_id, row_id, row_updates)
+                if "Successfully" in result:
+                    # Count successful updates (rough estimate based on result string)
+                    successful_updates += len(row_updates)
+                results.append(f"Row {row_id}: {result}")
+            except Exception as e:
+                results.append(f"✗ Error updating row {row_id}: {str(e)}")
         
         return json.dumps({
             "total_updates_attempted": sum(len(item.get("updates", {})) for item in updates),

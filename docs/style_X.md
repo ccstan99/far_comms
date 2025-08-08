@@ -47,8 +47,8 @@
 "High-compute alignment is necessary for safe superintelligence."
 @polynoamial
 : integrate alignment into high-compute RL, not after
-🔹 3 approaches: adversarial training, scalable oversight, model organisms
-🔹 Process: train robust models → align during RL → monitor deployment
+▸ 3 approaches: adversarial training, scalable oversight, model organisms
+▸ Process: train robust models → align during RL → monitor deployment
 👇
 
 ▶️ Watch Noam discuss Stephen McAleer's research (with his own critical perspectives) from the Singapore Alignment Workshop:

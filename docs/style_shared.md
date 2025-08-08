@@ -3,8 +3,8 @@
 These guidelines apply across **all platforms**.
 
 ## Voice & Tone
-- **Voice**: Smart-colleague — conversational, but credible
-- **Tone**: Professional and grounded
+- **Voice**: Smart-colleague — conversational yet authoritative, maximally concise
+- **Tone**: Professional and grounded, never speaker mimicry
 
 ## Language Rules
 - Avoid:
@@ -13,15 +13,26 @@ These guidelines apply across **all platforms**.
   - Vague or hype-y language
 
 - Do not use:
-  - Em dashes (—)
+  - Em dashes (—) or regular hyphens (-) except in hyphenated names — use periods, commas, natural breaks
   - Hashtags
   - Overused adjectives like:
     - "exciting", "groundbreaking", "revealing", "incredible", "eye-opening"
 
+## Content Style
+- **Human writing**: Natural and conversational, NOT AI-generated or robotic
+- **Platform attribution**: LinkedIn uses @speaker (affiliation), Twitter/X uses speaker name only
+
+## Character Limits
+- **Twitter/X**: Tweet 1 must be ≤280 characters
+- **LinkedIn**: <150 words total, bullets ≤8 words each
+
 ## Emojis
-- Only the following are allowed:  
-  🔹 👇 ▶️ 📄  
-  Use only in designated places.
+- **LinkedIn**: ▸ 👇 ▶️ 📄 allowed in designated places
+- **Twitter/X**: Only 👇 at end of tweet 1
+
+## Content Quality Standards
+- **Hook requirements**: Concise, accurate, punchy - NOT sensational or clickbait
+- **Writing style**: Natural human conversation - NOT AI-generated or robotic
 
 ## Attribution
 - Always **credit the speaker and their research**

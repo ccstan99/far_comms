@@ -1,3 +1,5 @@
+# All tasks follow style_shared.md, style_li.md, and style_x.md requirements
+
 analyze_transcript_task:
   description: >
     Analyze {speaker}'s talk transcript to extract core findings, technical details, and key insights.
@@ -63,88 +65,59 @@ generate_hooks_task:
 
 create_li_content_task:
   description: >
-    Create LinkedIn post content optimized for policymakers and tech professionals.
+    Create LinkedIn content for policymakers and tech professionals using common style requirements.
     ===
-    transcript: 
-    {transcript}
+    transcript: {transcript}
+    style_shared: {style_shared}
+    style_li: {style_li}
     ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_li: 
-    {style_li}
-    ===
-    Your content should:
-    - Select the strongest LinkedIn hook from the 5 options and explain your choice
-    - Ensure hook works cohesively with paragraph - no repetition of key phrases
-    - Write a tight 2-3 sentence paragraph summary suitable for non-ML professionals  
-    - Use concise attribution format: "{speaker} ({affiliation}) presents..." not "from"
-    - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 8 words each
-    - Bullets should complement hook/paragraph, not repeat same information
-    - Focus on implications, applications, and broader significance
-    - Maintain accessibility while preserving technical accuracy
-    - Use FAR.AI's professional voice with speaker's factual content
+    Requirements:
+    - Select strongest hook from 5 options (explain choice)
+    - Ensure hook/paragraph cohesion (no repetitive phrases)
+    - Write 2-3 sentence paragraph for non-ML professionals
+    - Create 3-4 bullets ≤8 words each (complement, don't repeat content)
+    - Focus on implications, applications, broader significance
   expected_output: >
     {
-      "selected_hook": "Chosen hook with detailed selection reasoning",
-      "paragraph_summary": "Tight 2-3 sentence summary for LinkedIn audience", 
-      "bullets": ["≤8 word bullet 1", "≤8 word bullet 2", "≤8 word bullet 3", "≤8 word bullet 4"]
+      "selected_hook": "Chosen hook + reasoning",
+      "paragraph_summary": "2-3 sentence summary", 
+      "bullets": ["≤8 word bullet 1", "≤8 word bullet 2", "≤8 word bullet 3"]
     }
   context: ["analyze_transcript_task", "generate_hooks_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
   description: >
-    Create Twitter/X thread content optimized for ML researchers and technical audiences.
+    Create Twitter/X content for ML researchers using common style requirements.
     ===
-    transcript: 
-    {transcript}
+    transcript: {transcript}
+    style_shared: {style_shared}
+    style_x: {style_x}
     ===
-    style_shared: 
-    {style_shared}
-    ===
-    style_x: 
-    {style_x}
-    ===
-    Your content should:
-    - Select the strongest X hook from the 5 options and explain your choice
-    - Write ULTRA-DENSE tweet content that packs maximum insight into 280 chars
-    - Use abbreviations: "w/" not "with", "&" not "and", numbers not words
-    - Cut ALL unnecessary words - every character must add value
-    - Include specific technical details, methods, and results
-    - Target ML researchers who appreciate precision and nuance
-    - Use FAR.AI's professional voice with speaker's technical accuracy
-    - COUNT CHARACTERS - must be ≤280 including spaces and punctuation
+    Requirements:
+    - Select strongest hook from 5 options (explain choice)  
+    - Write ULTRA-DENSE tweet, every character adds value
+    - Use abbreviations: w/, &, numbers not words
+    - Include specific technical details, methods, results
+    - Target ML researchers who appreciate precision
   expected_output: >
     {
-      "selected_hook": "Chosen hook with detailed selection reasoning",
-      "x_content": "Complete optimized tweet content (hook + core findings)"
+      "selected_hook": "Chosen hook + reasoning",
+      "x_content": "Complete tweet content"
     }
   context: ["analyze_transcript_task", "generate_hooks_task"]
   agent: x_content_writer_agent
 
 fact_check_content_task:
   description: >
-    Verify all content claims against the original transcript for accuracy.
+    Verify all content claims against original transcript.
     ===
-    ORIGINAL TRANSCRIPT (SOURCE OF TRUTH): 
-    {transcript}
-    ===
+    TRANSCRIPT: {transcript}
     SPEAKER: {speaker}
     EVENT: {event_name}
     ===
-    Review the LinkedIn and Twitter/X content from previous tasks to ensure:
-    - Every claim is supported by the transcript
-    - Technical details and numbers are precisely accurate
-    - No exaggerations or misrepresentations exist
-    - Tone matches the speaker's original communication style
-    - Content represents findings the speaker would endorse
-    
-    IF CONTENT FAILS ACCURACY CHECK:
-    1. Rewrite the problematic sections using only verified transcript information
-    2. Re-assess your corrections against the transcript
-    3. Maximum 1 revision attempt to avoid loops
-    4. If still failing after revision, reject with detailed notes
+    Ensure every claim is supported, technical details accurate, no exaggerations.
+    Speaker should endorse all content. Rewrite problematic sections once if needed.
   expected_output: >
     {
       "accuracy_score": 9,
@@ -167,34 +140,14 @@ fact_check_content_task:
 
 voice_authenticity_check_task:
   description: >
-    Ensure content uses FAR.AI's professional brand voice while being maximally concise and factually accurate.
+    Ensure FAR.AI brand voice and maximum conciseness using common style requirements.
     ===
-    ORIGINAL TRANSCRIPT (FOR FACTUAL ACCURACY): 
-    {transcript}
-    ===
+    TRANSCRIPT: {transcript}
     SPEAKER: {speaker}
     AFFILIATION: {affiliation}
     ===
-    Review the LinkedIn and Twitter/X content and fact check results from previous tasks.
-    STEP 1 - FAR.AI BRAND VOICE:
-    - Uses FAR.AI's conversational yet authoritative tone
-    - Professional and credible, never mimicking speaker's personal style
-    - Preserves speaker's exact technical terms and key insights for accuracy
-    - Sounds like FAR.AI content, not a speaker quote
-    - Maintains FAR.AI's brand consistency and standards
-    
-    STEP 2 - MAXIMUM CONCISENESS:
-    - Cut every unnecessary word ruthlessly
-    - Tighten sentence structure for maximum impact
-    - LinkedIn: <150 words total, bullets ≤8 words each
-    - Twitter/X: Maximize information density, eliminate fluff
-    - Every word must earn its place - no exceptions
-    
-    IF CONTENT FAILS:
-    1. Rewrite in FAR.AI's professional voice using factual content
-    2. Cut wordiness aggressively while preserving meaning
-    3. Re-assess both brand voice and conciseness
-    4. Maximum 1 revision attempt to avoid loops
+    Check: FAR.AI tone (not speaker mimicry), conciseness (LinkedIn <150 words, bullets ≤8 words).
+    Cut unnecessary words ruthlessly. Rewrite once if needed.
   expected_output: >
     {
       "brand_voice_score": 9,
@@ -220,41 +173,26 @@ voice_authenticity_check_task:
 
 compliance_audit_task:
   description: >
-    CRITICAL: You must ONLY audit and assemble content from previous tasks. DO NOT create new content.
+    Audit content from previous tasks using common style requirements, then assemble final posts.
     ===
-    style_shared: 
-    {style_shared}
+    style_shared: {style_shared}
+    style_li: {style_li}
+    style_x: {style_x}
     ===
-    style_li: 
-    {style_li}
+    yt_full_link: {yt_full_link}
+    resource_url: {resource_url}
+    event_name: {event_name}
     ===
-    style_x: 
-    {style_x}
-    ===
-    MANDATORY: Use ONLY the LinkedIn and Twitter/X content from previous tasks - never create new content.
-    Extract the approved content from create_li_content_task and create_x_content_task outputs.
+    Process:
+    1. AUDIT: Check compliance against style guides, structure, attribution, 14-point rubric
+       - CRITICAL: Scan for em dashes (—) and hyphens (-) except in names - replace with periods/commas
+    2. ASSESS: Evaluate hook/paragraph/bullets cohesion, ensure no repetitive phrasing
+    3. ASSEMBLE: Create final LinkedIn and Twitter/X posts using FAR.AI templates
+       - Replace [video_url] with {yt_full_link}
+       - Replace [resource_url] with {resource_url} 
+       - Replace {event_name} in CTA text with actual event name
     
-    STEP 1 - COMPLIANCE AUDIT:
-    - Emoji usage (only 🔹 👇 ▶️ 📄 in designated places)
-    - Character limits and word counts
-    - Structural requirements (hook, paragraph, bullets, CTA)
-    - Attribution and event mention rules
-    - 14-point rubric scoring
-    - Style guide violations
-    
-    STEP 2 - CONTENT ASSEMBLY:
-    - Combine approved components using FAR.AI templates
-    - LinkedIn: Hook + Paragraph + Bullets + CTA + First Comment
-    - Twitter/X: Optimized content + CTA with links
-    - Apply proper formatting and structure
-    - Ensure hook/paragraph/bullets work cohesively without repetitive phrasing
-    - Each section should add unique value, not repeat information
-    
-    IF COMPLIANCE FAILS:
-    1. Fix format violations (emojis, structure, character counts)
-    2. Re-audit against style guide requirements
-    3. Assemble only if fully compliant
-    4. Maximum 1 revision attempt to avoid loops
+    Fix violations once if needed, assemble only when fully compliant.
   expected_output: >
     {
       "li_compliance_score": 14,
@@ -266,10 +204,17 @@ compliance_audit_task:
         "specific_scores": "Detailed breakdown"
       },
       "corrections_made": "Description of compliance fixes applied",
-      "li_hook": "Final LinkedIn hook",
-      "paragraph_summary": "Final paragraph summary",
-      "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
-      "x_content": "Final Twitter/X content",
+      "cohesion_assessment": "Assessment of how well hook/paragraph/bullets work together without repetition",
+      "components": {
+        "li_hook": "Final LinkedIn hook",
+        "paragraph_summary": "Final paragraph summary",
+        "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+        "x_content_core": "Final Twitter/X content without CTA"
+      },
+      "assembled_content": {
+        "li_content": "Complete LinkedIn post: hook + paragraph + bullets + CTA + first comment",
+        "x_content": "Complete Twitter/X content: core content + CTA + links"
+      },
       "approved_for_final_review": false
     }
     
@@ -320,15 +265,22 @@ final_review_task:
     Reject content that doesn't meet these strict criteria. FAR.AI's reputation depends on exceptional quality.
   expected_output: >
     {
-      "li_hook": "Final approved LinkedIn hook",
-      "paragraph_summary": "Final approved summary paragraph",
-      "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
-      "x_content": "Final approved Twitter/X content",
+      "components": {
+        "li_hook": "Final approved LinkedIn hook",
+        "paragraph_summary": "Final approved summary paragraph",
+        "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+        "x_content_core": "Final approved Twitter/X core content"
+      },
+      "assembled_content": {
+        "li_content": "Final approved complete LinkedIn post",
+        "x_content": "Final approved complete Twitter/X content"
+      },
       "publication_decision": "APPROVED/NEEDS_REVISION",
       "final_quality_score": 14,
       "blocking_issues": [],
-      "revision_notes": "Specific feedback if revision needed",
-      "eval_notes": "Complete quality assessment and rubric breakdown"
+      "revision_notes": "Specific feedback if revision needed", 
+      "eval_notes": "Complete quality assessment and rubric breakdown",
+      "cohesion_assessment": "Final assessment of content cohesion and flow"
     }
   context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task", "compliance_audit_task"]
   output_file: "output/{speaker}_final.json"
