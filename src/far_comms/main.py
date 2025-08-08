@@ -65,6 +65,26 @@ class TalkPromotionOutput(BaseModel):
 
 app = FastAPI()
 
+@app.on_event("startup")
+async def validate_environment():
+    """Validate required environment variables on startup"""
+    required_vars = {
+        "CODA_API_TOKEN": "Coda API integration",
+        "ANTHROPIC_API_KEY": "Claude model access"
+    }
+    
+    missing_vars = []
+    for var, purpose in required_vars.items():
+        if not os.getenv(var):
+            missing_vars.append(f"{var} (required for {purpose})")
+    
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    
+    logger.info("Environment validation passed")
+
 @app.get("/")
 def home():
     return RedirectResponse(url="/docs")
@@ -237,8 +257,15 @@ async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkReques
     
     # Use CodaTool to get row data
     coda_tool = CodaTool()
-    row_data_str = coda_tool.get_row(doc_id, table_id, row_id)
-    row_data = json.loads(row_data_str)
+    try:
+        row_data_str = coda_tool.get_row(doc_id, table_id, row_id)
+        row_data = json.loads(row_data_str)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Coda row data as JSON: {e}")
+        raise ValueError(f"Invalid JSON response from Coda: {e}")
+    except Exception as e:
+        logger.error(f"Failed to fetch Coda row data: {e}")
+        raise
     
     # Extract talk data from the row
     talk_data_dict = row_data["data"]
@@ -286,8 +313,11 @@ async def coda_webhook_endpoint(
                 this_row = json_data.get("this_row")
             if "doc_id" in json_data:
                 doc_id = json_data.get("doc_id")
-        except:
-            pass
+            logger.debug(f"Extracted from JSON body: this_row={this_row}, doc_id={doc_id}")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse webhook JSON body: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error parsing webhook body: {e}")
     
     # Validate required params
     if not this_row or not doc_id or not function_name:
@@ -335,6 +365,7 @@ async def coda_webhook_endpoint(
         return response_data
             
     except Exception as e:
+        logger.error(f"Webhook processing error: {e}", exc_info=True)
         return {"error": f"Failed to process Coda webhook for {function_name}: {e}"}
 
 if __name__ == "__main__":
