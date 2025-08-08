@@ -76,9 +76,11 @@ create_li_content_task:
     ===
     Your content should:
     - Select the strongest LinkedIn hook from the 5 options and explain your choice
+    - Ensure hook works cohesively with paragraph - no repetition of key phrases
     - Write a tight 2-3 sentence paragraph summary suitable for non-ML professionals  
     - Use concise attribution format: "{speaker} ({affiliation}) presents..." not "from"
     - Create 3-4 bullet points (without 🔹 emoji) that are ≤ 8 words each
+    - Bullets should complement hook/paragraph, not repeat same information
     - Focus on implications, applications, and broader significance
     - Maintain accessibility while preserving technical accuracy
     - Use FAR.AI's professional voice with speaker's factual content
@@ -218,7 +220,7 @@ voice_authenticity_check_task:
 
 compliance_audit_task:
   description: >
-    Audit content for style compliance and assemble final publication-ready posts.
+    CRITICAL: You must ONLY audit and assemble content from previous tasks. DO NOT create new content.
     ===
     style_shared: 
     {style_shared}
@@ -229,7 +231,9 @@ compliance_audit_task:
     style_x: 
     {style_x}
     ===
-    Review the LinkedIn and Twitter/X content and all quality control results from previous tasks.
+    MANDATORY: Use ONLY the LinkedIn and Twitter/X content from previous tasks - never create new content.
+    Extract the approved content from create_li_content_task and create_x_content_task outputs.
+    
     STEP 1 - COMPLIANCE AUDIT:
     - Emoji usage (only 🔹 👇 ▶️ 📄 in designated places)
     - Character limits and word counts
@@ -243,6 +247,8 @@ compliance_audit_task:
     - LinkedIn: Hook + Paragraph + Bullets + CTA + First Comment
     - Twitter/X: Optimized content + CTA with links
     - Apply proper formatting and structure
+    - Ensure hook/paragraph/bullets work cohesively without repetitive phrasing
+    - Each section should add unique value, not repeat information
     
     IF COMPLIANCE FAILS:
     1. Fix format violations (emojis, structure, character counts)

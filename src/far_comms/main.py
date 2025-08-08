@@ -151,9 +151,11 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                     parsed_output = {"content": crew_output}
                 
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
-                logger.debug(f"hooks_ai type: {type(parsed_output.get('hooks_ai'))}, value: {parsed_output.get('hooks_ai')}")
+                logger.info(f"li_hook value: {parsed_output.get('li_hook', 'MISSING')}")
+                logger.info(f"x_content value: {parsed_output.get('x_content', 'MISSING')}")
+                logger.debug(f"Full parsed_output: {parsed_output}")
                 
-                # Handle hooks - crew outputs li_hook as single string
+                # Handle hooks - compliance_auditor_agent outputs final li_hook
                 hooks_formatted = parsed_output.get("li_hook", "")
                 
                 # Assemble final posts from components
