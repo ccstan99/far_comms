@@ -14,13 +14,15 @@ These guidelines apply across **all platforms**.
 
 - Do not use:
   - Em dashes (—) or regular hyphens (-) except in hyphenated names — use periods, commas, natural breaks
-  - Hashtags
+  - Hashtags (absolutely prohibited - never suggest or include hashtags)
   - Overused adjectives like:
     - "exciting", "groundbreaking", "revealing", "incredible", "eye-opening"
 
 ## Content Style
 - **Human writing**: Natural and conversational, NOT AI-generated or robotic
 - **Platform attribution**: LinkedIn uses @speaker (affiliation), Twitter/X uses speaker name only
+- **Neutrality**: Present research findings objectively, do not advocate for positions or artificially promote viewpoints
+- **Accessibility**: Clear and accessible to non-technical audiences while preserving technical accuracy
 
 ## Character Limits
 - **Twitter/X**: Tweet 1 must be ≤280 characters

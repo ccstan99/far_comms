@@ -247,6 +247,125 @@ class CodaTool:
         }, indent=2)
 
 
+    def get_x_handle(self, speaker_name: str, contacts_doc_id: str = "-igBsvSR-f", contacts_table_id: str = "grid-rDp4tK3BXf") -> str:
+        """
+        Find speaker's X handle using hybrid approach:
+        1. Try exact query first (fast)
+        2. Fall back to cached fuzzy matching if no exact match
+        3. Safe fallback to speaker name
+        """
+        if not speaker_name or not speaker_name.strip():
+            return ""
+        
+        speaker_name = speaker_name.strip()
+        
+        # Step 1: Try exact query match (fast)
+        try:
+            params = {"query": f'"name":"{speaker_name}"', "limit": 1}
+            uri = f'https://coda.io/apis/v1/docs/{contacts_doc_id}/tables/{contacts_table_id}/rows'
+            
+            response = requests.get(uri, headers=self.coda_headers, params=params)
+            if response.ok:
+                data = response.json()
+                if data.get("items"):
+                    x_handle = data["items"][0]["values"].get("c-eZzZN-hJYk", "")
+                    if x_handle and x_handle.strip():
+                        return x_handle.strip()  # Already includes @
+        except Exception as e:
+            print(f"Query lookup failed: {e}")
+        
+        # Step 2: Fall back to cached fuzzy matching
+        try:
+            contacts_cache = self._get_contacts_cache(contacts_doc_id, contacts_table_id)
+            return self._fuzzy_match_speaker(speaker_name, contacts_cache)
+        except Exception as e:
+            print(f"Cache lookup failed: {e}")
+        
+        # Step 3: Safe fallback
+        return speaker_name
+
+    def _get_contacts_cache(self, doc_id: str, table_id: str) -> list:
+        """Get contacts cache, refresh if older than 24 hours"""
+        cache_file = self.output_dir / f"contacts_cache_{doc_id}_{table_id}.json"
+        
+        # Check if cache exists and is fresh (< 24 hours)
+        if cache_file.exists():
+            try:
+                cached_data = json.loads(cache_file.read_text())
+                cached_at = datetime.fromisoformat(cached_data.get("cached_at", ""))
+                now = datetime.now()
+                cache_age_hours = (now - cached_at).total_seconds() / 3600
+                
+                if cache_age_hours < 24:
+                    return cached_data.get("contacts", [])
+            except Exception:
+                pass  # Invalid cache, will refresh
+        
+        # Refresh cache
+        return self._refresh_contacts_cache(doc_id, table_id, cache_file)
+
+    def _refresh_contacts_cache(self, doc_id: str, table_id: str, cache_file) -> list:
+        """Fetch all contacts and cache them"""
+        uri = f'https://coda.io/apis/v1/docs/{doc_id}/tables/{table_id}/rows'
+        params = {"limit": 500}  # Adjust as needed
+        
+        response = requests.get(uri, headers=self.coda_headers, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        contacts = []
+        
+        for item in data.get("items", []):
+            values = item.get("values", {})
+            contact = {
+                "name": values.get("c-zL3WLW9EK1", ""),  # Name column
+                "x_handle": values.get("c-eZzZN-hJYk", "")  # X handle column
+            }
+            contacts.append(contact)
+        
+        # Cache the results
+        cache_data = {
+            "cached_at": datetime.now().isoformat(),
+            "contacts": contacts
+        }
+        cache_file.write_text(json.dumps(cache_data, indent=2))
+        
+        return contacts
+
+    def _fuzzy_match_speaker(self, speaker_name: str, contacts: list) -> str:
+        """Fuzzy match speaker name against contacts cache"""
+        speaker_lower = speaker_name.lower()
+        speaker_parts = speaker_lower.split()
+        
+        # Try exact match (case insensitive)
+        for contact in contacts:
+            contact_name = contact.get("name", "").lower()
+            if contact_name == speaker_lower:
+                x_handle = contact.get("x_handle", "")
+                if x_handle and x_handle.strip():
+                    return x_handle.strip()
+        
+        # Try partial matching - all speaker parts in contact name
+        for contact in contacts:
+            contact_name = contact.get("name", "").lower()
+            if all(part in contact_name for part in speaker_parts):
+                x_handle = contact.get("x_handle", "")
+                if x_handle and x_handle.strip():
+                    return x_handle.strip()
+        
+        # Try reverse - contact name parts in speaker name (for nicknames)
+        for contact in contacts:
+            contact_name = contact.get("name", "").lower()
+            contact_parts = contact_name.split()
+            if len(contact_parts) >= 2:  # At least first + last name
+                if all(part in speaker_lower for part in contact_parts[:2]):
+                    x_handle = contact.get("x_handle", "")
+                    if x_handle and x_handle.strip():
+                        return x_handle.strip()
+        
+        # Safe fallback
+        return speaker_name
+
     def _refresh_column_cache(self, doc_id: str, table_id: str, cache_file) -> str:
         """Refresh column cache with fresh data from API"""
         # Fetch table info and columns

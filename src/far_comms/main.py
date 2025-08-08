@@ -147,38 +147,49 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 
-                # Extract components and assembled content from new crew structure
-                components = parsed_output.get("components", {})
-                assembled = parsed_output.get("assembled_content", {})
+                # Extract from new clean structure - Coda fields at top level
+                paragraph_summary = parsed_output.get("paragraph_ai", "")
+                hooks_formatted = parsed_output.get("hooks_ai", "")
+                li_content = parsed_output.get("li_content", "")
+                x_content = parsed_output.get("x_content", "")
                 
-                # Use assembled content directly (no more assembly in main.py)
-                hooks_formatted = components.get("li_hook", "")
-                paragraph_summary = components.get("paragraph_summary", "")
-                li_content = assembled.get("li_content", "")
-                x_content = assembled.get("x_content", "")
+                # Notes section contains all intermediate work
+                notes = parsed_output.get("notes", {})
+                publication_decision = notes.get("publication_decision", "NEEDS_REVISION")
                 
-                logger.info(f"li_hook value: {hooks_formatted if hooks_formatted else 'MISSING'}")
-                logger.info(f"paragraph_summary value: {paragraph_summary if paragraph_summary else 'MISSING'}")
+                logger.info(f"paragraph_ai value: {paragraph_summary if paragraph_summary else 'MISSING'}")
+                logger.info(f"hooks_ai value: {hooks_formatted if hooks_formatted else 'MISSING'}")
+                logger.info(f"li_content value: {li_content if li_content else 'MISSING'}")
                 logger.info(f"x_content value: {x_content if x_content else 'MISSING'}")
-                logger.debug(f"Components keys: {list(components.keys())}")
-                logger.debug(f"Assembled keys: {list(assembled.keys())}")
+                logger.info(f"Publication decision: {publication_decision}")
+                logger.debug(f"Notes keys: {list(notes.keys())}")
                 
                 logger.info(f"Final LI content length: {len(li_content)}")
                 logger.info(f"Final X content length: {len(x_content)}")
                 logger.debug(f"X content preview: {x_content[:100]}..." if len(x_content) > 100 else f"Full X content: {x_content}")
                 
+                # Map publication decision to Coda status
+                status_mapping = {
+                    "APPROVED": "Done",
+                    "NEEDS_REVISION": "Needs review", 
+                    "REJECTED": "Error",
+                    "NEEDS_MANUAL_REVIEW": "Needs review"
+                }
+                coda_status = status_mapping.get(publication_decision, "Needs review")
+                logger.info(f"Setting Coda status: {coda_status}")
+                
                 # Prepare final updates for Coda columns
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
-                        "Summaries status": "Done",
+                        "Summaries status": coda_status,
                         "Progress": json.dumps(parsed_output, indent=2),
                         # Map assembled content to Coda columns:
                         "Paragraph (AI)": paragraph_summary,
                         "Hooks (AI)": hooks_formatted,
                         "LI content": li_content,
                         "X content": x_content,
-                        "Eval notes": parsed_output.get("eval_notes", "")
+                        "Eval notes": notes.get("eval_notes", "")
                     }
                 }]
                 

@@ -12,7 +12,6 @@ analyze_transcript_task:
     - Extract specific technical details, numbers, and metrics
     - Find surprising or counterintuitive claims
     - Collect impactful direct quotes from the speaker
-    - Note the speaker's communication style and tone
     - Highlight key findings that would interest both technical and non-technical audiences
   expected_output: >
     {
@@ -20,8 +19,7 @@ analyze_transcript_task:
       "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
       "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["...", "..."]},
       "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
-      "impactful_quotes": ["Direct quote 1", "Direct quote 2"],
-      "speaker_voice": "Description of communication style and tone characteristics"
+      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
     }
   agent: transcript_analyzer_agent
 
@@ -65,18 +63,22 @@ generate_hooks_task:
 
 create_li_content_task:
   description: >
-    Create LinkedIn content for policymakers and tech professionals using common style requirements.
+    Create LinkedIn content for policymakers and tech professionals using transcript analysis and hook options.
     ===
+    Use the structured transcript analysis and generated hooks as your primary source.
+    Reference raw transcript only for verification and additional quotes if needed.
+    
     transcript: {transcript}
     style_shared: {style_shared}
     style_li: {style_li}
     ===
     Requirements:
-    - Select strongest hook from 5 options (explain choice)
+    - Select strongest LinkedIn hook from generated options (explain choice)
+    - Use transcript analysis findings to inform paragraph content
     - Ensure hook/paragraph cohesion (no repetitive phrases)
-    - Write 2-3 sentence paragraph for non-ML professionals
+    - Write 2-3 sentence paragraph for non-ML professionals using key findings
     - Create 3-4 bullets ≤8 words each (complement, don't repeat content)
-    - Focus on implications, applications, broader significance
+    - Focus on implications, applications, broader significance from analysis
   expected_output: >
     {
       "selected_hook": "Chosen hook + reasoning",
@@ -88,17 +90,21 @@ create_li_content_task:
 
 create_x_content_task:
   description: >
-    Create Twitter/X content for ML researchers using common style requirements.
+    Create Twitter/X content for ML researchers using transcript analysis and hook options.
     ===
+    Use the structured transcript analysis and generated hooks as your primary source.
+    Reference raw transcript only for verification and additional technical details if needed.
+    
     transcript: {transcript}
     style_shared: {style_shared}
     style_x: {style_x}
     ===
     Requirements:
-    - Select strongest hook from 5 options (explain choice)  
+    - Select strongest Twitter/X hook from generated options (explain choice)  
+    - Use transcript analysis technical details and methods for content
     - Write ULTRA-DENSE tweet, every character adds value
     - Use abbreviations: w/, &, numbers not words
-    - Include specific technical details, methods, results
+    - Include specific technical details, methods, results from analysis
     - Target ML researchers who appreciate precision
   expected_output: >
     {
@@ -110,55 +116,64 @@ create_x_content_task:
 
 fact_check_content_task:
   description: >
-    Verify all content claims against original transcript.
+    Verify all content claims against original transcript and provide corrected versions.
     ===
     TRANSCRIPT: {transcript}
     SPEAKER: {speaker}
     EVENT: {event_name}
     ===
-    Ensure every claim is supported, technical details accurate, no exaggerations.
-    Speaker should endorse all content. Rewrite problematic sections once if needed.
+    PROCESS:
+    1. Check every claim against transcript for accuracy
+    2. Identify any exaggerations, unsupported claims, or technical errors
+    3. If accuracy issues found, rewrite problematic sections using only verified transcript information
+    4. Ensure speaker would endorse all final content
+    5. Output corrected content versions
   expected_output: >
     {
-      "accuracy_score": 9,
-      "fact_issues": ["Issue description if any"],
-      "technical_accuracy": "Assessment of numbers/methods accuracy", 
-      "speaker_alignment": "Would speaker endorse this content?",
-      "corrections_made": "Description of any corrections applied",
-      "revised_li_content": "Corrected LinkedIn content (if revised)",
-      "revised_x_content": "Corrected X content (if revised)",
-      "approved_for_next_step": false
+      "accuracy_score": "8-10 scale based on factual correctness",
+      "corrections_made": "Description of any corrections applied to fix accuracy issues",
+      "corrected_li_hook": "Final accurate LinkedIn hook",
+      "corrected_li_paragraph": "Final accurate paragraph summary", 
+      "corrected_li_bullets": ["Accurate bullet 1", "Accurate bullet 2", "Accurate bullet 3"],
+      "corrected_x_hook": "Final accurate Twitter/X hook",
+      "corrected_x_content": "Final accurate Twitter/X core content",
+      "approved_for_next_step": "true/false based on accuracy threshold"
     }
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
-    - Accuracy score is PERFECT 10/10 (no tolerance for inaccuracy)
-    - Zero factual errors or misrepresentations 
-    - Speaker would confidently endorse and reshare
-    - All technical details are precisely correct
+    - Accuracy score is 9/10 or higher (10/10 if no glaring errors, simplifications for readability are fine)
+    - No major factual errors or misrepresentations of core findings
+    - Content represents speaker's research fairly and accurately
+    - Technical details are substantially correct (minor simplifications acceptable for platform constraints)
   context: ["create_li_content_task", "create_x_content_task"]
   agent: fact_checker_agent
 
+
 voice_authenticity_check_task:
   description: >
-    Ensure FAR.AI brand voice and maximum conciseness using common style requirements.
+    Apply FAR.AI brand voice and maximum conciseness to fact-checked content.
     ===
     TRANSCRIPT: {transcript}
     SPEAKER: {speaker}
     AFFILIATION: {affiliation}
     ===
-    Check: FAR.AI tone (not speaker mimicry), conciseness (LinkedIn <150 words, bullets ≤8 words).
-    Cut unnecessary words ruthlessly. Rewrite once if needed.
+    PROCESS:
+    1. Take the corrected content from fact_check_content_task (accuracy verified)
+    2. Apply FAR.AI brand voice: conversational yet authoritative, maximally concise
+    3. Cut unnecessary words ruthlessly while preserving accuracy
+    4. Ensure professional tone and brand consistency
+    5. LinkedIn <150 words, bullets ≤8 words each
   expected_output: >
     {
-      "brand_voice_score": 9,
-      "conciseness_score": 9,
-      "brand_voice_assessment": "Does this sound like professional FAR.AI content?",
-      "conciseness_assessment": "Content is maximally tight and impactful?",
-      "far_ai_would_publish": true,
-      "corrections_made": "Description of brand voice and conciseness corrections applied",
-      "revised_li_content": "FAR.AI-voiced and maximally concise LinkedIn content (if revised)",
-      "revised_x_content": "FAR.AI-voiced and maximally concise X content (if revised)",
-      "approved_for_next_step": false
+      "brand_voice_score": 10,
+      "conciseness_score": 10,
+      "voice_corrections_made": "Description of brand voice and conciseness improvements applied",
+      "final_li_hook": "FAR.AI-voiced LinkedIn hook",
+      "final_li_paragraph": "FAR.AI-voiced paragraph summary", 
+      "final_li_bullets": ["FAR.AI-voiced bullet 1", "FAR.AI-voiced bullet 2", "FAR.AI-voiced bullet 3"],
+      "final_x_hook": "FAR.AI-voiced Twitter/X hook",
+      "final_x_content": "FAR.AI-voiced Twitter/X core content",
+      "approved_for_next_step": true
     }
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
@@ -173,7 +188,7 @@ voice_authenticity_check_task:
 
 compliance_audit_task:
   description: >
-    Audit content from previous tasks using common style requirements, then assemble final posts.
+    Take final content from voice_authenticity_check_task and assemble complete posts.
     ===
     style_shared: {style_shared}
     style_li: {style_li}
@@ -182,40 +197,45 @@ compliance_audit_task:
     yt_full_link: {yt_full_link}
     resource_url: {resource_url}
     event_name: {event_name}
+    speaker: {speaker}
     ===
     Process:
-    1. AUDIT: Check compliance against style guides, structure, attribution, 14-point rubric
-       - CRITICAL: Scan for em dashes (—) and hyphens (-) except in names - replace with periods/commas
-    2. ASSESS: Evaluate hook/paragraph/bullets cohesion, ensure no repetitive phrasing
-    3. ASSEMBLE: Create final LinkedIn and Twitter/X posts using FAR.AI templates
+    1. AUDIT & FIX: Check final content for style guide compliance, fix any violations found
+       - CRITICAL: Scan for em dashes (—) and hyphens (-) except in names, replace with appropriate punctuation
+       - Fix any style guide violations before assembling
+    2. ASSESS: Evaluate content cohesion and flow
+    3. ASSEMBLE: Create complete LinkedIn and Twitter/X posts using templates
        - Replace [video_url] with {yt_full_link}
-       - Replace [resource_url] with {resource_url} 
-       - Replace {event_name} in CTA text with actual event name
+       - Replace [resource_url] with {resource_url}
+       - Replace {event_name} in CTA text
+       - For Twitter/X: Use CodaTool.get_x_handle({speaker}) for attribution
     
-    Fix violations once if needed, assemble only when fully compliant.
+    Content should already be accurate and properly voiced from previous tasks.
   expected_output: >
     {
-      "li_compliance_score": 14,
-      "x_compliance_score": 14,
-      "style_violations": ["Violation description if any"],
-      "rubric_breakdown": {
-        "content_quality": 8,
-        "style_quality": 6,
-        "specific_scores": "Detailed breakdown"
-      },
-      "corrections_made": "Description of compliance fixes applied",
-      "cohesion_assessment": "Assessment of how well hook/paragraph/bullets work together without repetition",
-      "components": {
-        "li_hook": "Final LinkedIn hook",
-        "paragraph_summary": "Final paragraph summary",
-        "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
-        "x_content_core": "Final Twitter/X content without CTA"
-      },
-      "assembled_content": {
-        "li_content": "Complete LinkedIn post: hook + paragraph + bullets + CTA + first comment",
-        "x_content": "Complete Twitter/X content: core content + CTA + links"
-      },
-      "approved_for_final_review": false
+      "paragraph_ai": "Final paragraph summary",
+      "hooks_ai": "Final LinkedIn hook",
+      "li_content": "Complete LinkedIn post: hook + paragraph + bullets + CTA + first comment",
+      "x_content": "Complete Twitter/X content: core content + CTA + links",
+      "notes": {
+        "li_compliance_score": 14,
+        "x_compliance_score": 14,
+        "style_violations": ["Violation description if any"],
+        "rubric_breakdown": {
+          "content_quality": 8,
+          "style_quality": 6,
+          "specific_scores": "Detailed breakdown"
+        },
+        "corrections_made": "Description of compliance fixes applied",
+        "cohesion_assessment": "Assessment of how well hook/paragraph/bullets work together without repetition",
+        "approved_for_final_review": false,
+        "components": {
+          "li_hook": "Final LinkedIn hook",
+          "paragraph_summary": "Final paragraph summary",
+          "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+          "x_content_core": "Final Twitter/X content without CTA"
+        }
+      }
     }
     
     APPROVAL CRITERIA: Only approve (set approved_for_final_review: true) if:
@@ -254,34 +274,54 @@ final_review_task:
     - Assembled post quality
     - Overall readiness for publication
     
-    PUBLICATION STANDARDS (VERY HIGH BAR):
-    - Accuracy score must be 10/10 or higher
-    - Voice match score must be 8/10 or higher  
-    - Compliance score must be 14/14 (perfect)
-    - Zero blocking issues allowed
-    - Speaker must be willing to reshare (confident assessment)
-    - Content must exceed industry standards for research communication
+    PUBLICATION STANDARDS (HIGH BAR):
+    - Accuracy score must be 9/10 or higher (10/10 if no glaring errors, simplifications for readability are fine)
+    - Brand voice score must be 9/10 or higher  
+    - Compliance score must be 13/14 or higher (allows minor style issues)
+    - No major blocking issues allowed
+    - Content fairly represents speaker's research and findings
+    - Content meets professional standards for research communication
+    
+    HARD REJECTION CONDITIONS:
+    - If revision_counter >= 2 and accuracy still < 9/10: REJECT with detailed failure report
+    - If persistent accuracy issues after multiple revision attempts: NEEDS_MANUAL_REVIEW
+    - Otherwise apply standard publication criteria
+    
+    CRITICAL PROHIBITIONS (IMMEDIATE REJECTION):
+    - NEVER suggest hashtags (absolutely prohibited in style guide) - ANY hashtag suggestions = AUTOMATIC REJECTION
+    - NEVER advocate for positions or suggest CTAs asking for opinions
+    - Content must remain neutral and factual
+    - Scan all content for # symbols and reject immediately if found
+    
+    BLOCKING CONDITIONS:
+    - If ANY hashtags are present or suggested: publication_decision = "REJECTED"
+    - If content advocates positions: publication_decision = "REJECTED" 
+    - If accuracy < 10/10: publication_decision = "NEEDS_REVISION"
     
     Reject content that doesn't meet these strict criteria. FAR.AI's reputation depends on exceptional quality.
   expected_output: >
     {
-      "components": {
-        "li_hook": "Final approved LinkedIn hook",
-        "paragraph_summary": "Final approved summary paragraph",
-        "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
-        "x_content_core": "Final approved Twitter/X core content"
-      },
-      "assembled_content": {
-        "li_content": "Final approved complete LinkedIn post",
-        "x_content": "Final approved complete Twitter/X content"
-      },
-      "publication_decision": "APPROVED/NEEDS_REVISION",
-      "final_quality_score": 14,
-      "blocking_issues": [],
-      "revision_notes": "Specific feedback if revision needed", 
-      "eval_notes": "Complete quality assessment and rubric breakdown",
-      "cohesion_assessment": "Final assessment of content cohesion and flow"
+      "paragraph_ai": "Final approved summary paragraph",
+      "hooks_ai": "Final approved LinkedIn hook",
+      "li_content": "Final approved complete LinkedIn post",
+      "x_content": "Final approved complete Twitter/X content",
+      "notes": {
+        "publication_decision": "APPROVED/NEEDS_REVISION/REJECTED/NEEDS_MANUAL_REVIEW",
+        "final_quality_score": 14,
+        "blocking_issues": [],
+        "revision_notes": "Specific feedback if revision needed", 
+        "eval_notes": "Complete quality assessment and rubric breakdown",
+        "cohesion_assessment": "Final assessment of content cohesion and flow",
+        "transcript_analysis": "Full output from analyze_transcript_task",
+        "hooks_generation": "Full output from generate_hooks_task with all hook options and reasoning",
+        "components": {
+          "li_hook": "Final approved LinkedIn hook",
+          "paragraph_summary": "Final approved summary paragraph",
+          "bullets": ["Final bullet 1", "Final bullet 2", "Final bullet 3"],
+          "x_content_core": "Final approved Twitter/X core content"
+        }
+      }
     }
-  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task", "compliance_audit_task"]
+  context: ["analyze_transcript_task", "generate_hooks_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task", "compliance_audit_task"]
   output_file: "output/{speaker}_final.json"
   agent: final_reviewer_agent
