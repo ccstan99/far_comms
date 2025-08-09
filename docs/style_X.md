@@ -7,7 +7,7 @@
   - End with 👇
 
 - **Tweet 2**:  
-  - ▶️ Watch {event_name} recording: {video_url}  
+  - ▶️ Watch {event_name} recording: {yt_full_link}  
   - 📄 Read paper: {resource_url}
 
 ## Formatting Instructions
@@ -50,7 +50,7 @@
 ▸ 3 approaches: adversarial training, scalable oversight, model organisms
 ▸ Process: train robust models → align during RL → monitor deployment
 👇
-
+---
 ▶️ Watch Noam discuss Stephen McAleer's research (with his own critical perspectives) from the Singapore Alignment Workshop:
 https://youtu.be/J6Q-ILqlFHc&list=PLpvkFqYJXcrfMrlK7CgPNU5-bl3qlArbg
 ```
