@@ -10,6 +10,7 @@ dependencies = [
     "crewai[tools]>=0.28.8",
     "fastapi",
     "uvicorn[standard]",
+    "PyMuPDF>=1.23.0",
 ]
 
 [project.scripts]

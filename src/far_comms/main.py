@@ -89,6 +89,124 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
+@app.get("/prep-event")
+async def prep_event(table_id: str, doc_id: str):
+    """Prep event endpoint - matches speakers to slides and updates Coda"""
+    try:
+        logger.info(f"Prep event called - doc_id: {doc_id}, table_id: {table_id}")
+        
+        from far_comms.utils.slide_extractor import extract_slide_content
+        import json
+        import glob
+        import os
+        
+        # Initialize Coda client
+        coda_client = CodaClient()
+        
+        # Get all rows from the table
+        table_data_str = coda_client.get_table(doc_id, table_id)
+        table_data = json.loads(table_data_str)
+        rows = table_data.get("rows", [])
+        
+        logger.info(f"Found {len(rows)} rows in table")
+        
+        # Get all PDF files in data/slides/
+        slide_files = glob.glob("data/slides/*.pdf")
+        logger.info(f"Found {len(slide_files)} PDF files in data/slides/")
+        
+        # Extract speaker names from table rows
+        speakers = []
+        for row in rows:
+            speaker = row.get("data", {}).get("Speaker", "")
+            if speaker:
+                speakers.append(speaker)
+        
+        logger.info(f"Extracted {len(speakers)} speakers: {speakers}")
+        
+        # Simple filename matching logic
+        def find_matching_slide(speaker_name, slide_files):
+            """Find slide file that matches speaker name"""
+            speaker_lower = speaker_name.lower().replace(" ", "").replace("-", "").replace("_", "")
+            
+            for file_path in slide_files:
+                filename = os.path.basename(file_path).lower()
+                # Remove common patterns and normalize
+                clean_filename = filename.replace(".pdf", "").replace("_", "").replace("-", "").replace(" ", "")
+                
+                # Check if speaker name parts are in filename
+                speaker_parts = speaker_name.lower().split()
+                if len(speaker_parts) >= 2:
+                    first_name, last_name = speaker_parts[0], speaker_parts[-1]
+                    if first_name in clean_filename and last_name in clean_filename:
+                        return file_path
+            return None
+        
+        # Process first row only for testing
+        if rows:
+            first_row = rows[1]
+            row_id = first_row.get("row_id")
+            speaker_name = first_row.get("data", {}).get("Speaker", "")
+            
+            logger.info(f"Processing first row - Speaker: {speaker_name}, Row ID: {row_id}")
+            
+            # Find matching slide file for this speaker
+            matched_file = find_matching_slide(speaker_name, slide_files)
+            logger.info(f"Slide file search result: {matched_file}")
+            
+            if matched_file:
+                logger.info(f"Found matching file: {matched_file}")
+                
+                # Extract slide content
+                slide_result = extract_slide_content(matched_file)
+                
+                if slide_result.get("success"):
+                    slide_content = slide_result.get("content", "")
+                    logger.info(f"Extracted {len(slide_content)} characters from slides")
+                    
+                    # Update Coda row with slide content
+                    updates = [{
+                        "row_id": row_id,
+                        "updates": {
+                            "Slides": slide_content
+                        }
+                    }]
+                    
+                    update_result = coda_client.update_rows(doc_id, table_id, updates)
+                    logger.info(f"Coda update result: {update_result}")
+                    
+                    return {
+                        "status": "success",
+                        "message": "Prep event completed - processed first row",
+                        "speaker": speaker_name,
+                        "matched_file": matched_file,
+                        "slide_content_length": len(slide_content),
+                        "coda_update": "success"
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"Failed to extract slides: {slide_result.get('error')}",
+                        "speaker": speaker_name,
+                        "matched_file": matched_file
+                    }
+            else:
+                available_files = [os.path.basename(f) for f in slide_files]
+                return {
+                    "status": "no_match",
+                    "message": f"No slide file found for speaker: {speaker_name}",
+                    "available_files": available_files,
+                    "speaker_searched": speaker_name
+                }
+        else:
+            return {
+                "status": "no_rows",
+                "message": "No rows found in table"
+            }
+        
+    except Exception as e:
+        logger.error(f"Prep event error: {e}", exc_info=True)
+        return {"error": f"Failed to prep event: {e}"}
+
 # Assembly functions removed - now handled by compliance_auditor_agent in the crew
 
 async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
@@ -292,7 +410,7 @@ async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkReques
 
     return coda_ids, talk_data
 
-@app.api_route("/coda_webhook/{function_name}", methods=["GET", "POST"])
+@app.api_route("/coda_webhook/{function_name}", methods=["GET"])
 async def coda_webhook_endpoint(
     function_name: FunctionName,
     request: Request,
@@ -359,7 +477,7 @@ async def coda_webhook_endpoint(
         # Start the crew function directly
         import asyncio
         runner = function_runners[function_name]
-        asyncio.create_task(runner(talk_data, coda_ids))
+        # asyncio.create_task(runner(talk_data, coda_ids))
         
         return response_data
             
