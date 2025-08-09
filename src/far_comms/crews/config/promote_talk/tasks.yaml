@@ -2,22 +2,33 @@
 
 analyze_transcript_task:
   description: >
-    Analyze {speaker}'s talk transcript to extract core findings, technical details, and key insights.
+    Analyze {speaker}'s talk transcript to extract core findings, technical details, key insights, and organizational structure.
     ===
     transcript: 
     {transcript}
     ===
     Your analysis should:
     - Identify the main thesis and supporting arguments
-    - Extract specific technical details, numbers, and metrics
+    - Extract the speaker's organizational pattern and talk structure (e.g., "3 problems + 3 solutions", "4 research highlights", "10 key issues", "5 strategic recommendations")
+    - Capture the speaker's own section titles, main points, and flow - preserve their intended logic and structure
+    - Extract specific technical details, numbers, and metrics (if applicable - some talks focus on policy/strategy rather than technical research)
     - Find surprising or counterintuitive claims
     - Collect impactful direct quotes from the speaker
     - Highlight key findings that would interest both technical and non-technical audiences
   expected_output: >
     {
+      "speaker": "{speaker} ({affiliation})",
       "core_thesis": "Main argument in 1 sentence",
       "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
-      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["...", "..."]},
+      "talk_outline": {
+        "structure_type": "Describe the speaker's organizational pattern (e.g., '3 problems + 3 solutions', '4 research highlights', '10 key issues', '5 strategic recommendations')",
+        "main_points": [
+          {"point": "First main point/section title", "details": "Key content and supporting details"},
+          {"point": "Second main point/section title", "details": "Key content and supporting details"},
+          {"point": "Continue for all major sections", "details": "Maintain speaker's intended flow and logic"}
+        ]
+      },
+      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - this is a policy/strategic talk"},
       "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
       "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
     }
