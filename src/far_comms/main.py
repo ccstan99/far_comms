@@ -1,20 +1,26 @@
 #!/usr/bin/env python
 
-import requests
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, RedirectResponse
-import httpx
-from far_comms.crews.promote_talk_crew import PromoteTalkCrew
-from far_comms.utils.coda_client import CodaClient, CodaIds
-from pydantic import BaseModel, HttpUrl
+from fastapi.responses import RedirectResponse
+from far_comms.utils.coda_client import CodaClient
+from far_comms.models.requests import (
+    FunctionName, TalkRequest, CodaIds
+)
+from far_comms.handlers.promote_talk import (
+    run_promote_talk, 
+    get_promote_talk_input,
+    display_promote_talk_input
+)
+from far_comms.handlers.prepare_talk import (
+    prepare_talk,
+    get_prepare_talk_input, 
+    display_prepare_talk_input
+)
 import uvicorn
 import os
 import json
 import logging
 from dotenv import load_dotenv
-from datetime import datetime
-import asyncio
-from enum import Enum
 from far_comms.utils.project_paths import get_project_root, get_docs_dir, get_output_dir
 
 # Configure logging
@@ -33,35 +39,7 @@ PROJECT_DIR = get_project_root()
 DOCS_DIR = get_docs_dir()
 OUTPUT_DIR = get_output_dir()
 
-class FunctionName(str, Enum):
-    """Available crew function names for Coda webhook"""
-    PROMOTE_TALK = "promote_talk"
-    PROMOTE_RESEARCH = "promote_research" 
-    PROMOTE_EVENT = "promote_event"
-    # Add more as they're created:
-
-class TalkRequest(BaseModel):
-    """Unified model for talk promotion - works for both API and Coda"""
-    speaker: str
-    title: str
-    event: str
-    affiliation: str
-    yt_full_link: str | HttpUrl
-    resource_url: str | HttpUrl | None = None
-    transcript: str
-
-class CodaWebhookRequest(BaseModel):
-    thisRow: str
-    docId: str
-    speaker: str | None = None
-
-class TalkPromotionOutput(BaseModel):
-    """Output from the talk promotion crew - keys match Coda column names"""
-    paragraph_ai: str  # "Paragraph (AI)" column
-    hooks_ai: list[str]  # "Hooks (AI)" column - 5 hooks 
-    li_content: str  # "LI content" column
-    x_content: str  # "X content" column
-    eval_notes: str  # Rubric breakdown and checklist with compliance notes
+# Models imported from far_comms.models.requests
 
 app = FastAPI()
 
@@ -89,16 +67,13 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-@app.get("/prep-event")
-async def prep_event(table_id: str, doc_id: str):
-    """Prep event endpoint - matches speakers to slides and updates Coda"""
+@app.get("/prepare-event")
+async def prepare_event(table_id: str, doc_id: str):
+    """Prepare event endpoint - calls prepare_talk for each speaker in the table"""
     try:
-        logger.info(f"Prep event called - doc_id: {doc_id}, table_id: {table_id}")
+        logger.info(f"Prepare event called - doc_id: {doc_id}, table_id: {table_id}")
         
-        from far_comms.utils.slide_extractor import extract_slide_content
         import json
-        import glob
-        import os
         
         # Initialize Coda client
         coda_client = CodaClient()
@@ -110,243 +85,84 @@ async def prep_event(table_id: str, doc_id: str):
         
         logger.info(f"Found {len(rows)} rows in table")
         
-        # Get all PDF files in data/slides/
-        slide_files = glob.glob("data/slides/*.pdf")
-        logger.info(f"Found {len(slide_files)} PDF files in data/slides/")
-        
-        # Extract speaker names from table rows
-        speakers = []
-        for row in rows:
-            speaker = row.get("data", {}).get("Speaker", "")
-            if speaker:
-                speakers.append(speaker)
-        
-        logger.info(f"Extracted {len(speakers)} speakers: {speakers}")
-        
-        # Simple filename matching logic
-        def find_matching_slide(speaker_name, slide_files):
-            """Find slide file that matches speaker name"""
-            speaker_lower = speaker_name.lower().replace(" ", "").replace("-", "").replace("_", "")
-            
-            for file_path in slide_files:
-                filename = os.path.basename(file_path).lower()
-                # Remove common patterns and normalize
-                clean_filename = filename.replace(".pdf", "").replace("_", "").replace("-", "").replace(" ", "")
-                
-                # Check if speaker name parts are in filename
-                speaker_parts = speaker_name.lower().split()
-                if len(speaker_parts) >= 2:
-                    first_name, last_name = speaker_parts[0], speaker_parts[-1]
-                    if first_name in clean_filename and last_name in clean_filename:
-                        return file_path
-            return None
-        
-        # Process first row only for testing
-        if rows:
-            first_row = rows[1]
-            row_id = first_row.get("row_id")
-            speaker_name = first_row.get("data", {}).get("Speaker", "")
-            
-            logger.info(f"Processing first row - Speaker: {speaker_name}, Row ID: {row_id}")
-            
-            # Find matching slide file for this speaker
-            matched_file = find_matching_slide(speaker_name, slide_files)
-            logger.info(f"Slide file search result: {matched_file}")
-            
-            if matched_file:
-                logger.info(f"Found matching file: {matched_file}")
-                
-                # Extract slide content
-                slide_result = extract_slide_content(matched_file)
-                
-                if slide_result.get("success"):
-                    slide_content = slide_result.get("content", "")
-                    logger.info(f"Extracted {len(slide_content)} characters from slides")
-                    
-                    # Update Coda row with slide content
-                    updates = [{
-                        "row_id": row_id,
-                        "updates": {
-                            "Slides": slide_content
-                        }
-                    }]
-                    
-                    update_result = coda_client.update_rows(doc_id, table_id, updates)
-                    logger.info(f"Coda update result: {update_result}")
-                    
-                    return {
-                        "status": "success",
-                        "message": "Prep event completed - processed first row",
-                        "speaker": speaker_name,
-                        "matched_file": matched_file,
-                        "slide_content_length": len(slide_content),
-                        "coda_update": "success"
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": f"Failed to extract slides: {slide_result.get('error')}",
-                        "speaker": speaker_name,
-                        "matched_file": matched_file
-                    }
-            else:
-                available_files = [os.path.basename(f) for f in slide_files]
-                return {
-                    "status": "no_match",
-                    "message": f"No slide file found for speaker: {speaker_name}",
-                    "available_files": available_files,
-                    "speaker_searched": speaker_name
-                }
-        else:
+        if not rows:
             return {
                 "status": "no_rows",
                 "message": "No rows found in table"
             }
         
-    except Exception as e:
-        logger.error(f"Prep event error: {e}", exc_info=True)
-        return {"error": f"Failed to prep event: {e}"}
-
-# Assembly functions removed - now handled by compliance_auditor_agent in the crew
-
-async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
-    """Run crew in background - accepts TalkRequest directly"""
-    try:
-        logger.info(f"Starting PromoteTalk crew for {talk_request.speaker}: {talk_request.title}")
-        logger.debug(f"Input transcript length: {len(talk_request.transcript or '')}")
+        # Process each row and track results
+        successful_speakers = []
+        skipped_speakers = []
+        failed_speakers = []
         
-        # Load style guides
-        docs_dir = get_docs_dir()
-        style_shared = (docs_dir / "style_shared.md").read_text() if (docs_dir / "style_shared.md").exists() else ""
-        style_li = (docs_dir / "style_li.md").read_text() if (docs_dir / "style_li.md").exists() else ""
-        style_x = (docs_dir / "style_x.md").read_text() if (docs_dir / "style_x.md").exists() else ""
+        for row in rows:
+            row_id = row.get("row_id")
+            row_data = row.get("data", {})
+            speaker_name = row_data.get("Speaker", "")
+            
+            if not speaker_name or not row_id:
+                logger.warning(f"Skipping row {row_id} - missing speaker name or row_id")
+                failed_speakers.append(f"{row_id or 'unknown'} (missing data)")
+                continue
+                
+            logger.info(f"Processing speaker: {speaker_name}")
+            
+            # Create function_data for prepare_talk (just needs speaker name)
+            function_data = {"speaker": speaker_name}
+            
+            # Create CodaIds for this row
+            coda_ids = CodaIds(
+                doc_id=doc_id,
+                table_id=table_id,
+                row_id=row_id
+            )
+            
+            # Call prepare_talk for this speaker and handle structured results
+            try:
+                result = await prepare_talk(function_data, coda_ids)
+                
+                # Categorize based on prepare_talk's return status
+                if result.get("status") == "success":
+                    successful_speakers.append(f"{speaker_name}: {result.get('message', 'Success')}")
+                elif result.get("status") == "skipped":
+                    skipped_speakers.append(f"{speaker_name}: {result.get('message', 'Skipped')}")
+                else:  # "failed" or any other status
+                    failed_speakers.append(f"{speaker_name}: {result.get('message', 'Failed')}")
+                
+                # Add delay between speakers to avoid rate limits
+                import asyncio
+                await asyncio.sleep(2)  # Wait 2 seconds between speakers
+                
+            except Exception as e:
+                logger.error(f"Failed to prepare {speaker_name}: {e}")
+                failed_speakers.append(f"{speaker_name} (exception: {str(e)[:50]}...)")
         
-        # Lookup speaker's X handle for Twitter/X content attribution
-        coda_client = CodaClient()
-        speaker_x_handle = ""
-        try:
-            speaker_x_handle = coda_client.get_x_handle(talk_request.speaker)
-            logger.info(f"Retrieved X handle for {talk_request.speaker}: {speaker_x_handle}")
-        except Exception as e:
-            logger.warning(f"X handle lookup failed for {talk_request.speaker}: {e}")
-            speaker_x_handle = talk_request.speaker  # Fallback to speaker name
+        # Create detailed summary message
+        summary_parts = []
+        if successful_speakers:
+            summary_parts.append(f"succeeded: {len(successful_speakers)}")
+        if skipped_speakers:
+            summary_parts.append(f"skipped: {len(skipped_speakers)}")
+        if failed_speakers:
+            summary_parts.append(f"failed: {len(failed_speakers)}")
         
-        # Convert TalkRequest to crew data format
-        crew_data = {
-            "transcript": talk_request.transcript or "",
-            "speaker": talk_request.speaker or "",
-            "speaker_x_handle": speaker_x_handle,
-            "yt_full_link": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",
-            "resource_url": str(talk_request.resource_url) if talk_request.resource_url else "",
-            "event_name": talk_request.event or "",
-            "affiliation": talk_request.affiliation or "",
-            # Style guide content
-            "style_shared": style_shared,
-            "style_li": style_li,
-            "style_x": style_x
+        summary = f"Prepare event completed - {', '.join(summary_parts)}"
+        
+        return {
+            "status": "success",
+            "message": summary,
+            "successful_speakers": successful_speakers,
+            "skipped_speakers": skipped_speakers,
+            "failed_speakers": failed_speakers,
+            "total_rows": len(rows)
         }
         
-        # Add Coda IDs if provided (for error reporting)
-        if coda_ids:
-            crew_data.update(coda_ids.model_dump())
-            logger.debug(f"Added Coda IDs for error reporting: {coda_ids}")
-        
-        logger.debug(f"Final crew data keys: {list(crew_data.keys())}")
-        logger.debug(f"Final transcript length being sent to crew: {len(crew_data.get('transcript', ''))}")
-        
-        # Run the crew and capture results
-        result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
-        logger.info("Crew completed successfully!")
-        
-        # Update Coda with final results if Coda IDs provided
-        if coda_ids and result:
-            coda_client = CodaClient()
-            
-            # Parse crew output - assuming result has the content we need
-            # You may need to adjust these field names based on actual crew output structure
-            try:
-                # Extract structured data from crew result
-                crew_output = result.raw if hasattr(result, 'raw') else str(result)
-                
-                # Parse the output if it's JSON, otherwise use as string
-                try:
-                    parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
-                except (json.JSONDecodeError, TypeError):
-                    parsed_output = {"content": crew_output}
-                
-                logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
-                
-                # Extract from new clean structure - Coda fields at top level
-                paragraph_summary = parsed_output.get("paragraph_ai", "")
-                # Skip hooks_ai - raw JSON is unreadable in Coda interface
-                li_content = parsed_output.get("li_content", "")
-                x_content = parsed_output.get("x_content", "")
-                
-                # X handle attribution is now handled by the X writer agent during content creation
-                
-                # Notes section contains all intermediate work
-                notes = parsed_output.get("notes", {})
-                publication_decision = notes.get("publication_decision", "NEEDS_REVISION")
-                
-                logger.info(f"Publication decision: {publication_decision}")
-                
-                # Map publication decision to Coda status
-                status_mapping = {
-                    "APPROVED": "Done",
-                    "NEEDS_REVISION": "Needs review", 
-                    "REJECTED": "Error",
-                    "NEEDS_MANUAL_REVIEW": "Needs review"
-                }
-                coda_status = status_mapping.get(publication_decision, "Needs review")
-                logger.info(f"Setting Coda status: {coda_status}")
-                
-                # Prepare final updates for Coda columns
-                updates = [{
-                    "row_id": coda_ids.row_id,
-                    "updates": {
-                        "Summaries status": coda_status,
-                        "Progress": json.dumps(parsed_output, indent=2),
-                        # Map assembled content to Coda columns:
-                        "Paragraph (AI)": paragraph_summary,
-                        # Skip "Hooks (AI)" - raw JSON is unreadable in Coda
-                        "LI content": li_content,
-                        "X content": x_content,
-                        "Eval notes": notes.get("eval_notes", "")
-                    }
-                }]
-                
-                logger.info(f"Updating Coda columns: {list(updates[0]['updates'].keys())}")
-                
-                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-                logger.info(f"Coda update result: {result}")
-                logger.info(f"Updated Coda with crew results")
-                
-            except Exception as update_error:
-                logger.error(f"Failed to update Coda with results: {update_error}")
-                # Mark as error and put details in Progress
-                updates = [{
-                    "row_id": coda_ids.row_id,
-                    "updates": {
-                        "Summaries status": "Error",
-                        "Progress": f"Update error: {str(update_error)}"
-                    }
-                }]
-                coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-        
     except Exception as e:
-        logger.error(f"Background crew error: {e}", exc_info=True)
-        # If crew fails, update status via CodaClient
-        if coda_ids:
-            coda_client = CodaClient()
-            updates = [{
-                "row_id": coda_ids.row_id,
-                "updates": {
-                    "Summaries status": "Error",
-                    "Progress": f"Crew error: {str(e)}"
-                }
-            }]
-            coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-            logger.info(f"Updated Coda row with error status")
+        logger.error(f"Prepare event error: {e}", exc_info=True)
+        return {"error": f"Failed to prepare event: {e}"}
+
+# Handler functions imported from far_comms.handlers
 
 @app.post("/promote_talk")
 async def promote_talk_endpoint(
@@ -366,13 +182,14 @@ async def promote_talk_endpoint(
     except Exception as e:
         return {"error": f"Failed to process talk request: {e}"}
 
-async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkRequest]:
-    """Extract data from Coda row and return Coda IDs + TalkRequest"""
-    logger.info(f"Extracting data from Coda - this_row: {this_row}, doc_id: {doc_id}")
+
+async def get_input(function_name: FunctionName, this_row: str, doc_id: str) -> tuple[CodaIds, any]:
+    """Get input data for a specific function by fetching from Coda and parsing"""
+    logger.info(f"Getting input for {function_name.value} - this_row: {this_row}, doc_id: {doc_id}")
     
     table_id, row_id = this_row.split('/')
     
-    # Use CodaClient to get row data
+    # Use CodaClient to get row data (TODO: optimize to fetch only needed fields)
     coda_client = CodaClient()
     try:
         row_data_str = coda_client.get_row(doc_id, table_id, row_id)
@@ -384,23 +201,6 @@ async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkReques
         logger.error(f"Failed to fetch Coda row data: {e}")
         raise
     
-    # Extract talk data from the row
-    talk_data_dict = row_data["data"]
-    
-    # Map to TalkRequest fields (adjust field names as needed)
-    talk_request_data = {
-        "speaker": talk_data_dict.get("Speaker", ""),
-        "title": talk_data_dict.get("Title", ""),
-        "event": talk_data_dict.get("Event", ""),
-        "affiliation": talk_data_dict.get("Affiliation", ""),
-        "yt_full_link": talk_data_dict.get("YT full link", ""),
-        "transcript": talk_data_dict.get("Transcript", ""),
-        "resource_url": talk_data_dict.get("Resource URL", ""),
-    }
-    
-    talk_data = TalkRequest(**talk_request_data)
-    logger.info(f"Successfully validated Coda data: {talk_data.speaker} - {talk_data.title}")
-    
     # Create Coda IDs object
     coda_ids = CodaIds(
         doc_id=doc_id,
@@ -408,14 +208,35 @@ async def get_coda_data(this_row: str, doc_id: str) -> tuple[CodaIds, TalkReques
         row_id=row_id
     )
 
-    return coda_ids, talk_data
+    # Get function-specific input parser and parse only what's needed
+    raw_data = row_data["data"]
+    function_config = FUNCTION_REGISTRY[function_name]
+    function_data = function_config["get_input"](raw_data)
+    
+    return coda_ids, function_data
+
+# Function registry - maps function names to their input/display handlers and runners
+FUNCTION_REGISTRY = {
+    FunctionName.PROMOTE_TALK: {
+        "runner": run_promote_talk,
+        "get_input": get_promote_talk_input,
+        "display_input": display_promote_talk_input
+    },
+    FunctionName.PREPARE_TALK: {
+        "runner": prepare_talk,
+        "get_input": get_prepare_talk_input,
+        "display_input": display_prepare_talk_input
+    }
+    # Add new functions here as they're implemented
+}
 
 @app.api_route("/coda_webhook/{function_name}", methods=["GET"])
 async def coda_webhook_endpoint(
     function_name: FunctionName,
     request: Request,
+    background_tasks: BackgroundTasks,
     this_row: str = None,
-    doc_id: str = None
+    doc_id: str = None,
 ):
     """Generic Coda webhook - routes to different functions based on 'function_name' parameter"""
     method = request.method
@@ -440,44 +261,54 @@ async def coda_webhook_endpoint(
     if not this_row or not doc_id or not function_name:
         return {"error": "Missing required parameters: this_row, doc_id, and function_name"}
     
-    # Map function names to crew runner functions
-    function_runners = {
-        FunctionName.PROMOTE_TALK: run_promote_talk,
-        # Add more functions as they're created:
-        # FunctionName.PROMOTE_RESEARCH: run_promote_research,
-        # FunctionName.PROMOTE_EVENT: run_promote_event,
-    }
-    
-    if function_name not in function_runners:
+    # Validate function exists in registry
+    if function_name not in FUNCTION_REGISTRY:
         available = [fn.value for fn in FunctionName]
         return {"error": f"Unknown function_name: {function_name}. Available: {available}"}
     
     try:
-        # Extract data from Coda
-        coda_ids, talk_data = await get_coda_data(this_row, doc_id)
+        # Get function configuration from registry
+        function_config = FUNCTION_REGISTRY[function_name]
         
-        # Prepare response data
-        response_data = {
-            "status": "In progress",
-            "message": f"{function_name.value} crew process will complete asynchronously",
-            **talk_data.model_dump(exclude={"transcript"})
-        }
+        # Get input data for this specific function (fetches from Coda and parses)
+        coda_ids, function_data = await get_input(function_name, this_row, doc_id)
         
-        # Update Coda row with status and progress in single batch call
+        # Get display fields using the function's input display formatter
+        display_input = function_config["display_input"](function_data)
+        
+        # Update Coda status quickly and use same data for response
         coda_client = CodaClient()
-        updates = [{
-            "row_id": coda_ids.row_id,
-            "updates": {
-                "Summaries status": "In progress",
-                "Progress": "Starting crew workflow..."
-            }
-        }]
-        coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+        status_updates = {
+            "Summaries status": "In progress",
+            "Progress": "Starting crew workflow..."
+        }
+        coda_client.update_row(**coda_ids.model_dump(), column_updates=status_updates)
         
-        # Start the crew function directly
-        import asyncio
-        runner = function_runners[function_name]
-        # asyncio.create_task(runner(talk_data, coda_ids))
+        # Prepare response data using the status updates + display_input
+        response_data = {
+            **status_updates,
+            **display_input
+        }
+        runner = function_config["runner"]
+        
+        # Execute crew function in background with proper async handling
+        def execute_crew():
+            import asyncio
+            logger.info(f"Starting {function_name.value} crew in background")
+            
+            try:
+                # Run the crew function
+                if asyncio.iscoroutinefunction(runner):
+                    # Async function - run it properly
+                    asyncio.run(runner(function_data, coda_ids))
+                else:
+                    # Sync function - call directly
+                    runner(function_data, coda_ids)
+                logger.info(f"Completed {function_name.value} crew successfully")
+            except Exception as e:
+                logger.error(f"Crew execution failed: {e}", exc_info=True)
+        
+        background_tasks.add_task(execute_crew)
         
         return response_data
             

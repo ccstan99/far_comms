@@ -3,6 +3,7 @@
 import requests
 import json
 import os
+import time
 from datetime import datetime
 from typing import Dict, List, Any
 from pathlib import Path
@@ -209,16 +210,31 @@ class CodaClient:
             }
         }
         
-        response = requests.put(uri, headers=self.coda_headers, json=payload)
+        # Retry logic for 429 rate limit errors
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = requests.put(uri, headers=self.coda_headers, json=payload)
+            
+            if response.ok:
+                updated_columns = [col for col in column_updates.keys() if col not in not_found_columns]
+                result = f"Successfully updated {len(updated_columns)} columns: {updated_columns}"
+                if not_found_columns:
+                    result += f". Not found: {not_found_columns}"
+                return result
+            elif response.status_code == 429:
+                # Rate limit hit - wait with exponential backoff
+                wait_time = (2 ** attempt) + 1  # 2, 5, 9 seconds
+                if attempt < max_retries - 1:  # Don't wait on the last attempt
+                    print(f"Rate limited, retrying in {wait_time} seconds (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    return f"Error updating cells: {response.status_code} - {response.text} (failed after {max_retries} retries)"
+            else:
+                # Non-429 error, don't retry
+                return f"Error updating cells: {response.status_code} - {response.text}"
         
-        if response.ok:
-            updated_columns = [col for col in column_updates.keys() if col not in not_found_columns]
-            result = f"Successfully updated {len(updated_columns)} columns: {updated_columns}"
-            if not_found_columns:
-                result += f". Not found: {not_found_columns}"
-            return result
-        else:
-            return f"Error updating cells: {response.status_code} - {response.text}"
+        return f"Unexpected error - should not reach this point"
 
     def update_rows(self, doc_id: str, table_id: str, updates: List[Dict[str, Any]]) -> str:
         """
