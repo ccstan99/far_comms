@@ -14,15 +14,16 @@ class TestCodaIntegration:
     
     @pytest.fixture
     def test_coda_ids(self):
-        """Provide test Coda identifiers - REPLACE WITH YOUR ACTUAL VALUES"""
-        return {
-            "doc_id": "your_doc_id_here",  # Replace with actual doc ID
-            "table_id": "your_table_id_here",  # Replace with actual table ID  
-            "row_id": "your_row_id_here",  # Replace with actual row ID
-            "this_row": "your_table_id_here/your_row_id_here"  # table_id/row_id format
-        }
+        """Provide test Coda identifiers using CodaIds model"""
+        from far_comms.tools.coda_tool import CodaIds
+        
+        # Update these values as needed for testing
+        doc_id = "Jv4r8SGAJp"  # Your Coda document ID
+        this_row = "grid-LcVoQIcUB2/i-AbYMTOZsbA"  # this_row format from webhook
+        
+        return CodaIds.from_this_row(doc_id, this_row)
     
-    def test_read_coda_data(self, coda_tool, test_coda_ids):
+    def test_get_row(self, coda_tool, test_coda_ids):
         """Test reading data from Coda using get_row"""
         # Test the low-level get_row method
         result = coda_tool.get_row(
@@ -37,7 +38,7 @@ class TestCodaIntegration:
         
         # Check for expected columns (adjust based on your table structure)
         data = parsed_result["data"]
-        expected_columns = ["Speaker", "Title", "Event", "Transcript"]
+        expected_columns = ["Speaker", "Title", "Event", "YT full link"]
         
         for col in expected_columns:
             print(f"Column '{col}': {'✓ Present' if col in data else '✗ Missing'}")
@@ -46,7 +47,7 @@ class TestCodaIntegration:
         print(f"Sample data: {dict(list(data.items())[:3])}")  # First 3 columns
     
     @pytest.mark.asyncio
-    async def test_get_coda_data_function(self, test_coda_ids):
+    async def test_get_coda_data(self, test_coda_ids):
         """Test the main.py get_coda_data function"""
         coda_ids, talk_request = await get_coda_data(
             test_coda_ids["this_row"],
@@ -65,72 +66,37 @@ class TestCodaIntegration:
         print(f"✓ CodaIds: {coda_ids}")
         print(f"✓ TalkRequest: {talk_request.speaker} - {talk_request.title}")
     
-    def test_write_coda_data_single_column(self, coda_tool, test_coda_ids):
-        """Test writing a single column to Coda"""
-        test_value = f"Test update at {json.loads('{}')}"  # Simple timestamp
-        
-        updates = [{
-            "row_id": test_coda_ids["row_id"],
-            "updates": {
-                "Progress": f"🧪 Pytest single column test: {test_value}"
-            }
-        }]
-        
-        result = coda_tool.update_rows(
-            test_coda_ids["doc_id"],
-            test_coda_ids["table_id"], 
-            updates
-        )
-        
-        # Parse result and verify success
-        result_data = json.loads(result)
-        print(f"Update result: {result}")
-        
-        assert result_data["successful_updates"] >= 1
-        assert "Successfully" in str(result_data["results"])
-    
-    def test_write_coda_data_multiple_columns(self, coda_tool, test_coda_ids):
-        """Test writing multiple columns to Coda (the main issue we're fixing)"""
+    def test_update_row(self, coda_tool, test_coda_ids):
+        """Test writing multiple columns to Coda using update_row directly"""
         import time
         timestamp = str(int(time.time()))
         
-        updates = [{
-            "row_id": test_coda_ids["row_id"],
-            "updates": {
-                "Progress": f"🧪 Pytest multi-column test: {timestamp}",
-                "X content": f"Test X content update {timestamp}",
-                "Summaries status": "Testing",
-                "Hooks (AI)": f"Test hook {timestamp}"
-            }
-        }]
+        # Test direct update_row method (single API call for multiple columns)
+        column_updates = {
+            "Progress": f"🧪 Direct update_row test: {timestamp}",
+            "X content": f"Test X content {timestamp}",
+            "Summaries status": "Testing"
+        }
         
-        result = coda_tool.update_rows(
-            test_coda_ids["doc_id"],
-            test_coda_ids["table_id"],
-            updates
+        result = coda_tool.update_row(
+            test_coda_ids.doc_id,
+            test_coda_ids.table_id, 
+            test_coda_ids.row_id,
+            column_updates
         )
         
-        # Parse result and check details
-        result_data = json.loads(result)
-        print(f"Multi-column update result: {result}")
+        # Check the result (update_row returns a string, not JSON)
+        print(f"Update result: {result}")
         
-        # Verify success
-        assert result_data["total_updates_attempted"] == 4
-        print(f"Updates attempted: {result_data['total_updates_attempted']}")
-        print(f"Successful updates: {result_data['successful_updates']}")
+        # Verify success - update_row returns a success message string
+        assert "Successfully updated" in result
+        assert "Progress" in result
+        assert "X content" in result
+        assert "Summaries status" in result
         
-        # Check individual results
-        for result_line in result_data["results"]:
-            print(f"Result: {result_line}")
-            
-        # The key test: X content should update successfully now
-        results_str = str(result_data["results"])
-        if "X content" in updates[0]["updates"]:
-            # Either X content succeeded, or it failed for a reason other than rate limiting
-            assert "429" not in results_str, "Rate limiting still occurring"
-            
-        # At least some updates should succeed
-        assert result_data["successful_updates"] > 0
+        # Verify no rate limiting errors
+        assert "429" not in result, "Rate limiting occurred"
+        assert "Error" not in result, f"Update failed: {result}"
     
     def test_column_discovery(self, coda_tool, test_coda_ids):
         """Test discovering available columns in the table"""
@@ -156,6 +122,25 @@ class TestCodaIntegration:
             
         # Verify we have the essential columns
         assert "Progress" in column_names, "Progress column missing"
+    
+    def test_x_handle_lookup(self, coda_tool):
+        """Test X handle lookup functionality"""
+        # Test with a known speaker name
+        x_handle = coda_tool.get_x_handle("Tianwei Zhang")
+        print(f"X handle for 'Tianwei Zhang': '{x_handle}'")
+        
+        # Test with empty/None input
+        empty_handle = coda_tool.get_x_handle("")
+        assert empty_handle == ""
+        print(f"Empty input test: '{empty_handle}'")
+        
+        # Test with non-existent speaker (should fallback to speaker name)
+        fallback_handle = coda_tool.get_x_handle("NonExistent Speaker")
+        print(f"Fallback test for 'NonExistent Speaker': '{fallback_handle}'")
+        
+        # The function should always return a string (never None)
+        assert isinstance(x_handle, str)
+        assert isinstance(fallback_handle, str)
 
 
 # Instructions for running the test:

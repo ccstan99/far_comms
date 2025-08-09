@@ -5,21 +5,36 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, List, Any
+from pathlib import Path
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from far_comms.utils.project_paths import get_output_dir
 
 
-class CodaIds(BaseModel):
+class CodaIds:
     """Coda document, table, and row identifiers"""
-    doc_id: str
-    table_id: str
-    row_id: str
+    def __init__(self, doc_id: str, table_id: str, row_id: str):
+        self.doc_id = doc_id
+        self.table_id = table_id
+        self.row_id = row_id
+    
+    @classmethod
+    def from_this_row(cls, doc_id: str, this_row: str) -> 'CodaIds':
+        """Create CodaIds by splitting this_row into table_id/row_id"""
+        table_id, row_id = this_row.split('/')
+        return cls(doc_id=doc_id, table_id=table_id, row_id=row_id)
+    
+    def model_dump(self):
+        """For compatibility with existing code"""
+        return {
+            "doc_id": self.doc_id,
+            "table_id": self.table_id,
+            "row_id": self.row_id
+        }
 
 
-class CodaTool:
+class CodaClient:
     """
-    Read and write data from Coda tables. Can fetch row data, column information, 
+    Client for reading and writing data from Coda tables. Can fetch row data, column information, 
     and update cells. Useful for getting context about talks, speakers, events,
     and updating processing status.
     
@@ -29,16 +44,16 @@ class CodaTool:
     - get_columns: Get column information for a table
     - update_row: Update one or more rows (single row or batch across multiple rows)
     - search_rows: Search for rows matching criteria
+    - get_x_handle: Look up speaker's X/Twitter handle
     """
 
     def __init__(self):
         # Load environment variables
         load_dotenv()
         
-        self.name = "coda_tool"
+        # Set instance attributes
         self.coda_headers = {'Authorization': f'Bearer {os.getenv("CODA_API_TOKEN")}'}
         self.output_dir = get_output_dir()
-
 
     def get_table(self, doc_id: str, table_id: str, filters: dict = None) -> str:
         """Get all rows from a table with optional filtering"""
@@ -399,4 +414,3 @@ class CodaTool:
             "columns": column_mapping,
             "cache_refreshed": True
         }, indent=2)
-

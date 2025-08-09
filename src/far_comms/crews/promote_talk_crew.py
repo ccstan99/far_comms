@@ -23,14 +23,7 @@ class PromoteTalkCrew():
       allow_delegation=False
     )
 
-  @agent
-  def hook_specialist_agent(self) -> Agent:
-    return Agent(
-      config=self.agents_config['hook_specialist_agent'],
-      llm=self.llm,
-      verbose=True,
-      allow_delegation=False
-    )
+  # Removed hook_specialist_agent - LI and X writers now generate their own hooks for better alignment
 
   # Phase 2: Content Creation
   @agent
@@ -70,24 +63,16 @@ class PromoteTalkCrew():
       allow_delegation=False
     )
 
-  @agent
-  def compliance_auditor_agent(self) -> Agent:
-    return Agent(
-      config=self.agents_config['compliance_auditor_agent'],
-      llm=self.llm,
-      verbose=True,
-      allow_delegation=False
-    )
-
   # Phase 4: Final Review
 
   @agent
   def final_reviewer_agent(self) -> Agent:
+    # Final reviewer should not delegate - it's the final stage that iterates on itself
     return Agent(
       config=self.agents_config['final_reviewer_agent'],
       llm=self.llm,
       verbose=True,
-      allow_delegation=True
+      allow_delegation=False
     )
 
   # Tasks - Sequential Multi-Agent Workflow
@@ -98,12 +83,7 @@ class PromoteTalkCrew():
       agent=self.transcript_analyzer_agent()
     )
 
-  @task
-  def generate_hooks_task(self) -> Task:
-    return Task(
-      config=self.tasks_config['generate_hooks_task'],
-      agent=self.hook_specialist_agent()
-    )
+  # Removed generate_hooks_task - hooks now generated inline by content writers
 
   @task
   def create_li_content_task(self) -> Task:
@@ -133,12 +113,6 @@ class PromoteTalkCrew():
       agent=self.voice_checker_agent()
     )
 
-  @task
-  def compliance_audit_task(self) -> Task:
-    return Task(
-      config=self.tasks_config['compliance_audit_task'],
-      agent=self.compliance_auditor_agent()
-    )
 
 
   @task
@@ -155,22 +129,18 @@ class PromoteTalkCrew():
     return Crew(
       agents=[
         self.transcript_analyzer_agent(),
-        self.hook_specialist_agent(),
         self.li_content_writer_agent(),
         self.x_content_writer_agent(),
         self.fact_checker_agent(),
         self.voice_checker_agent(),
-        self.compliance_auditor_agent(),
         self.final_reviewer_agent()
       ],
       tasks=[
         self.analyze_transcript_task(),
-        self.generate_hooks_task(),
         self.create_li_content_task(),
         self.create_x_content_task(),
         self.fact_check_content_task(),
         self.voice_authenticity_check_task(),
-        self.compliance_audit_task(),
         self.final_review_task()
       ],
       process=Process.sequential,
