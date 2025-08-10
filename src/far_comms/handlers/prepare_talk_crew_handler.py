@@ -2,11 +2,83 @@
 
 import json
 import logging
+import re
 from far_comms.crews.prepare_talk_crew import PrepareTalkCrew
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
 
 logger = logging.getLogger(__name__)
+
+
+def _reconstruct_srt(original_srt: str, cleaned_text: str) -> str:
+    """
+    Reconstruct SRT format using original timestamps with cleaned text content.
+    
+    Args:
+        original_srt: Original SRT content with timestamps from AssemblyAI
+        cleaned_text: Cleaned transcript text (paragraphs with corrected technical terms)
+    
+    Returns:
+        Reconstructed SRT with original timestamps and cleaned text
+    """
+    try:
+        # Parse original SRT to extract timestamps and text segments
+        srt_pattern = r'(\d+)\n([\d:,]+ --> [\d:,]+)\n(.*?)(?=\n\d+\n|\n*$)'
+        srt_matches = re.findall(srt_pattern, original_srt, re.DOTALL)
+        
+        if not srt_matches:
+            logger.warning("No SRT segments found in original transcript")
+            return None
+            
+        # Extract just the text from original SRT
+        original_text_segments = []
+        for _, _, text in srt_matches:
+            # Clean the text segment (remove extra whitespace, newlines)
+            clean_segment = re.sub(r'\s+', ' ', text.strip())
+            if clean_segment:
+                original_text_segments.append(clean_segment)
+        
+        original_text = ' '.join(original_text_segments)
+        
+        # Clean the cleaned_text for comparison (remove paragraph breaks, extra spaces)
+        cleaned_text_normalized = re.sub(r'\s+', ' ', cleaned_text.strip())
+        
+        # Simple approach: if the texts are similar length and content, map word by word
+        original_words = original_text.split()
+        cleaned_words = cleaned_text_normalized.split()
+        
+        logger.info(f"Original words: {len(original_words)}, Cleaned words: {len(cleaned_words)}")
+        
+        # If word counts are very different, fall back to original
+        if abs(len(original_words) - len(cleaned_words)) > len(original_words) * 0.1:
+            logger.warning(f"Word count difference too large, using original SRT")
+            return None
+        
+        # Map cleaned words back to SRT segments proportionally
+        reconstructed_srt = []
+        cleaned_word_idx = 0
+        
+        for seq_num, timestamp, original_segment_text in srt_matches:
+            original_segment_words = re.sub(r'\s+', ' ', original_segment_text.strip()).split()
+            segment_word_count = len(original_segment_words)
+            
+            if segment_word_count == 0:
+                continue
+                
+            # Take corresponding words from cleaned text
+            end_idx = min(cleaned_word_idx + segment_word_count, len(cleaned_words))
+            segment_cleaned_words = cleaned_words[cleaned_word_idx:end_idx]
+            cleaned_word_idx = end_idx
+            
+            if segment_cleaned_words:
+                cleaned_segment_text = ' '.join(segment_cleaned_words)
+                reconstructed_srt.append(f"{seq_num}\n{timestamp}\n{cleaned_segment_text}\n")
+        
+        return '\n'.join(reconstructed_srt)
+        
+    except Exception as e:
+        logger.error(f"Error reconstructing SRT: {e}")
+        return None
 
 
 def get_prepare_talk_input(raw_data: dict) -> dict:
@@ -75,11 +147,18 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         # Preprocess slides
         logger.info(f"Preprocessing slides for speaker: {speaker_name}")
         pdf_path = find_matching_pdf(speaker_name)
+        slides_data = None
         slides_raw = ""
+        qr_codes = []
+        visual_elements = []
+        
         if pdf_path:
             logger.info(f"Found matching PDF: {pdf_path}")
-            slides_raw = extract_pdf_content(pdf_path)
-            logger.info(f"Extracted slides content: {len(slides_raw)} characters")
+            slides_data = extract_pdf_content(pdf_path)
+            slides_raw = slides_data["enhanced_content"]  # Use enhanced content with visual descriptions
+            qr_codes = slides_data["qr_codes"]
+            visual_elements = slides_data["visual_elements"]
+            logger.info(f"Extracted slides: {len(slides_raw)} chars, {len(qr_codes)} QR codes, {len(visual_elements)} visual elements")
         else:
             logger.warning(f"No matching PDF found for speaker: {speaker_name}")
         
@@ -131,7 +210,9 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
             "transcript_raw": transcript_raw,
             "transcript_source": transcript_source,
             "pdf_path": pdf_path or "",
-            "processing_notes": f"Slides: {len(slides_raw)} chars, Transcript: {len(transcript_raw)} chars from {transcript_source}"
+            "qr_codes": qr_codes,
+            "visual_elements": visual_elements,
+            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}"
         }
         
         # Check if we have enough content to proceed
@@ -196,32 +277,88 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         # Extract Coda updates from crew output
         coda_updates = crew_output.get("coda_updates", {})
         
+        # Post-process transcript formatting: convert double newlines to single newlines
+        if "Transcript" in coda_updates and coda_updates["Transcript"]:
+            coda_updates["Transcript"] = coda_updates["Transcript"].replace("\n\n", "\n")
+            logger.info(f"Post-processed transcript formatting: converted \\n\\n to \\n, length: {len(coda_updates['Transcript'])} chars")
+        
+        # Reconstruct SRT with original timestamps if we have both raw SRT and cleaned text
+        if transcript_raw and "Transcript" in coda_updates:
+            try:
+                reconstructed_srt = _reconstruct_srt(transcript_raw, coda_updates["Transcript"])
+                if reconstructed_srt:
+                    coda_updates["SRT"] = reconstructed_srt
+                    logger.info(f"Reconstructed SRT with original timestamps, length: {len(reconstructed_srt)} chars")
+            except Exception as e:
+                logger.warning(f"Failed to reconstruct SRT: {e}")
+                # Fallback to original SRT if reconstruction fails
+                coda_updates["SRT"] = transcript_raw
+        
         # Ensure we have required status fields
         if "Webhook progress" not in coda_updates:
             coda_updates["Webhook progress"] = f"Processed {speaker_name}: crew completed"
         if "Webhook status" not in coda_updates:
             coda_updates["Webhook status"] = "Done"
         
-        # Update Coda row if we have updates
+        # Log content lengths for debugging truncation issues
+        for key, value in coda_updates.items():
+            if isinstance(value, str):
+                logger.info(f"Coda update '{key}': {len(value)} chars")
+                if len(value) > 10000:
+                    logger.warning(f"Large content in '{key}': {len(value)} chars - may be truncated by Coda")
+        
+        # Update Coda in separate batches to handle large content better
         if coda_updates:
-            updates = [{
-                "row_id": coda_ids.row_id,
-                "updates": coda_updates
-            }]
+            total_successful = 0
+            update_results = []
             
-            update_result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-            logger.info(f"Updated Coda for {speaker_name}: {update_result}")
+            # Batch 1: Large content (Slides, SRT, Transcript)
+            large_content_updates = {}
+            for key in ["Slides", "SRT", "Transcript"]:
+                if key in coda_updates:
+                    large_content_updates[key] = coda_updates[key]
             
-            # Check if update was successful
-            if "successful_updates" in update_result:
-                update_data = json.loads(update_result)
-                if update_data.get("successful_updates", 0) > 0:
-                    return {"status": "success", "message": f"PrepareTalkCrew completed successfully", "speaker": speaker_name}
+            if large_content_updates:
+                logger.info(f"Updating large content columns: {list(large_content_updates.keys())}")
+                updates = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": large_content_updates
+                }]
+                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                update_results.append(f"Large content: {result}")
+                if "successful_updates" in result:
+                    result_data = json.loads(result)
+                    total_successful += result_data.get("successful_updates", 0)
                 else:
-                    return {"status": "failed", "message": f"Crew succeeded but Coda update failed: {update_result}", "speaker": speaker_name}
+                    total_successful += len(large_content_updates)  # Assume success if no error
+            
+            # Batch 2: Small content (Resources, status fields)
+            small_content_updates = {}
+            for key in ["Resources", "Webhook progress", "Webhook status"]:
+                if key in coda_updates:
+                    small_content_updates[key] = coda_updates[key]
+            
+            if small_content_updates:
+                logger.info(f"Updating small content columns: {list(small_content_updates.keys())}")
+                updates = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": small_content_updates
+                }]
+                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                update_results.append(f"Small content: {result}")
+                if "successful_updates" in result:
+                    result_data = json.loads(result)
+                    total_successful += result_data.get("successful_updates", 0)
+                else:
+                    total_successful += len(small_content_updates)  # Assume success if no error
+            
+            logger.info(f"Updated Coda for {speaker_name} in {len(update_results)} batches: {update_results}")
+            
+            # Check overall success
+            if total_successful > 0:
+                return {"status": "success", "message": f"PrepareTalkCrew completed successfully, updated {total_successful} columns", "speaker": speaker_name}
             else:
-                # Old format, assume success if no error
-                return {"status": "success", "message": f"PrepareTalkCrew completed successfully", "speaker": speaker_name}
+                return {"status": "failed", "message": f"Crew succeeded but Coda updates failed: {update_results}", "speaker": speaker_name}
         else:
             # No updates from crew
             return {"status": "failed", "message": "Crew completed but produced no Coda updates", "speaker": speaker_name}

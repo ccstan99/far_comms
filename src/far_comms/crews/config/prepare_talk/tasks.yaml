@@ -5,14 +5,23 @@ process_slides_task:
     RAW SLIDES CONTENT:
     {slides_raw}
     
+    QR CODES FOUND:
+    {qr_codes}
+    
+    VISUAL ELEMENTS:
+    {visual_elements}
+    
     SOURCE FILE: {pdf_path}
     
     Your processing should:
     - Clean and structure the provided slide content
     - Preserve all technical terminology, formulas, and acronyms exactly
     - Maintain the original slide structure and organization
+    - Include QR codes from the QR CODES FOUND section as verified resources
+    - Include visual elements descriptions in the cleaned content
     - Extract and catalog ALL resources mentioned, including:
-      * Direct URLs (http/https links)
+      * QR code URLs (already verified - add directly to resources)
+      * Direct URLs (http/https links) from text
       * Research paper titles with conference/journal info (e.g., "MasterKey (NDSS'24)")
       * arXiv references (e.g., "arXiv:2502.12202")
       * DOI references
@@ -21,7 +30,6 @@ process_slides_task:
       * Author/collaborator references
       * Institution names
     - Identify slide titles, main sections, and organizational structure
-    - Note any QR codes or visual elements that might contain additional resources
     
   expected_output: >
     {
@@ -33,10 +41,12 @@ process_slides_task:
       },
       "resources_found": [
         {
-          "type": "url|paper|arxiv|doi|dataset|github",
-          "title": "Resource title or description",
-          "reference": "Original reference as found in slides",
-          "context": "Brief context where it was mentioned"
+          "type": "qr_code|url|paper|arxiv|doi|dataset|github|text_reference",
+          "title": "Resource title or description", 
+          "url": "Direct URL if available (especially for QR codes)",
+          "reference": "Original reference as found in slides or QR code",
+          "context": "Brief context where it was mentioned",
+          "source": "qr_code|slide_text"
         }
       ],
       "technical_terms": ["List of key technical terms and acronyms found"],
@@ -56,27 +66,25 @@ process_transcript_task:
     Use the slides content from the previous task to ensure name spelling and technical terms are correct.
     
     Your processing should:
-    1. Clean the provided SRT transcript using slides context for technical accuracy:
-       - Fix technical terms spelling (use slides as reference)
-       - Correct acronyms to match slide formatting
-       - Fix complex terminology to match slides
-       - Correct speaker names and affiliations
+    1. Extract the text content from the SRT transcript (ignore timestamps - they will be preserved automatically):
+       - Extract just the spoken text from the SRT format
+       - Use slide context to correct technical terminology, acronyms, and complex terms
+       - Fix speaker names and affiliations to match slides
        - CRITICAL: Only fix spelling/terminology - do NOT change, add, or remove any words
-    2. Format the cleaned transcript into readable paragraphs:
-       - Create natural paragraph breaks at topic transitions
+    2. Create readable paragraph format with corrected text:
+       - CRITICAL: Keep EVERY SINGLE WORD from the original transcript - do not remove, summarize, or shorten anything
+       - Only make spelling/terminology corrections, never remove content
+       - Organize the corrected text into natural paragraph breaks at topic transitions  
        - Group related sentences together
-       - VERBATIM: Maintain ALL original words exactly as spoken (no summarization, no additions)
        - Create substantial paragraphs (50-100 words each)
        - DO NOT add section headers, titles, or structural elements not in original speech
-       - DO NOT organize into topics with headers like "Introduction", "Definition", etc.
-    3. Preserve both timestamped SRT format and readable paragraph format
+    3. Output only the clean paragraph format - SRT will be reconstructed automatically with original timestamps
     
-    CRITICAL: The formatted transcript should read like the original speech with only paragraph breaks added and technical terms corrected. No headers, no topic organization, no summarization.
+    CRITICAL: The word count should be nearly identical to the original. Focus only on text accuracy and paragraph formatting. Timestamps will be preserved automatically by the system.
     
   expected_output: >
     {
-      "transcript_srt": "Actual full transcript in SRT format with real timestamps from AssemblyAI",
-      "transcript_formatted": "Verbatim transcript text organized into readable paragraphs WITHOUT headers or topic titles",
+      "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT SHOULD BE NEARLY IDENTICAL TO ORIGINAL",
       "transcript_stats": {
         "duration_minutes": "Actual video duration",
         "word_count": "Actual word count",
@@ -96,20 +104,19 @@ research_resources_task:
     Use the resources found in the previous slide processing task to research actual URLs and complete citations.
     
     Your research should:
-    - Use web search to find actual URLs for each resource reference
-    - For academic papers with conference info (e.g., "MasterKey (NDSS'24)"):
-      * Search using queries like "MasterKey NDSS 2024 paper", "MasterKey NDSS'24 arXiv"
+    - For QR code URLs (type: "qr_code"):
+      * These URLs are already verified - do NOT search for them
+      * Visit the URL to get the page title and determine resource type (paper, codebase, website, dataset)
+      * Extract basic info: type, title, url (keep original QR URL)
+    - For text references without URLs:
+      * Search using queries like "MasterKey NDSS 2024 paper", "MasterKey NDSS'24 arXiv"  
       * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
-      * Try variations: "MasterKey paper 2024", "MasterKey security research"
-    - For incomplete citations:
-      * Search for author names + conference + year
-      * Use partial titles and technical terms from slides
-      * Provide the most complete citation information possible
-    - Search strategies:
-      * Start with exact title + conference if available
-      * Try author names from slides + key terms
+      * Try variations with author names from slides + key terms
       * Search academic databases: "site:arxiv.org", "site:dl.acm.org", "site:ieeexplore.ieee.org"
-    - Validate URLs are accessible and point to correct resources
+    - For all resources, provide simple format:
+      * type: paper, codebase, website, dataset, etc.
+      * title: Clean page/paper title  
+      * url: Working URL (QR code URL for QR resources, found URL for searched resources)
     - Prioritize official/authoritative sources over mirrors
     - Format results for easy integration into Coda "Resources" column
     
@@ -157,10 +164,12 @@ final_assembly_task:
     Assembly requirements:
     - Combine actual slides content with resources for "Slides" column
     - Use the actual researched "resources_formatted" for "Resources" column
-    - Use the actual "transcript_srt" (with real timestamps) for "SRT" column
+    - MANDATORY: Include "SRT" column with actual "transcript_srt" content (with real timestamps)
     - Use the actual "transcript_formatted" (clean paragraphs) for "Transcript" column
     - Generate processing summary for "Webhook progress" column
     - Set "Webhook status" to "Done"
+    
+    CRITICAL: Your JSON output MUST include all 6 columns: Slides, Resources, SRT, Transcript, Webhook progress, Webhook status
     
     DO NOT use placeholder text like "Timestamped transcript in SRT format" - use the real content from previous tasks.
     
@@ -169,7 +178,7 @@ final_assembly_task:
       "coda_updates": {
         "Slides": "[ACTUAL cleaned slides content from slide processing task, not placeholder text]",
         "Resources": "[ACTUAL resources_formatted string from resource research task, not placeholder text]",
-        "SRT": "[ACTUAL transcript_srt content with real timestamps from transcript processing task, not placeholder text]", 
+        "SRT": "[MANDATORY: ACTUAL transcript_srt content with real timestamps from transcript processing task - DO NOT OMIT THIS COLUMN]", 
         "Transcript": "[ACTUAL transcript_formatted content with clean paragraphs from transcript processing task, not placeholder text]",
         "Webhook progress": "Processing summary with actual statistics",
         "Webhook status": "Done"

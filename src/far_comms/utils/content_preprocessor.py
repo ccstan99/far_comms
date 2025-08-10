@@ -3,10 +3,130 @@
 import logging
 import glob
 import os
+import base64
 from langchain_community.document_loaders import AssemblyAIAudioTranscriptLoader, PyPDFLoader
 from langchain_community.document_loaders.assemblyai import TranscriptFormat
 
 logger = logging.getLogger(__name__)
+
+
+def _analyze_pdf_visually(pdf_path: str) -> dict:
+    """
+    Analyze PDF visually using multimodal LLM to extract QR codes and describe images.
+    
+    Args:
+        pdf_path: Path to PDF file
+        
+    Returns:
+        dict with qr_codes, images, and visual_elements
+    """
+    try:
+        import fitz  # PyMuPDF
+        from anthropic import Anthropic
+        import os
+        
+        # Initialize Anthropic client
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            # Try loading from .env file
+            try:
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.getenv("ANTHROPIC_API_KEY")
+            except ImportError:
+                pass
+                
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not found - skipping visual analysis")
+            return {"qr_codes": [], "visual_elements": [], "page_analyses": []}
+        client = Anthropic(api_key=api_key)
+        
+        doc = fitz.open(pdf_path)
+        results = {
+            "qr_codes": [],
+            "visual_elements": [],
+            "page_analyses": []
+        }
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Convert page to image
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better quality
+            img_data = pix.tobytes("png")
+            img_base64 = base64.b64encode(img_data).decode()
+            
+            # Analyze with multimodal LLM
+            prompt = """Analyze this slide image and extract:
+1. QR codes: If you see any QR codes, try to read the URL they contain
+2. Visual elements: Describe any charts, diagrams, tables, or images with brief alt text
+3. Important text: Any key text that might be missed by OCR
+
+Format your response as JSON:
+{
+  "qr_codes": [{"url": "detected_url", "location": "description of where on slide"}],
+  "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief alt text"}],
+  "key_text": ["any important text visible"]
+}"""
+
+            try:
+                response = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=1024,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image", "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": img_base64
+                            }}
+                        ]
+                    }]
+                )
+                
+                # Parse response
+                import json
+                analysis_text = response.content[0].text
+                
+                # Extract JSON from response
+                if "{" in analysis_text and "}" in analysis_text:
+                    json_start = analysis_text.find("{")
+                    json_end = analysis_text.rfind("}") + 1
+                    json_str = analysis_text[json_start:json_end]
+                    
+                    analysis = json.loads(json_str)
+                    
+                    # Add page info and collect results
+                    for qr in analysis.get("qr_codes", []):
+                        qr["page"] = page_num + 1
+                        results["qr_codes"].append(qr)
+                    
+                    for element in analysis.get("visual_elements", []):
+                        element["page"] = page_num + 1
+                        results["visual_elements"].append(element)
+                    
+                    results["page_analyses"].append({
+                        "page": page_num + 1,
+                        "analysis": analysis
+                    })
+                
+            except Exception as e:
+                logger.warning(f"Failed to analyze page {page_num + 1} of PDF: {e}")
+                continue
+        
+        doc.close()
+        
+        logger.info(f"Visual analysis complete: {len(results['qr_codes'])} QR codes, {len(results['visual_elements'])} visual elements found")
+        return results
+        
+    except ImportError:
+        logger.warning("PyMuPDF not available - skipping visual analysis")
+        return {"qr_codes": [], "visual_elements": [], "page_analyses": []}
+    except Exception as e:
+        logger.error(f"Error in visual analysis: {e}")
+        return {"qr_codes": [], "visual_elements": [], "page_analyses": []}
 
 
 def find_matching_pdf(speaker_name: str) -> str:
@@ -37,15 +157,40 @@ def find_matching_pdf(speaker_name: str) -> str:
     return best_match if best_score > 0 else None
 
 
-def extract_pdf_content(pdf_path: str) -> str:
-    """Extract text content from PDF using PyPDFLoader"""
+def extract_pdf_content(pdf_path: str) -> dict:
+    """Extract both text and visual content from PDF"""
     try:
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-        return "\n\n".join([doc.page_content for doc in docs])
+        # Extract text content
+        text_loader = PyPDFLoader(pdf_path)
+        text_docs = text_loader.load()
+        text_content = "\n\n".join([doc.page_content for doc in text_docs])
+        
+        # Extract visual content (QR codes, images, charts)
+        visual_analysis = _analyze_pdf_visually(pdf_path)
+        
+        # Combine text with visual descriptions
+        enhanced_content = text_content
+        if visual_analysis["visual_elements"]:
+            enhanced_content += "\n\n--- VISUAL ELEMENTS ---\n"
+            for element in visual_analysis["visual_elements"]:
+                enhanced_content += f"[Page {element['page']}] {element['type']}: {element['description']}\n"
+        
+        return {
+            "text_content": text_content,
+            "enhanced_content": enhanced_content,
+            "visual_analysis": visual_analysis,
+            "qr_codes": visual_analysis["qr_codes"],
+            "visual_elements": visual_analysis["visual_elements"]
+        }
     except Exception as e:
         logger.error(f"Error extracting PDF content from {pdf_path}: {e}")
-        return ""
+        return {
+            "text_content": "",
+            "enhanced_content": "",
+            "visual_analysis": {"qr_codes": [], "visual_elements": [], "page_analyses": []},
+            "qr_codes": [],
+            "visual_elements": []
+        }
 
 
 def find_matching_video(speaker_name: str) -> str:
