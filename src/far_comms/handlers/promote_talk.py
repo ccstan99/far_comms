@@ -52,8 +52,8 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 try:
                     coda_client = CodaClient()
                     error_updates = {
-                        "Summaries status": "Failed", 
-                        "Progress": error_msg
+                        "Webhook status": "Failed", 
+                        "Webhook progress": error_msg
                     }
                     coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
                 except Exception as update_error:
@@ -152,8 +152,8 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
-                        "Summaries status": coda_status,
-                        "Progress": json.dumps(parsed_output, indent=2),
+                        "Webhook status": coda_status,
+                        "Webhook progress": json.dumps(parsed_output, indent=2),
                         # Map assembled content to Coda columns:
                         "Paragraph (AI)": paragraph_summary,
                         # Skip "Hooks (AI)" - raw JSON is unreadable in Coda
@@ -175,8 +175,8 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
-                        "Summaries status": "Error",
-                        "Progress": f"Update error: {str(update_error)}"
+                        "Webhook status": "Error",
+                        "Webhook progress": f"Update error: {str(update_error)}"
                     }
                 }]
                 coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
@@ -189,8 +189,8 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
             updates = [{
                 "row_id": coda_ids.row_id,
                 "updates": {
-                    "Summaries status": "Error",
-                    "Progress": f"Crew error: {str(e)}"
+                    "Webhook status": "Error",
+                    "Webhook progress": f"Crew error: {str(e)}"
                 }
             }]
             coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)

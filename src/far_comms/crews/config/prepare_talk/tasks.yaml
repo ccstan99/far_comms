@@ -1,0 +1,188 @@
+process_slides_task:
+  description: >
+    Process and clean slide content for speaker: {speaker}
+    
+    RAW SLIDES CONTENT:
+    {slides_raw}
+    
+    SOURCE FILE: {pdf_path}
+    
+    Your processing should:
+    - Clean and structure the provided slide content
+    - Preserve all technical terminology, formulas, and acronyms exactly
+    - Maintain the original slide structure and organization
+    - Extract and catalog ALL resources mentioned, including:
+      * Direct URLs (http/https links)
+      * Research paper titles with conference/journal info (e.g., "MasterKey (NDSS'24)")
+      * arXiv references (e.g., "arXiv:2502.12202")
+      * DOI references
+      * Dataset mentions
+      * GitHub repositories
+      * Author/collaborator references
+      * Institution names
+    - Identify slide titles, main sections, and organizational structure
+    - Note any QR codes or visual elements that might contain additional resources
+    
+  expected_output: >
+    {
+      "cleaned_slides": "Full cleaned slide content with proper formatting",
+      "slide_structure": {
+        "title": "Presentation title",
+        "main_sections": ["Section 1", "Section 2", "Section 3"],
+        "slide_count": "Number of slides processed"
+      },
+      "resources_found": [
+        {
+          "type": "url|paper|arxiv|doi|dataset|github",
+          "title": "Resource title or description",
+          "reference": "Original reference as found in slides",
+          "context": "Brief context where it was mentioned"
+        }
+      ],
+      "technical_terms": ["List of key technical terms and acronyms found"],
+      "processing_notes": "Any issues encountered during processing"
+    }
+  agent: slide_processor_agent
+
+process_transcript_task:
+  description: >
+    Clean and format transcript for speaker: {speaker}
+    
+    RAW TRANSCRIPT (SRT format from AssemblyAI):
+    {transcript_raw}
+    
+    SOURCE: {transcript_source}
+    SLIDES CONTEXT (from previous task for technical accuracy):
+    Use the slides content from the previous task to ensure name spelling and technical terms are correct.
+    
+    Your processing should:
+    1. Clean the provided SRT transcript using slides context for technical accuracy:
+       - Fix technical terms spelling (use slides as reference)
+       - Correct acronyms to match slide formatting
+       - Fix complex terminology to match slides
+       - Correct speaker names and affiliations
+       - CRITICAL: Only fix spelling/terminology - do NOT change, add, or remove any words
+    2. Format the cleaned transcript into readable paragraphs:
+       - Create natural paragraph breaks at topic transitions
+       - Group related sentences together
+       - VERBATIM: Maintain ALL original words exactly as spoken (no summarization, no additions)
+       - Create substantial paragraphs (50-100 words each)
+       - DO NOT add section headers, titles, or structural elements not in original speech
+       - DO NOT organize into topics with headers like "Introduction", "Definition", etc.
+    3. Preserve both timestamped SRT format and readable paragraph format
+    
+    CRITICAL: The formatted transcript should read like the original speech with only paragraph breaks added and technical terms corrected. No headers, no topic organization, no summarization.
+    
+  expected_output: >
+    {
+      "transcript_srt": "Actual full transcript in SRT format with real timestamps from AssemblyAI",
+      "transcript_formatted": "Verbatim transcript text organized into readable paragraphs WITHOUT headers or topic titles",
+      "transcript_stats": {
+        "duration_minutes": "Actual video duration",
+        "word_count": "Actual word count",
+        "paragraph_count": "Actual number of paragraphs created"
+      },
+      "cleaning_notes": "Actual details about spelling/terminology corrections made using slide context",
+      "processing_status": "success|partial|failed with actual details"
+    }
+  agent: transcript_processor_agent
+  context:
+    - process_slides_task
+
+research_resources_task:
+  description: >
+    Research and find actual URLs for academic papers and resources identified in slides.
+    
+    Use the resources found in the previous slide processing task to research actual URLs and complete citations.
+    
+    Your research should:
+    - Use web search to find actual URLs for each resource reference
+    - For academic papers with conference info (e.g., "MasterKey (NDSS'24)"):
+      * Search using queries like "MasterKey NDSS 2024 paper", "MasterKey NDSS'24 arXiv"
+      * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
+      * Try variations: "MasterKey paper 2024", "MasterKey security research"
+    - For incomplete citations:
+      * Search for author names + conference + year
+      * Use partial titles and technical terms from slides
+      * Provide the most complete citation information possible
+    - Search strategies:
+      * Start with exact title + conference if available
+      * Try author names from slides + key terms
+      * Search academic databases: "site:arxiv.org", "site:dl.acm.org", "site:ieeexplore.ieee.org"
+    - Validate URLs are accessible and point to correct resources
+    - Prioritize official/authoritative sources over mirrors
+    - Format results for easy integration into Coda "Resources" column
+    
+  expected_output: >
+    {
+      "researched_resources": [
+        {
+          "original_reference": "Reference as found in slides",
+          "title": "Full paper/resource title",
+          "url": "Actual URL if found, or 'NOT_FOUND'",
+          "citation": "Complete citation information",
+          "source": "Where URL was found (arXiv, ACM, IEEE, etc.)",
+          "status": "found|partial|not_found",
+          "notes": "Additional information or search attempts"
+        }
+      ],
+      "resources_formatted": "Formatted string ready for Coda Resources column",
+      "research_summary": {
+        "total_resources": "Number of resources processed",
+        "urls_found": "Number of actual URLs found",
+        "citations_only": "Number with citation info but no URL"
+      }
+    }
+  agent: resource_researcher_agent
+  context:
+    - process_slides_task
+
+final_assembly_task:
+  description: >
+    Assemble all processed content and prepare final outputs for Coda database update.
+    
+    CRITICAL: You must extract the ACTUAL content from previous tasks, not placeholder descriptions.
+    
+    From the slide processing task, extract:
+    - The actual "cleaned_slides" content
+    - The actual "resources_found" list
+    
+    From the transcript processing task, extract:
+    - The actual "transcript_srt" content (with real timestamps)
+    - The actual "transcript_formatted" content (clean paragraphs)
+    
+    From the resource research task, extract:
+    - The actual "resources_formatted" string ready for Coda
+    
+    Assembly requirements:
+    - Combine actual slides content with resources for "Slides" column
+    - Use the actual researched "resources_formatted" for "Resources" column
+    - Use the actual "transcript_srt" (with real timestamps) for "SRT" column
+    - Use the actual "transcript_formatted" (clean paragraphs) for "Transcript" column
+    - Generate processing summary for "Webhook progress" column
+    - Set "Webhook status" to "Done"
+    
+    DO NOT use placeholder text like "Timestamped transcript in SRT format" - use the real content from previous tasks.
+    
+  expected_output: >
+    {
+      "coda_updates": {
+        "Slides": "[ACTUAL cleaned slides content from slide processing task, not placeholder text]",
+        "Resources": "[ACTUAL resources_formatted string from resource research task, not placeholder text]",
+        "SRT": "[ACTUAL transcript_srt content with real timestamps from transcript processing task, not placeholder text]", 
+        "Transcript": "[ACTUAL transcript_formatted content with clean paragraphs from transcript processing task, not placeholder text]",
+        "Webhook progress": "Processing summary with actual statistics",
+        "Webhook status": "Done"
+      },
+      "processing_summary": {
+        "slides_processed": "Actual number of slides processed",
+        "resources_found": "Actual number of resources with URLs found",
+        "transcript_length": "Actual transcript word count",
+        "total_processing_time": "Actual processing time"
+      }
+    }
+  agent: slide_processor_agent
+  context:
+    - process_slides_task
+    - process_transcript_task  
+    - research_resources_task

@@ -73,9 +73,9 @@ class TestCodaIntegration:
         
         # Test direct update_row method (single API call for multiple columns)
         column_updates = {
-            "Progress": f"🧪 Direct update_row test: {timestamp}",
+            "Webhook progress": f"🧪 Direct update_row test: {timestamp}",
             "X content": f"Test X content {timestamp}",
-            "Summaries status": "Testing"
+            "Webhook status": "Testing"
         }
         
         result = coda_tool.update_row(
@@ -90,9 +90,9 @@ class TestCodaIntegration:
         
         # Verify success - update_row returns a success message string
         assert "Successfully updated" in result
-        assert "Progress" in result
+        assert "Webhook progress" in result
         assert "X content" in result
-        assert "Summaries status" in result
+        assert "Webhook status" in result
         
         # Verify no rate limiting errors
         assert "429" not in result, "Rate limiting occurred"

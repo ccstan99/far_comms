@@ -221,10 +221,11 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             logger.info(f"SRT already exists for {speaker_name}, skipping transcript extraction")
             processing_messages.append("transcript already exists")
         
-        # Update Progress column with processing summary
+        # Update Webhook progress column with processing summary and mark as done
         if processing_messages:
             progress_message = f"Processed {speaker_name}: " + ", ".join(processing_messages)
-            coda_updates["Progress"] = progress_message
+            coda_updates["Webhook progress"] = progress_message
+            coda_updates["Webhook status"] = "Done"
         
         # Update Coda row if we have any updates
         if coda_updates:

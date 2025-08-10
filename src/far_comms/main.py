@@ -11,8 +11,8 @@ from far_comms.handlers.promote_talk import (
     get_promote_talk_input,
     display_promote_talk_input
 )
-from far_comms.handlers.prepare_talk import (
-    prepare_talk,
+from far_comms.handlers.prepare_talk_crew_handler import (
+    prepare_talk_crew as prepare_talk,
     get_prepare_talk_input, 
     display_prepare_talk_input
 )
@@ -296,8 +296,8 @@ async def coda_webhook_endpoint(
         # Update Coda status quickly and use same data for response
         coda_client = CodaClient()
         status_updates = {
-            "Summaries status": "In progress",
-            "Progress": "Starting crew workflow..."
+            "Webhook status": "In progress",
+            "Webhook progress": "Starting crew workflow..."
         }
         coda_client.update_row(**coda_ids.model_dump(), column_updates=status_updates)
         
