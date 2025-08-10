@@ -355,13 +355,18 @@ def parse_resources_section(content: str) -> list:
                 break
                 
             if line.startswith("- ") and " - " in line:
-                # Parse format: "- Paper Title - URL or arXiv:ID or DOI"
+                # Parse format: "- Paper Title - arXiv:ID (year)" or "- Paper Title - URL"
                 resource_text = line[2:].strip()  # Remove "- "
                 
                 if " - " in resource_text:
                     parts = resource_text.split(" - ", 1)
                     name = parts[0].strip()
-                    identifier = parts[1].strip()
+                    identifier_part = parts[1].strip()
+                    
+                    # Extract just the identifier, removing year info in parentheses
+                    # Handle formats like "arXiv:2502.12202 (2025)" -> "arXiv:2502.12202"
+                    identifier = identifier_part.split(' (')[0].strip()  # Remove year part
+                    identifier = identifier.split(' ')[0].strip()  # Take first word/identifier
                     
                     # Convert identifier to full URL
                     url = convert_identifier_to_url(identifier)
@@ -372,7 +377,7 @@ def parse_resources_section(content: str) -> list:
                             'url': url,
                             'context': f"Found in resources section: {resource_text}"
                         })
-                        logger.debug(f"Parsed resource: {name} -> {url}")
+                        logger.debug(f"Parsed resource: {name} -> {url} (from {identifier_part})")
     
     return resources
 
