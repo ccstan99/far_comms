@@ -11,6 +11,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "PyMuPDF>=1.23.0",
+    "assemblyai",
 ]
 
 [project.scripts]

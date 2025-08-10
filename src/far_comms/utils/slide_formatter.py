@@ -64,7 +64,8 @@ At the end, add a "RESOURCES FOUND:" section listing:
 - All URLs (http/https links)
 - Paper citations (titles with arXiv IDs like "arXiv:2502.12202")
 - DOI references (like "10.1000/xyz123")
-- Academic conferences (NeurIPS, ICML, ICLR, AAAI, IJCAI, CVPR, ACL, etc.)
+- Research papers with conference/journal info (like "MasterKey (NDSS'24)" or "ART (NeurIPS'24)")
+- Academic conferences (NeurIPS, ICML, ICLR, AAAI, IJCAI, CVPR, ACL, NDSS, CCS, etc.)
 - Author references and collaborators
 - Organization/institution names with potential links
 - GitHub repos, datasets, tools mentioned
@@ -98,9 +99,11 @@ RESOURCES FOUND:
 **ACADEMIC PATTERNS TO LOOK FOR**:
 - arXiv preprint references (format: arXiv:YYMM.NNNNN)
 - DOI patterns (format: 10.XXXX/...)
-- Conference papers: "NeurIPS", "ICML", "ICLR", "AAAI", "CVPR", "ACL", etc.
+- Research papers with conference abbreviations: "Paper Title (NeurIPS'24)", "Method Name (ICLR'25)", etc.
+- Conference/journal names: NeurIPS, ICML, ICLR, AAAI, CVPR, ACL, EMNLP, NDSS, CCS, USENIX, etc.
 - Journal abbreviations and full names
 - Author citations with years
+- Publications lists or "Our Work" sections often contain multiple papers
 
 **SKIP ONLY**:
 - Duplicate slides
@@ -188,6 +191,30 @@ def cleanup_multimodal_output(content: str) -> str:
     result = re.sub(r'\n\s*\n\s*\n+', '\n\n', result)
     
     return result.strip()
+
+
+def remove_resources_section_from_slides(content: str) -> str:
+    """
+    Remove the RESOURCES FOUND section from slide content to avoid confusing content generation LLMs
+    
+    Args:
+        content: Slide content with potential RESOURCES FOUND section
+    
+    Returns:
+        Slide content with RESOURCES FOUND section removed
+    """
+    if not content or "RESOURCES FOUND:" not in content:
+        return content
+    
+    # Split at RESOURCES FOUND and keep only the content before it
+    parts = content.split("RESOURCES FOUND:", 1)
+    slide_content = parts[0].strip()
+    
+    # Remove any trailing separators or empty lines
+    slide_content = re.sub(r'\n\s*\n\s*$', '', slide_content)  # Remove trailing empty lines
+    slide_content = slide_content.rstrip('-= \t\n')  # Remove trailing separators
+    
+    return slide_content
 
 
 def clean_slide_text(raw_content: str) -> str:
@@ -368,16 +395,27 @@ def parse_resources_section(content: str) -> list:
                     identifier = identifier_part.split(' (')[0].strip()  # Remove year part
                     identifier = identifier.split(' ')[0].strip()  # Take first word/identifier
                     
-                    # Convert identifier to full URL
+                    # Convert identifier to full URL if possible
                     url = convert_identifier_to_url(identifier)
                     
                     if url:
+                        # Successfully converted to URL
                         resources.append({
                             'name': name,
                             'url': url,
                             'context': f"Found in resources section: {resource_text}"
                         })
                         logger.debug(f"Parsed resource: {name} -> {url} (from {identifier_part})")
+                    else:
+                        # No URL conversion possible, but keep the citation for manual lookup
+                        # This handles cases like "MasterKey (NDSS'24)" or "ART (NeurIPS'24)"
+                        citation_info = identifier_part.strip()  # Keep original with conference/year
+                        resources.append({
+                            'name': name,
+                            'url': f"CITATION: {citation_info}",
+                            'context': f"Found in resources section: {resource_text}"
+                        })
+                        logger.debug(f"Parsed citation: {name} -> {citation_info} (needs manual lookup)")
     
     return resources
 
@@ -430,7 +468,8 @@ def convert_identifier_to_url(identifier: str) -> str:
     
     # Academic conference/journal patterns
     # Look for patterns like "NeurIPS 2024", "ICML 2023", etc.
-    conference_pattern = r'^(NeurIPS|ICML|ICLR|AAAI|IJCAI|UAI|AISTATS|COLT|KDD|WWW|SIGIR|RecSys|WSDM|CHI|UIST|CVPR|ICCV|ECCV|ACL|EMNLP|NAACL|COLING)\s+\d{4}$'
+    # Expanded to include more conferences and formats
+    conference_pattern = r'^(NeurIPS|ICML|ICLR|AAAI|IJCAI|UAI|AISTATS|COLT|KDD|WWW|SIGIR|RecSys|WSDM|CHI|UIST|CVPR|ICCV|ECCV|ACL|EMNLP|NAACL|COLING|NDSS|CCS|USENIX|SOSP|OSDI|NSDI|SIGCOMM|INFOCOM|MOBICOM|S&P|Oakland)\s+\d{4}$'
     if re.match(conference_pattern, identifier, re.IGNORECASE):
         # For conference proceedings, we can't generate direct URLs without paper titles
         # Return empty string - these should be detected in context
@@ -464,7 +503,11 @@ def extract_resources_by_patterns(content: str) -> list:
     lines = content.split('\n')
     
     # URL patterns - simple and robust
-    url_pattern = r'https?://[^\s\)\]]+|www\.[^\s\)\]]+|[a-zA-Z0-9.-]+\.(com|org|edu|net|gov|io|ai)\b[^\s\)\]]*'
+    url_pattern = r'https?://[^\s\)\]]+|www\.[^\s\)\]]+|[a-zA-Z0-9.-]+\.(?:com|org|edu|net|gov|io|ai)\b[^\s\)\]]*'
+    
+    # Conference citation patterns like "MasterKey (NDSS'24)", "C²-EVAL (EMNLP'24)", "ART (NeurIPS'24)"
+    # Enhanced to capture common academic conference formats and variations including Security, S&P, NeurIPS
+    conference_pattern = r'([A-Za-z0-9²]+(?:[A-Za-z0-9\-_²]*[A-Za-z0-9²])?)\s*\(([A-Za-z0-9&]{2,15}(?:\s+[A-Za-z]+)?)\s*\'?(\d{2})\)'
     
     for line in lines:
         line = line.strip()
@@ -499,6 +542,30 @@ def extract_resources_by_patterns(content: str) -> list:
                 'url': clean_url,
                 'context': line[:100]  # Keep some context
             })
+        
+        # Look for conference citations without URLs
+        conference_matches = re.finditer(conference_pattern, line)
+        
+        for match in conference_matches:
+            paper_name = match.group(1).strip()
+            conference = match.group(2).upper()
+            year = match.group(3)
+            
+            # Skip if paper name is too short (likely false positive)
+            if len(paper_name) < 3:
+                continue
+            
+            # Format the citation
+            citation_info = f"({conference}'{year})"
+            full_citation = f"{paper_name} {citation_info}"
+            
+            resources.append({
+                'name': paper_name,
+                'url': f"CITATION: {citation_info}",
+                'context': f"Conference paper found in: {line[:100]}"
+            })
+            
+            logger.debug(f"Found conference citation: {full_citation}")
     
     return resources
 
@@ -552,7 +619,7 @@ def format_resources_for_coda(resources: list) -> str:
         resources: List of resource dicts with 'name' and 'url'
     
     Returns:
-        Formatted string: "{resource_name} - {resource_url}"
+        Formatted string: "{resource_name} - {resource_url}" or "{resource_name} - CITATION: (CONF'YY)"
     """
     if not resources:
         return ""
@@ -562,8 +629,13 @@ def format_resources_for_coda(resources: list) -> str:
         name = resource.get('name', 'Resource')
         url = resource.get('url', '')
         
-        if url:  # Only include if we have a valid URL
-            formatted_items.append(f"{name} - {url}")
+        if url:  # Include both URLs and citations
+            if url.startswith('CITATION:'):
+                # Format citations more cleanly: "MasterKey - CITATION: (NDSS'24)"
+                formatted_items.append(f"{name} - {url}")
+            else:
+                # Regular URLs: "Paper Title - https://..."
+                formatted_items.append(f"{name} - {url}")
     
     return '\n'.join(formatted_items)
 
@@ -745,13 +817,16 @@ def get_cleaned_text(content_dict: dict) -> dict:
         multimodal_content = analyze_pdf_with_multimodal_llm(images_data)
         
         if multimodal_content:
-            # Use multimodal analysis as the primary content
-            result['content'] = multimodal_content
-            result['content_markdown'] = multimodal_content  # Already in markdown format
-            result['processing_method'] = 'multimodal_llm'
-            
-            # Extract resources from the cleaned multimodal content
+            # Extract resources from the full multimodal content (including RESOURCES FOUND section)
             resources = extract_resources_from_content(multimodal_content)
+            
+            # Remove RESOURCES FOUND section from slide content to avoid confusing content generation LLMs
+            clean_slide_content = remove_resources_section_from_slides(multimodal_content)
+            
+            # Use cleaned content for slides (without resources section)
+            result['content'] = clean_slide_content
+            result['content_markdown'] = clean_slide_content  # Already in markdown format
+            result['processing_method'] = 'multimodal_llm'
         else:
             # Fallback to OCR-based processing
             logger.warning("Multimodal analysis failed, falling back to OCR processing")
@@ -789,6 +864,10 @@ def get_cleaned_text(content_dict: dict) -> dict:
         result['resources'] = resources
         result['resources_formatted'] = format_resources_for_coda(resources)
     
+    # Add processing summary for progress tracking
+    processing_summary = generate_processing_summary(result, resources)
+    result['processing_summary'] = processing_summary
+    
     logger.info(f"Processed slide content for {result.get('file_name', 'unknown file')} using {result.get('processing_method', 'ocr')}")
     
     return result
@@ -819,3 +898,63 @@ def process_with_ocr_fallback(result: dict) -> dict:
     
     result['processing_method'] = 'ocr_fallback'
     return result
+
+
+def generate_processing_summary(result: dict, resources: list) -> str:
+    """
+    Generate a processing summary for progress tracking
+    
+    Args:
+        result: Processing result dictionary
+        resources: List of extracted resources
+    
+    Returns:
+        Summary string for Progress column
+    """
+    method = result.get('processing_method', 'unknown')
+    file_name = result.get('file_name', 'unknown')
+    
+    summary_parts = [f"Processed {file_name}"]
+    
+    # Processing method
+    if method == 'multimodal_llm':
+        summary_parts.append("✓ Multimodal analysis")
+    elif method == 'ocr_fallback':
+        summary_parts.append("⚠ OCR fallback")
+    
+    # Content stats
+    page_count = result.get('page_count', 0)
+    content_length = len(result.get('content_markdown', result.get('content', '')))
+    summary_parts.append(f"{page_count} slides, {content_length} chars")
+    
+    # Resources found
+    if resources:
+        resource_count = len(resources)
+        summary_parts.append(f"📄 {resource_count} resource{'s' if resource_count > 1 else ''}")
+        
+        # Identify types of resources
+        resource_types = []
+        for resource in resources:
+            url = resource.get('url', '')
+            if 'arxiv.org' in url:
+                resource_types.append('arXiv')
+            elif any(domain in url for domain in ['github.com', 'gitlab.com']):
+                resource_types.append('code')
+            elif url.startswith('https://doi.org/'):
+                resource_types.append('DOI')
+            elif any(domain in url for domain in ['.edu', '.org', '.gov']):
+                resource_types.append('academic')
+        
+        if resource_types:
+            unique_types = list(set(resource_types))
+            summary_parts.append(f"({', '.join(unique_types)})")
+    else:
+        summary_parts.append("📄 No resources found")
+    
+    # Visual analysis notes
+    if result.get('has_visual_data'):
+        images_processed = len(result.get('images', []))
+        if images_processed > 0:
+            summary_parts.append(f"🖼 {images_processed} slides analyzed")
+    
+    return " | ".join(summary_parts)

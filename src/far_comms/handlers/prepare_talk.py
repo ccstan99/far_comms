@@ -6,6 +6,7 @@ import glob
 import os
 from far_comms.utils.slide_extractor import get_slide_content
 from far_comms.utils.slide_formatter import get_cleaned_text
+from far_comms.utils.youtube_transcript import get_youtube_transcript_srt, format_transcript_summary, find_matching_video_file
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
 
@@ -13,9 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def get_prepare_talk_input(raw_data: dict) -> dict:
-    """Parse raw Coda data for prepare_talk - just needs speaker name for slide text extraction"""
+    """Parse raw Coda data for prepare_talk - needs speaker name and YouTube URL"""
     return {
-        "speaker": raw_data.get("Speaker", "")
+        "speaker": raw_data.get("Speaker", ""),
+        "yt_full_link": raw_data.get("YT url", "")
     }
 
 
@@ -25,81 +27,15 @@ def display_prepare_talk_input(function_data: dict) -> dict:
 
 
 def find_matching_slide(speaker_name: str, slide_files: list) -> str | None:
-    """Find slide file that matches speaker name using progressive matching strategies"""
-    import re
+    """Find slide file that matches speaker name using shared matching logic"""
+    from far_comms.utils.file_matcher import find_best_matching_file
     
-    def clean_name(name: str) -> str:
-        """Remove all non-alphanumeric characters and convert to lowercase"""
-        return re.sub(r'[^a-zA-Z0-9]', '', name.lower())
-    
-    def score_match(speaker_parts: list, filename: str) -> tuple[int, str, str]:
-        """Score how well speaker name matches filename. Returns (score, match_type, details)"""
-        clean_filename = clean_name(filename)
-        first_name = clean_name(speaker_parts[0]) if speaker_parts else ""
-        last_name = clean_name(speaker_parts[-1]) if len(speaker_parts) > 1 else ""
-        
-        # Strategy 1: Full name exact match (highest score)
-        full_name = "".join(clean_name(part) for part in speaker_parts)
-        if full_name in clean_filename:
-            return (100, "full_exact", f"full:{full_name}")
-        
-        # Strategy 2: First + Last exact match
-        if first_name and last_name and first_name in clean_filename and last_name in clean_filename:
-            return (90, "first_last_exact", f"first:{first_name},last:{last_name}")
-        
-        # Strategy 3: Single name exact match (first or last)
-        exact_matches = []
-        if first_name and first_name in clean_filename:
-            exact_matches.append(f"first:{first_name}")
-        if last_name and last_name in clean_filename:
-            exact_matches.append(f"last:{last_name}")
-        if exact_matches:
-            return (80, "single_exact", ",".join(exact_matches))
-        
-        # Strategy 4: Long partial matches (6+ chars)
-        partial_matches = []
-        if len(first_name) >= 6 and first_name[:6] in clean_filename:
-            partial_matches.append(f"first:{first_name[:6]}+")
-        if len(last_name) >= 6 and last_name[:6] in clean_filename:
-            partial_matches.append(f"last:{last_name[:6]}+")
-        if partial_matches:
-            return (60, "long_partial", ",".join(partial_matches))
-        
-        # Strategy 5: Medium partial matches (4-5 chars) - only if name is longer
-        medium_matches = []
-        if len(first_name) >= 5 and first_name[:4] in clean_filename:
-            medium_matches.append(f"first:{first_name[:4]}+")
-        if len(last_name) >= 5 and last_name[:4] in clean_filename:
-            medium_matches.append(f"last:{last_name[:4]}+")
-        if medium_matches:
-            return (40, "medium_partial", ",".join(medium_matches))
-        
-        return (0, "no_match", "")
-    
-    speaker_parts = speaker_name.strip().split()
-    if not speaker_parts:
+    if not slide_files:
+        logger.warning("No slide files provided")
         return None
     
-    # Score all files and find best match
-    best_score = 0
-    best_match = None
-    best_details = ""
-    
-    for file_path in slide_files:
-        filename = os.path.basename(file_path)
-        score, match_type, details = score_match(speaker_parts, filename)
-        
-        if score > best_score:
-            best_score = score
-            best_match = file_path
-            best_details = f"{match_type}({details})"
-    
-    if best_match and best_score >= 40:  # Require at least medium partial match
-        logger.info(f"Matched '{speaker_name}' to '{os.path.basename(best_match)}' via: {best_details} (score: {best_score})")
-        return best_match
-    
-    logger.warning(f"No good match found for '{speaker_name}' (best score: {best_score})")
-    return None
+    # Use shared file matching logic
+    return find_best_matching_file(speaker_name, slide_files, min_score=40)
 
 
 async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
@@ -111,84 +47,142 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
     try:
         logger.info(f"Starting prepare_talk for row {coda_ids.row_id}")
         
-        # Get speaker name from function_data (already parsed)
+        # Get speaker name and YouTube URL from function_data (already parsed)
         speaker_name = function_data.get("speaker", "")
+        yt_url = function_data.get("yt_full_link", "")
+        
         if not speaker_name:
             logger.error("No speaker name found in function_data")
             return {"status": "failed", "message": "No speaker name found in function_data", "speaker": ""}
             
         logger.info(f"Processing speaker: {speaker_name}")
+        if yt_url:
+            logger.info(f"YouTube URL provided: {yt_url}")
         
         # Initialize Coda client for updates
         coda_client = CodaClient()
         
-        # Check if Slides column already has content - skip if it does
+        # Check if Slides and SRT columns already have content - skip if both do
         try:
             row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
             row_data = json.loads(row_data_str)
-            existing_slides = row_data.get("data", {}).get("Slides", "")
+            row_values = row_data.get("data", {})
+            existing_slides = row_values.get("Slides", "")
+            existing_srt = row_values.get("SRT", "")
             
-            if existing_slides and existing_slides.strip():
-                logger.info(f"Skipping {speaker_name} - Slides column already has content")
-                return {"status": "skipped", "message": "Slides column already populated", "speaker": speaker_name}
+            # Check what needs to be processed
+            slides_exist = existing_slides and existing_slides.strip()
+            srt_exists = existing_srt and existing_srt.strip()
+            
+            if slides_exist and srt_exists:
+                logger.info(f"Skipping {speaker_name} - both Slides and SRT columns already populated")
+                return {"status": "skipped", "message": "Both Slides and SRT already populated", "speaker": speaker_name}
+                
         except Exception as e:
-            logger.warning(f"Could not check existing slides for {speaker_name}: {e}")
+            logger.warning(f"Could not check existing content for {speaker_name}: {e}")
             # Continue anyway in case it was just a temporary error
+            slides_exist = False
+            srt_exists = False
         
-        # Get all PDF files in data/slides/
-        slide_files = glob.glob("data/slides/*.pdf")
-        matched_file = find_matching_slide(speaker_name, slide_files)
+        # Prepare updates for Coda
+        coda_updates = {}
+        processing_messages = []
         
-        if matched_file:
-            logger.info(f"Found matching file: {matched_file}")
+        # Process slides if not already done
+        if not slides_exist:
+            slide_files = glob.glob("data/slides/*.pdf")
+            matched_file = find_matching_slide(speaker_name, slide_files)
             
-            # Extract slide content (text + images for multimodal analysis)
-            slide_result = get_slide_content(matched_file, max_slides=-1)  # Process all slides
-            
-            if slide_result.get("success"):
-                # Clean the extracted text content using LLM
-                cleaned_result = get_cleaned_text(slide_result)
+            if matched_file:
+                logger.info(f"Found matching file: {matched_file}")
                 
-                # Use markdown formatted version if available, otherwise fall back to content
-                slide_content = cleaned_result.get("content_markdown") or cleaned_result.get("content", "")
-                logger.info(f"Extracted and cleaned {len(slide_content)} characters from slides")
+                # Extract slide content (text + images for multimodal analysis)
+                slide_result = get_slide_content(matched_file, max_slides=-1)  # Process all slides
                 
-                # Prepare updates for Coda
-                coda_updates = {"Slides": slide_content}
-                
-                # Add resources if found
-                resources_formatted = cleaned_result.get("resources_formatted")
-                if resources_formatted:
-                    coda_updates["Resources"] = resources_formatted
-                    resource_count = len(cleaned_result.get("resources", []))
-                    logger.info(f"Found {resource_count} resources in slides")
-                
-                # Update Coda row with slide content and resources
-                updates = [{
-                    "row_id": coda_ids.row_id,
-                    "updates": coda_updates
-                }]
-                
-                update_result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-                logger.info(f"Updated Coda for {speaker_name}: {update_result}")
-                
-                # Check if update was successful
-                if "successful_updates" in update_result:
-                    update_data = json.loads(update_result)
-                    if update_data.get("successful_updates", 0) > 0:
-                        return {"status": "success", "message": f"Extracted slides from {matched_file} and updated Coda", "speaker": speaker_name}
-                    else:
-                        return {"status": "failed", "message": f"Slide extraction succeeded but Coda update failed: {update_result}", "speaker": speaker_name}
+                if slide_result.get("success"):
+                    # Clean the extracted text content using LLM
+                    cleaned_result = get_cleaned_text(slide_result)
+                    
+                    # Use markdown formatted version if available, otherwise fall back to content
+                    slide_content = cleaned_result.get("content_markdown") or cleaned_result.get("content", "")
+                    logger.info(f"Extracted and cleaned {len(slide_content)} characters from slides")
+                    
+                    coda_updates["Slides"] = slide_content
+                    processing_messages.append(f"extracted slides ({len(slide_content)} chars)")
+                    
+                    # Add resources if found
+                    resources_formatted = cleaned_result.get("resources_formatted")
+                    if resources_formatted:
+                        coda_updates["Resources"] = resources_formatted
+                        resource_count = len(cleaned_result.get("resources", []))
+                        logger.info(f"Found {resource_count} resources in slides")
+                        processing_messages.append(f"{resource_count} resources found")
                 else:
-                    # Old format, assume success if no error
-                    return {"status": "success", "message": f"Extracted slides from {matched_file} and updated Coda", "speaker": speaker_name}
+                    error_msg = slide_result.get('error', 'Unknown extraction error')
+                    logger.error(f"Failed to extract slides for {speaker_name}: {error_msg}")
+                    processing_messages.append(f"slide extraction failed: {error_msg}")
             else:
-                error_msg = slide_result.get('error', 'Unknown extraction error')
-                logger.error(f"Failed to extract slides for {speaker_name}: {error_msg}")
-                return {"status": "failed", "message": f"Slide extraction failed: {error_msg}", "speaker": speaker_name}
+                logger.warning(f"No matching slide file found for speaker: {speaker_name}")
+                processing_messages.append("no matching slide file found")
         else:
-            logger.warning(f"No matching slide file found for speaker: {speaker_name}")
-            return {"status": "failed", "message": "No matching slide file found", "speaker": speaker_name}
+            logger.info(f"Slides already exist for {speaker_name}, skipping slide extraction")
+            processing_messages.append("slides already exist")
+        
+        # Process video transcript if not already done
+        if not srt_exists:
+            # Find matching local video file
+            matched_video = find_matching_video_file(speaker_name)
+            
+            if matched_video:
+                logger.info(f"Found matching video: {matched_video}")
+                logger.info(f"Extracting transcript from local video file")
+                transcript_result = get_youtube_transcript_srt(yt_url or "", matched_video)
+                
+                if transcript_result.get("success"):
+                    srt_content = transcript_result.get("srt_content", "")
+                    logger.info(f"Successfully extracted transcript: {len(srt_content)} characters")
+                    
+                    coda_updates["SRT"] = srt_content
+                    processing_messages.append(f"extracted transcript ({len(srt_content)} chars)")
+                else:
+                    error_msg = transcript_result.get("error", "Unknown transcript error")
+                    logger.error(f"Failed to extract transcript for {speaker_name}: {error_msg}")
+                    processing_messages.append(f"transcript extraction failed: {error_msg}")
+            else:
+                logger.warning(f"No matching video file found for speaker: {speaker_name}")
+                processing_messages.append("no matching video file found")
+        else:
+            logger.info(f"SRT already exists for {speaker_name}, skipping transcript extraction")
+            processing_messages.append("transcript already exists")
+        
+        # Update Progress column with processing summary
+        if processing_messages:
+            progress_message = f"Processed {speaker_name}: " + ", ".join(processing_messages)
+            coda_updates["Progress"] = progress_message
+        
+        # Update Coda row if we have any updates
+        if coda_updates:
+            updates = [{
+                "row_id": coda_ids.row_id,
+                "updates": coda_updates
+            }]
+            
+            update_result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+            logger.info(f"Updated Coda for {speaker_name}: {update_result}")
+            
+            # Check if update was successful
+            if "successful_updates" in update_result:
+                update_data = json.loads(update_result)
+                if update_data.get("successful_updates", 0) > 0:
+                    return {"status": "success", "message": ", ".join(processing_messages), "speaker": speaker_name}
+                else:
+                    return {"status": "failed", "message": f"Processing succeeded but Coda update failed: {update_result}", "speaker": speaker_name}
+            else:
+                # Old format, assume success if no error
+                return {"status": "success", "message": ", ".join(processing_messages), "speaker": speaker_name}
+        else:
+            # Nothing to process
+            return {"status": "skipped", "message": "No processing needed - all content already exists", "speaker": speaker_name}
             
     except Exception as e:
         logger.error(f"Error in prepare_talk: {e}", exc_info=True)

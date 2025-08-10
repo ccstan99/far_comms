@@ -51,6 +51,10 @@ async def validate_environment():
         "ANTHROPIC_API_KEY": "Claude model access"
     }
     
+    optional_vars = {
+        "ASSEMBLYAI_API_KEY": "YouTube transcript extraction (optional)"
+    }
+    
     missing_vars = []
     for var, purpose in required_vars.items():
         if not os.getenv(var):
@@ -60,6 +64,15 @@ async def validate_environment():
         error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
+    
+    # Check optional variables
+    missing_optional = []
+    for var, purpose in optional_vars.items():
+        if not os.getenv(var):
+            missing_optional.append(f"{var} (for {purpose})")
+    
+    if missing_optional:
+        logger.warning(f"Optional environment variables not set: {', '.join(missing_optional)}")
     
     logger.info("Environment validation passed")
 
@@ -108,8 +121,12 @@ async def prepare_event(table_id: str, doc_id: str):
                 
             logger.info(f"Processing speaker: {speaker_name}")
             
-            # Create function_data for prepare_talk (just needs speaker name)
-            function_data = {"speaker": speaker_name}
+            # Create function_data for prepare_talk (needs speaker name and YouTube URL)
+            yt_url = row_data.get("YT url", "")
+            function_data = {
+                "speaker": speaker_name,
+                "yt_full_link": yt_url
+            }
             
             # Create CodaIds for this row
             coda_ids = CodaIds(
@@ -131,8 +148,8 @@ async def prepare_event(table_id: str, doc_id: str):
                     failed_speakers.append(f"{speaker_name}: {result.get('message', 'Failed')}")
                 
                 # Add delay between speakers to avoid rate limits
-                import asyncio
-                await asyncio.sleep(2)  # Wait 2 seconds between speakers
+                # import asyncio
+                # await asyncio.sleep(2)  # Wait 2 seconds between speakers
                 
             except Exception as e:
                 logger.error(f"Failed to prepare {speaker_name}: {e}")
