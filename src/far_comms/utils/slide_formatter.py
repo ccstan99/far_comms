@@ -236,7 +236,7 @@ def clean_slide_text(raw_content: str) -> str:
     
     try:
         llm = LLM(
-            model="anthropic/claude-haiku-3-20240307",  # Fast, cheap model for cleaning
+            model="anthropic/claude-3-5-sonnet-20241022",  # Higher quality for better cleaning
             max_retries=2
         )
         

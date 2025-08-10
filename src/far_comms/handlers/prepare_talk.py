@@ -7,6 +7,7 @@ import os
 from far_comms.utils.slide_extractor import get_slide_content
 from far_comms.utils.slide_formatter import get_cleaned_text
 from far_comms.utils.youtube_transcript import get_youtube_transcript_srt, format_transcript_summary, find_matching_video_file
+from far_comms.utils.transcript_cleaner import clean_srt_transcript, format_transcript_for_reading
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
 
@@ -139,11 +140,41 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                 transcript_result = get_youtube_transcript_srt(yt_url or "", matched_video)
                 
                 if transcript_result.get("success"):
-                    srt_content = transcript_result.get("srt_content", "")
-                    logger.info(f"Successfully extracted transcript: {len(srt_content)} characters")
+                    raw_srt_content = transcript_result.get("srt_content", "")
+                    logger.info(f"Successfully extracted raw transcript: {len(raw_srt_content)} characters")
                     
-                    coda_updates["SRT"] = srt_content
-                    processing_messages.append(f"extracted transcript ({len(srt_content)} chars)")
+                    # Clean the transcript using LLM with slides context
+                    logger.info("Cleaning transcript with LLM using slides context")
+                    slide_content = coda_updates.get("Slides", "") or row_values.get("Slides", "")
+                    
+                    cleaning_result = clean_srt_transcript(raw_srt_content, slide_content)
+                    
+                    if cleaning_result.get("cleaned_srt"):
+                        cleaned_srt = cleaning_result.get("cleaned_srt")
+                        logger.info(f"Successfully cleaned transcript: {cleaning_result.get('processing_notes', '')}")
+                        
+                        # Format cleaned SRT into readable paragraphs for Transcript column
+                        logger.info("Formatting cleaned transcript for readability")
+                        formatting_result = format_transcript_for_reading(cleaned_srt, slide_content)
+                        
+                        if formatting_result.get("formatted_transcript"):
+                            formatted_transcript = formatting_result.get("formatted_transcript")
+                            logger.info(f"Successfully formatted transcript: {formatting_result.get('processing_notes', '')}")
+                            
+                            # Store both SRT (with timestamps) and Transcript (readable paragraphs)
+                            coda_updates["SRT"] = cleaned_srt
+                            coda_updates["Transcript"] = formatted_transcript
+                            processing_messages.append(f"extracted, cleaned & formatted transcript ({len(cleaned_srt)} chars SRT, {len(formatted_transcript)} chars text)")
+                        else:
+                            # Just store SRT if formatting failed
+                            logger.warning("Transcript formatting failed, storing only SRT")
+                            coda_updates["SRT"] = cleaned_srt
+                            processing_messages.append(f"extracted & cleaned transcript - formatting failed ({len(cleaned_srt)} chars)")
+                    else:
+                        # Fallback to raw SRT if cleaning failed
+                        logger.warning("Transcript cleaning failed, using raw SRT")
+                        coda_updates["SRT"] = raw_srt_content
+                        processing_messages.append(f"extracted transcript - cleaning failed ({len(raw_srt_content)} chars)")
                 else:
                     error_msg = transcript_result.get("error", "Unknown transcript error")
                     logger.error(f"Failed to extract transcript for {speaker_name}: {error_msg}")

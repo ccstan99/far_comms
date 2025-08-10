@@ -8,8 +8,15 @@ class PromoteTalkCrew():
   tasks_config = 'config/promote_talk/tasks.yaml'
   
   def __init__(self):
-    self.llm = LLM(
+    # High-quality Opus for content creation and final review
+    self.opus_llm = LLM(
       model="anthropic/claude-opus-4-20250514",
+      max_retries=3
+    )
+    
+    # Sonnet for analytical/systematic tasks
+    self.sonnet_llm = LLM(
+      model="anthropic/claude-3-5-sonnet-20241022",
       max_retries=3
     )
 
@@ -18,7 +25,7 @@ class PromoteTalkCrew():
   def transcript_analyzer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['transcript_analyzer_agent'],
-      llm=self.llm,
+      llm=self.sonnet_llm,  # Analytical task - Sonnet
       verbose=True,
       allow_delegation=False
     )
@@ -30,7 +37,7 @@ class PromoteTalkCrew():
   def li_content_writer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['li_content_writer_agent'],
-      llm=self.llm,
+      llm=self.opus_llm,  # Content creation - Opus
       verbose=True,
       allow_delegation=False
     )
@@ -39,7 +46,7 @@ class PromoteTalkCrew():
   def x_content_writer_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['x_content_writer_agent'],
-      llm=self.llm,
+      llm=self.opus_llm,  # Content creation - Opus
       verbose=True,
       allow_delegation=False
     )
@@ -49,7 +56,7 @@ class PromoteTalkCrew():
   def fact_checker_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['fact_checker_agent'],
-      llm=self.llm,
+      llm=self.sonnet_llm,  # Systematic checking - Sonnet
       verbose=True,
       allow_delegation=False
     )
@@ -58,7 +65,7 @@ class PromoteTalkCrew():
   def voice_checker_agent(self) -> Agent:
     return Agent(
       config=self.agents_config['voice_checker_agent'],
-      llm=self.llm,
+      llm=self.sonnet_llm,  # Rule-based checking - Sonnet
       verbose=True,
       allow_delegation=False
     )
@@ -70,7 +77,7 @@ class PromoteTalkCrew():
     # Final reviewer should not delegate - it's the final stage that iterates on itself
     return Agent(
       config=self.agents_config['final_reviewer_agent'],
-      llm=self.llm,
+      llm=self.opus_llm,  # Final quality control - Opus
       verbose=True,
       allow_delegation=False
     )

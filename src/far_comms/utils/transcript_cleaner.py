@@ -147,7 +147,7 @@ INSTRUCTIONS:
 Return only the cleaned transcript text. Do not add explanations or commentary."""
 
         llm = LLM(
-            model="anthropic/claude-3-haiku-20240307",  # Fast, cost-effective for cleaning
+            model="anthropic/claude-3-5-sonnet-20241022",  # Higher quality for better cleaning
             max_retries=2
         )
         
@@ -187,6 +187,99 @@ Return only the cleaned transcript text. Do not add explanations or commentary."
         return {
             "cleaned_text": transcript_text,
             "processing_notes": f"Cleaning failed: {str(e)}, kept original"
+        }
+
+
+def format_transcript_for_reading(srt_content: str, slides_content: str = "") -> Dict[str, str]:
+    """
+    Convert SRT content to human-readable paragraphs using LLM to find logical breaks
+    
+    Args:
+        srt_content: SRT format content with timestamps
+        slides_content: Related slide content for context on topic transitions
+    
+    Returns:
+        Dict with 'formatted_transcript' and 'processing_notes'
+    """
+    if not srt_content or not srt_content.strip():
+        return {
+            "formatted_transcript": "",
+            "processing_notes": "No SRT content to format"
+        }
+    
+    # Extract text-only version first
+    text_only = extract_srt_text_only(srt_content)
+    
+    if not text_only or len(text_only.strip()) < 50:
+        return {
+            "formatted_transcript": text_only,
+            "processing_notes": "Content too short, no formatting needed"
+        }
+    
+    try:
+        # Use Haiku to find logical paragraph breaks based on content structure
+        llm = LLM(
+            model="anthropic/claude-3-haiku-20240307",  # Fast and cost-effective
+            max_retries=2
+        )
+        
+        # Create paragraph break detection prompt
+        paragraph_prompt = f"""Add paragraph breaks to this transcript by inserting [BREAK] markers at logical topic transitions.
+
+SLIDES CONTEXT (for understanding topic flow):
+{slides_content[:800] if slides_content else 'No slides available'}
+
+INSTRUCTIONS:
+1. Insert [BREAK] markers where natural paragraph breaks should occur
+2. Look for topic transitions, new concepts, or shifts in discussion
+3. Use slides context to understand the presentation flow
+4. Keep sentences completely unchanged - ONLY add [BREAK] markers
+5. Don't add breaks too frequently - aim for substantial paragraphs (50-150 words)
+6. Don't add [BREAK] at the very beginning or end
+
+TRANSCRIPT TO FORMAT:
+{text_only}
+
+Return the transcript with [BREAK] markers inserted at logical paragraph boundaries. Change NO words - only add [BREAK] markers."""
+        
+        logger.info(f"Using Haiku to find logical paragraph breaks: {len(text_only)} characters")
+        
+        # Get paragraph breaks from LLM
+        formatted_result = llm.call(paragraph_prompt)
+        
+        # Extract the actual text response
+        if hasattr(formatted_result, 'content'):
+            marked_text = formatted_result.content
+        elif isinstance(formatted_result, str):
+            marked_text = formatted_result
+        else:
+            marked_text = str(formatted_result)
+        
+        marked_text = marked_text.strip()
+        
+        # Split on [BREAK] markers and create paragraphs
+        if '[BREAK]' in marked_text:
+            paragraphs = [p.strip() for p in marked_text.split('[BREAK]') if p.strip()]
+            formatted_transcript = '\n\n'.join(paragraphs)
+        else:
+            # Fallback to simple formatting if no breaks were added
+            logger.warning("LLM didn't add paragraph breaks, using simple formatting")
+            formatted_transcript = text_only
+        
+        processing_notes = f"Formatted transcript using Haiku: {len(text_only)} chars → {len(paragraphs) if '[BREAK]' in marked_text else 1} paragraphs"
+        logger.info(processing_notes)
+        
+        return {
+            "formatted_transcript": formatted_transcript,
+            "processing_notes": processing_notes
+        }
+        
+    except Exception as e:
+        logger.error(f"Error formatting transcript with LLM: {e}")
+        # Fallback to simple text-only version
+        return {
+            "formatted_transcript": text_only,
+            "processing_notes": f"LLM formatting failed: {str(e)}, kept text-only version"
         }
 
 
