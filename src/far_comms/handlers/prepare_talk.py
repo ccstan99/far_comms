@@ -4,8 +4,8 @@ import json
 import logging
 import glob
 import os
-from far_comms.utils.slide_extractor import extract_slide_content
-from far_comms.utils.slide_cleaner import clean_full_slide_content
+from far_comms.utils.slide_extractor import get_slide_content
+from far_comms.utils.slide_formatter import get_cleaned_text
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_prepare_talk_input(raw_data: dict) -> dict:
-    """Parse raw Coda data for prepare_talk - just needs speaker name"""
+    """Parse raw Coda data for prepare_talk - just needs speaker name for slide text extraction"""
     return {
         "speaker": raw_data.get("Speaker", "")
     }
@@ -142,21 +142,31 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         if matched_file:
             logger.info(f"Found matching file: {matched_file}")
             
-            # Extract slide content
-            slide_result = extract_slide_content(matched_file)
+            # Extract slide content (text + images for multimodal analysis)
+            slide_result = get_slide_content(matched_file, max_slides=-1)  # Process all slides
             
             if slide_result.get("success"):
-                # Clean the extracted content using LLM
-                cleaned_result = clean_full_slide_content(slide_result)
-                slide_content = cleaned_result.get("content", "")
+                # Clean the extracted text content using LLM
+                cleaned_result = get_cleaned_text(slide_result)
+                
+                # Use markdown formatted version if available, otherwise fall back to content
+                slide_content = cleaned_result.get("content_markdown") or cleaned_result.get("content", "")
                 logger.info(f"Extracted and cleaned {len(slide_content)} characters from slides")
                 
-                # Update Coda row with slide content
+                # Prepare updates for Coda
+                coda_updates = {"Slides": slide_content}
+                
+                # Add resources if found
+                resources_formatted = cleaned_result.get("resources_formatted")
+                if resources_formatted:
+                    coda_updates["Resources"] = resources_formatted
+                    resource_count = len(cleaned_result.get("resources", []))
+                    logger.info(f"Found {resource_count} resources in slides")
+                
+                # Update Coda row with slide content and resources
                 updates = [{
                     "row_id": coda_ids.row_id,
-                    "updates": {
-                        "Slides": slide_content
-                    }
+                    "updates": coda_updates
                 }]
                 
                 update_result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)

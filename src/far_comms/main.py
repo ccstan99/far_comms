@@ -67,7 +67,7 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-@app.get("/prepare-event")
+@app.get("/prepare_event")
 async def prepare_event(table_id: str, doc_id: str):
     """Prepare event endpoint - calls prepare_talk for each speaker in the table"""
     try:
