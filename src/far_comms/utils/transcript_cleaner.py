@@ -226,21 +226,42 @@ def format_transcript_for_reading(srt_content: str, slides_content: str = "") ->
         # Create paragraph break detection prompt
         paragraph_prompt = f"""Add paragraph breaks to this transcript by inserting [BREAK] markers at logical topic transitions.
 
-SLIDES CONTEXT (for understanding topic flow):
-{slides_content[:800] if slides_content else 'No slides available'}
+SLIDES CONTEXT (for understanding topic flow and main sections):
+{slides_content[:1000] if slides_content else 'No slides available'}
 
 INSTRUCTIONS:
 1. Insert [BREAK] markers where natural paragraph breaks should occur
-2. Look for topic transitions, new concepts, or shifts in discussion
-3. Use slides context to understand the presentation flow
+2. Follow academic presentation flow: intro → background → problem → method → results → conclusion
+3. Use slides context to understand the presentation's main sections and flow
 4. Keep sentences completely unchanged - ONLY add [BREAK] markers
-5. Don't add breaks too frequently - aim for substantial paragraphs (50-150 words)
-6. Don't add [BREAK] at the very beginning or end
+5. Create focused paragraphs (50-100 words each) covering one main concept
+6. Prioritize complete thoughts and logical topic transitions
+7. Don't add [BREAK] at the very beginning or end
+
+GOOD PARAGRAPH BREAK PATTERNS:
+- After speaker introduction and talk title
+- When shifting from background to specific problem details
+- When introducing research question or hypothesis
+- When explaining methodology or approach
+- When presenting results or examples
+- When comparing with other methods
+- When starting conclusions or summary
+- At major topic transitions (problem→solution, theory→practice)
+
+POOR BREAK PATTERNS:
+- Mid-sentence or mid-thought breaks
+- Breaking during detailed explanations of single concepts
+- Creating paragraphs under 30 words
+- Breaking just because of time stamps
+- Interrupting examples or numbered lists
+
+EXAMPLE OF GOOD PARAGRAPH BREAKS:
+"Hi everyone. I'm John from Stanford, and I'm happy to present my work on AI safety. [BREAK] Today we know that models can be harmful, but there are many approaches to mitigate these risks. Let's examine the current landscape of safety methods. [BREAK] In this work, we focus on a specific question: can we make models safer without sacrificing capability? As you might expect, this is quite challenging."
 
 TRANSCRIPT TO FORMAT:
 {text_only}
 
-Return the transcript with [BREAK] markers inserted at logical paragraph boundaries. Change NO words - only add [BREAK] markers."""
+Return the transcript with [BREAK] markers inserted at logical paragraph boundaries. Change NO words - only add [BREAK] markers. Aim for fewer, longer, more substantial paragraphs."""
         
         logger.info(f"Using Haiku to find logical paragraph breaks: {len(text_only)} characters")
         
@@ -260,7 +281,7 @@ Return the transcript with [BREAK] markers inserted at logical paragraph boundar
         # Split on [BREAK] markers and create paragraphs
         if '[BREAK]' in marked_text:
             paragraphs = [p.strip() for p in marked_text.split('[BREAK]') if p.strip()]
-            formatted_transcript = '\n\n'.join(paragraphs)
+            formatted_transcript = '\n'.join(paragraphs)
         else:
             # Fallback to simple formatting if no breaks were added
             logger.warning("LLM didn't add paragraph breaks, using simple formatting")

@@ -27,6 +27,39 @@ def display_prepare_talk_input(function_data: dict) -> dict:
     return function_data
 
 
+def extract_topic_flow_from_slides(slide_content: str) -> str:
+    """Extract key topic flow information from slides to help with paragraph formatting"""
+    if not slide_content:
+        return ""
+    
+    # Extract headers, section titles, and key transition phrases
+    import re
+    lines = slide_content.split('\n')
+    
+    topic_flow_elements = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Look for markdown headers
+        if line.startswith('#'):
+            topic_flow_elements.append(line)
+        # Look for potential section titles (short lines that look like titles)
+        elif (len(line) < 100 and 
+              (line.isupper() or line.istitle()) and 
+              not line.endswith('.') and
+              any(word in line.lower() for word in ['method', 'approach', 'results', 'conclusion', 'introduction', 'background', 'experiment', 'evaluation', 'related work', 'future work'])):
+            topic_flow_elements.append(f"Section: {line}")
+        # Look for bullet points that might indicate topic transitions
+        elif line.startswith(('- ', '• ', '* ')) and len(line) < 150:
+            topic_flow_elements.append(line)
+    
+    # Limit to first 20 elements to stay within context
+    return '\n'.join(topic_flow_elements[:20])
+
+
 def find_matching_slide(speaker_name: str, slide_files: list) -> str | None:
     """Find slide file that matches speaker name using shared matching logic"""
     from far_comms.utils.file_matcher import find_best_matching_file
@@ -155,7 +188,9 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                         
                         # Format cleaned SRT into readable paragraphs for Transcript column
                         logger.info("Formatting cleaned transcript for readability")
-                        formatting_result = format_transcript_for_reading(cleaned_srt, slide_content)
+                        # Extract key topic flow info from slides for better paragraph breaks
+                        topic_context = extract_topic_flow_from_slides(slide_content) if slide_content else ""
+                        formatting_result = format_transcript_for_reading(cleaned_srt, topic_context or slide_content)
                         
                         if formatting_result.get("formatted_transcript"):
                             formatted_transcript = formatting_result.get("formatted_transcript")
