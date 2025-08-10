@@ -3,6 +3,7 @@
 import os
 import logging
 import glob
+import tempfile
 from urllib.parse import urlparse, parse_qs
 import re
 
@@ -11,6 +12,12 @@ try:
     ASSEMBLYAI_AVAILABLE = True
 except ImportError:
     ASSEMBLYAI_AVAILABLE = False
+
+try:
+    import yt_dlp
+    YT_DLP_AVAILABLE = True
+except ImportError:
+    YT_DLP_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +49,70 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
+def download_youtube_audio(youtube_url: str, temp_dir: str = None) -> str | None:
+    """
+    Download audio from YouTube video using yt-dlp
+    
+    Args:
+        youtube_url: YouTube video URL
+        temp_dir: Temporary directory to store downloaded audio (optional)
+    
+    Returns:
+        Path to downloaded audio file or None if failed
+    """
+    if not YT_DLP_AVAILABLE:
+        logger.error("yt-dlp not available. Install with: pip install yt-dlp")
+        return None
+    
+    if not youtube_url:
+        logger.error("No YouTube URL provided")
+        return None
+    
+    video_id = extract_youtube_video_id(youtube_url)
+    if not video_id:
+        logger.error(f"Could not extract video ID from URL: {youtube_url}")
+        return None
+    
+    try:
+        # Create temp directory if not provided
+        if temp_dir is None:
+            temp_dir = tempfile.mkdtemp(prefix="yt_audio_")
+        
+        # Configure yt-dlp to download best audio only
+        output_path = os.path.join(temp_dir, f"{video_id}.%(ext)s")
+        
+        ydl_opts = {
+            'format': 'bestaudio/best',  # Download best audio quality
+            'outtmpl': output_path,
+            'extractaudio': True,
+            'audioformat': 'mp3',
+            'noplaylist': True,
+            'quiet': True,  # Suppress output
+            'no_warnings': True,
+        }
+        
+        logger.info(f"Downloading audio from YouTube video: {video_id}")
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Download the audio
+            ydl.download([youtube_url])
+            
+            # Find the downloaded file (yt-dlp might change extension)
+            downloaded_files = glob.glob(os.path.join(temp_dir, f"{video_id}.*"))
+            
+            if downloaded_files:
+                audio_file = downloaded_files[0]
+                logger.info(f"Successfully downloaded audio: {audio_file}")
+                return audio_file
+            else:
+                logger.error("Downloaded file not found")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error downloading YouTube audio: {e}")
+        return None
+
+
 def find_matching_video_file(speaker_name: str) -> str | None:
     """
     Find local video file that matches speaker name using shared matching logic
@@ -71,11 +142,11 @@ def find_matching_video_file(speaker_name: str) -> str | None:
 
 def get_youtube_transcript_srt(youtube_url: str, local_video_path: str = None) -> dict:
     """
-    Get SRT-formatted transcript from local video file using AssemblyAI
+    Get SRT-formatted transcript from local video file or YouTube URL using AssemblyAI
     
     Args:
-        youtube_url: YouTube video URL (used for video_id extraction)
-        local_video_path: Path to local video file (preferred over YouTube URL)
+        youtube_url: YouTube video URL (fallback if no local file)
+        local_video_path: Path to local video file (preferred)
     
     Returns:
         Dict with 'success', 'srt_content', 'error' keys
@@ -96,6 +167,8 @@ def get_youtube_transcript_srt(youtube_url: str, local_video_path: str = None) -
             "error": "ASSEMBLYAI_API_KEY environment variable not set"
         }
     
+    downloaded_audio_file = None
+    
     try:
         # Prefer local video file over YouTube URL
         if local_video_path and os.path.exists(local_video_path):
@@ -103,7 +176,7 @@ def get_youtube_transcript_srt(youtube_url: str, local_video_path: str = None) -
             source_file = local_video_path
             video_id = extract_youtube_video_id(youtube_url) or "local_video"
         else:
-            # Extract video ID and try YouTube URL (fallback)
+            # No local file - try downloading from YouTube
             video_id = extract_youtube_video_id(youtube_url)
             if not video_id:
                 return {
@@ -112,8 +185,17 @@ def get_youtube_transcript_srt(youtube_url: str, local_video_path: str = None) -
                     "error": f"No local video file found and could not extract video ID from URL: {youtube_url}"
                 }
             
-            logger.info(f"No local file found, attempting YouTube transcription for video: {video_id}")
-            source_file = f"https://www.youtube.com/watch?v={video_id}"
+            logger.info(f"No local file found, downloading audio from YouTube: {video_id}")
+            downloaded_audio_file = download_youtube_audio(youtube_url)
+            
+            if not downloaded_audio_file:
+                return {
+                    "success": False,
+                    "srt_content": "",
+                    "error": f"Failed to download audio from YouTube URL: {youtube_url}"
+                }
+                
+            source_file = downloaded_audio_file
         
         # Set up AssemblyAI
         aai.settings.api_key = api_key
@@ -149,12 +231,27 @@ def get_youtube_transcript_srt(youtube_url: str, local_video_path: str = None) -
         }
         
     except Exception as e:
-        logger.error(f"Error transcribing YouTube video {youtube_url}: {e}")
+        logger.error(f"Error transcribing video {youtube_url}: {e}")
         return {
             "success": False,
             "srt_content": "",
             "error": f"Transcription error: {str(e)}"
         }
+    finally:
+        # Clean up downloaded audio file
+        if downloaded_audio_file and os.path.exists(downloaded_audio_file):
+            try:
+                os.remove(downloaded_audio_file)
+                # Also try to remove the temp directory if it's empty
+                temp_dir = os.path.dirname(downloaded_audio_file)
+                if temp_dir and temp_dir.startswith('/tmp') or temp_dir.startswith(tempfile.gettempdir()):
+                    try:
+                        os.rmdir(temp_dir)
+                    except OSError:
+                        pass  # Directory not empty or other issue, ignore
+                logger.info(f"Cleaned up temporary audio file: {downloaded_audio_file}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up temporary file {downloaded_audio_file}: {cleanup_error}")
 
 
 def format_transcript_summary(result: dict) -> str:

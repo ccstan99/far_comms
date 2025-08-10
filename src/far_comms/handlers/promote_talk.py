@@ -42,6 +42,27 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         logger.info(f"Starting PromoteTalk crew for {talk_request.speaker}: {talk_request.title}")
         logger.debug(f"Input transcript length: {len(talk_request.transcript or '')}")
         
+        # Check if transcript is available - required for content generation
+        if not talk_request.transcript or not talk_request.transcript.strip():
+            error_msg = f"Cannot generate social media content without transcript. Please run 'prepare_talk' first to extract transcript from slides/video."
+            logger.error(error_msg)
+            
+            # Update Coda with error status
+            if coda_ids:
+                try:
+                    coda_client = CodaClient()
+                    error_updates = {
+                        "Summaries status": "Failed", 
+                        "Progress": error_msg
+                    }
+                    coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
+                except Exception as update_error:
+                    logger.error(f"Failed to update Coda with error status: {update_error}")
+            
+            return  # Exit early - cannot proceed without transcript
+        
+        logger.info(f"Transcript available ({len(talk_request.transcript)} characters) - proceeding with content generation")
+        
         # Load style guides
         docs_dir = get_docs_dir()
         style_shared = (docs_dir / "style_shared.md").read_text() if (docs_dir / "style_shared.md").exists() else ""
