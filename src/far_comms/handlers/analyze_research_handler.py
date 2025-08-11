@@ -135,6 +135,11 @@ def _save_analysis_to_files(analysis: ResearchAnalysisOutput, pdf_path: str, pap
         for i, claim in enumerate(analysis.citation_worthy_claims, 1):
             md_content += f"{i}. {claim}\n"
         
+        md_content += "\n## Communication & Framing\n\n### Research Framing for Different Audiences\n"
+        
+        for i, framing in enumerate(analysis.research_framing, 1):
+            md_content += f"{i}. {framing}\n"
+        
         md_content += "\n---\n*Analysis generated with Claude 4.1 Opus - PhD-level AI safety expertise*\n"
         
         with open(md_path, 'w', encoding='utf-8') as f:

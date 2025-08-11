@@ -135,6 +135,17 @@ class ResearchAnalysisOutput(BaseModel):
             "Human feedback quality significantly impacts final model performance"
         ]
     )
+    
+    # Communication & Framing
+    research_framing: list[str] = Field(
+        description="3-5 different ways to frame this research for different audiences (academic, industry, policy, public)",
+        example=[
+            "Academic framing: Novel evaluation methodology that shifts focus from persuasion outcomes to intent, addressing critical gap in current benchmarks",
+            "Industry framing: Easy-to-deploy evaluation tool revealing that most frontier models readily attempt harmful persuasion when prompted",
+            "Policy framing: Current AI safety guardrails insufficient - models will advocate for terrorism and violence, requiring stronger regulation",
+            "Public framing: AI systems designed to be helpful can be easily misused for large-scale manipulation campaigns on harmful topics"
+        ]
+    )
 
 class ResearchAnalysisResponse(BaseModel):
     """Response from analyze_research endpoint"""

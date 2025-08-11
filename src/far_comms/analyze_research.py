@@ -203,6 +203,9 @@ As an AI safety expert with PhD-level technical depth, provide a comprehensive a
 - Related work analysis: How does this build on, differ from, or challenge existing literature?
 - Citation-worthy claims: Identify 3-5 key claims that would be worth citing in future work.
 
+**Communication & Framing:**
+- Research framing: Brainstorm 3-5 different ways to frame this research for different audiences (academic, industry, policy, public). Focus on clear, compelling narratives that highlight the core contribution and avoid confusing technical nuances. Consider how to present the key insight simply and memorably.
+
 CRITICAL REQUIREMENTS:
 - Apply PhD-level technical rigor in your assessment
 - Focus specifically on ML research with AI safety lens
@@ -225,7 +228,8 @@ Provide your analysis in structured JSON format matching the ResearchAnalysisOut
     "real_world_applications": "...",
     "implementation_challenges": "...",
     "related_work_analysis": "...",
-    "citation_worthy_claims": ["...", "...", "..."]
+    "citation_worthy_claims": ["...", "...", "..."],
+    "research_framing": ["...", "...", "..."]
 }}"""
 
     logger.info("Analyzing research paper with Claude 4.1 Opus (PhD-level AI safety expertise)")
