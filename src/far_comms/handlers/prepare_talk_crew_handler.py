@@ -159,14 +159,16 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         slides_raw = ""
         qr_codes = []
         visual_elements = []
+        saved_images = []
         
         if pdf_path:
             logger.info(f"Found matching PDF: {pdf_path}")
-            slides_data = extract_pdf_content(pdf_path)
+            slides_data = extract_pdf_content(pdf_path, speaker_name)
             slides_raw = slides_data["enhanced_content"]  # Use enhanced content with visual descriptions
             qr_codes = slides_data["qr_codes"]
             visual_elements = slides_data["visual_elements"]
-            logger.info(f"Extracted slides: {len(slides_raw)} chars, {len(qr_codes)} QR codes, {len(visual_elements)} visual elements")
+            saved_images = slides_data["saved_images"]
+            logger.info(f"Extracted slides: {len(slides_raw)} chars, {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images saved")
         else:
             logger.warning(f"No matching PDF found for speaker: {speaker_name}")
         
@@ -228,7 +230,7 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
             "qr_codes": qr_codes,
             "visual_elements": visual_elements,
             "style_transcript": style_transcript,
-            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}",
+            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Images saved: {len(saved_images)}, Transcript: {len(transcript_raw)} chars from {transcript_source}",
             # Pass Coda row data for speaker validation
             "coda_speaker": row_values.get("Speaker", ""),
             "coda_affiliation": row_values.get("Affiliation", ""), 

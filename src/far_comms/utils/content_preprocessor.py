@@ -47,15 +47,17 @@ def _decode_qr_codes_from_image(img_data: bytes) -> list:
         return []
 
 
-def _analyze_pdf_visually(pdf_path: str) -> dict:
+def _analyze_pdf_visually(pdf_path: str, speaker_name: str = None) -> dict:
     """
     Analyze PDF visually using multimodal LLM to extract QR codes and describe images.
+    Also saves image-rich slides for potential social media use.
     
     Args:
         pdf_path: Path to PDF file
+        speaker_name: Speaker name for image filename generation
         
     Returns:
-        dict with qr_codes, images, and visual_elements
+        dict with qr_codes, images, visual_elements, and saved_images
     """
     try:
         import fitz  # PyMuPDF
@@ -82,8 +84,20 @@ def _analyze_pdf_visually(pdf_path: str) -> dict:
         results = {
             "qr_codes": [],
             "visual_elements": [],
-            "page_analyses": []
+            "page_analyses": [],
+            "saved_images": []
         }
+        
+        # Set up output directory for images
+        from far_comms.utils.project_paths import get_output_dir
+        output_dir = get_output_dir()
+        
+        # Clean speaker name for filename
+        safe_speaker_name = "unknown"
+        if speaker_name:
+            import re
+            safe_speaker_name = re.sub(r'[^\w\-_\s]', '', speaker_name.replace(' ', '_'))
+            safe_speaker_name = re.sub(r'[_\s]+', '_', safe_speaker_name).strip('_')
         
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -101,12 +115,15 @@ def _analyze_pdf_visually(pdf_path: str) -> dict:
 1. QR codes: If you see any QR codes, try to read the URL they contain
 2. Visual elements: Describe any charts, diagrams, tables, or images with brief alt text
 3. Important text: Any key text that might be missed by OCR
+4. Image richness: Determine if this slide is visually interesting for social media
 
 Format your response as JSON:
 {
   "qr_codes": [{"url": "detected_url", "location": "description of where on slide"}],
   "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief alt text"}],
-  "key_text": ["any important text visible"]
+  "key_text": ["any important text visible"],
+  "is_image_rich": "true|false - true if slide contains compelling charts, diagrams, visualizations, or interesting graphics suitable for social media",
+  "social_media_potential": "brief explanation of why this slide would/wouldn't work for social media"
 }"""
 
             try:
@@ -158,6 +175,30 @@ Format your response as JSON:
                         element["page"] = page_num + 1
                         results["visual_elements"].append(element)
                     
+                    # Save image if it's rich in visual content
+                    is_image_rich = analysis.get("is_image_rich", "false").lower() == "true"
+                    if is_image_rich:
+                        try:
+                            # Save the slide image
+                            image_filename = f"{safe_speaker_name}_{page_num + 1}.png"
+                            image_path = output_dir / image_filename
+                            
+                            with open(image_path, "wb") as img_file:
+                                img_file.write(img_data)
+                            
+                            results["saved_images"].append({
+                                "page": page_num + 1,
+                                "filename": image_filename,
+                                "path": str(image_path),
+                                "social_media_potential": analysis.get("social_media_potential", ""),
+                                "visual_elements_count": len(analysis.get("visual_elements", []))
+                            })
+                            
+                            logger.info(f"Saved image-rich slide {page_num + 1} as {image_filename}")
+                            
+                        except Exception as save_error:
+                            logger.warning(f"Failed to save slide {page_num + 1} image: {save_error}")
+                    
                     results["page_analyses"].append({
                         "page": page_num + 1,
                         "analysis": analysis
@@ -182,15 +223,15 @@ Format your response as JSON:
         
         doc.close()
         
-        logger.info(f"Visual analysis complete: {len(results['qr_codes'])} QR codes, {len(results['visual_elements'])} visual elements found")
+        logger.info(f"Visual analysis complete: {len(results['qr_codes'])} QR codes, {len(results['visual_elements'])} visual elements, {len(results['saved_images'])} images saved")
         return results
         
     except ImportError:
         logger.warning("PyMuPDF not available - skipping visual analysis")
-        return {"qr_codes": [], "visual_elements": [], "page_analyses": []}
+        return {"qr_codes": [], "visual_elements": [], "page_analyses": [], "saved_images": []}
     except Exception as e:
         logger.error(f"Error in visual analysis: {e}")
-        return {"qr_codes": [], "visual_elements": [], "page_analyses": []}
+        return {"qr_codes": [], "visual_elements": [], "page_analyses": [], "saved_images": []}
 
 
 def find_matching_pdf(speaker_name: str) -> str:
@@ -221,7 +262,7 @@ def find_matching_pdf(speaker_name: str) -> str:
     return best_match if best_score > 0 else None
 
 
-def extract_pdf_content(pdf_path: str) -> dict:
+def extract_pdf_content(pdf_path: str, speaker_name: str = None) -> dict:
     """Extract both text and visual content from PDF"""
     try:
         # Extract text content
@@ -231,8 +272,8 @@ def extract_pdf_content(pdf_path: str) -> dict:
         
         logger.info(f"PyPDFLoader extracted {len(text_docs)} pages with {len(text_content)} chars")
         
-        # Extract visual content (QR codes, images, charts)
-        visual_analysis = _analyze_pdf_visually(pdf_path)
+        # Extract visual content (QR codes, images, charts) and save image-rich slides
+        visual_analysis = _analyze_pdf_visually(pdf_path, speaker_name)
         
         # Check for missing pages by comparing PDF page count with extracted pages
         import fitz
@@ -256,6 +297,7 @@ def extract_pdf_content(pdf_path: str) -> dict:
             "visual_analysis": visual_analysis,
             "qr_codes": visual_analysis["qr_codes"],
             "visual_elements": visual_analysis["visual_elements"],
+            "saved_images": visual_analysis["saved_images"],
             "page_count_info": f"PDF: {total_pdf_pages} pages, Extracted: {len(text_docs)} pages"
         }
     except Exception as e:
@@ -263,9 +305,10 @@ def extract_pdf_content(pdf_path: str) -> dict:
         return {
             "text_content": "",
             "enhanced_content": "",
-            "visual_analysis": {"qr_codes": [], "visual_elements": [], "page_analyses": []},
+            "visual_analysis": {"qr_codes": [], "visual_elements": [], "page_analyses": [], "saved_images": []},
             "qr_codes": [],
-            "visual_elements": []
+            "visual_elements": [],
+            "saved_images": []
         }
 
 
