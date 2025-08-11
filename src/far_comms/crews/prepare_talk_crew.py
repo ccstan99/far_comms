@@ -56,6 +56,15 @@ class PrepareTalkCrew():
             tools=tools
         )
 
+    @agent
+    def transcript_analyzer_agent(self) -> Agent:
+        return Agent(
+            config=self.agents_config['transcript_analyzer_agent'],
+            llm=self.sonnet_llm,
+            verbose=True,
+            allow_delegation=False
+        )
+
     # Sequential Processing Tasks
     @task
     def process_slides_task(self) -> Task:
@@ -79,6 +88,13 @@ class PrepareTalkCrew():
         )
 
     @task
+    def analyze_transcript_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['analyze_transcript_task'],
+            agent=self.transcript_analyzer_agent()
+        )
+
+    @task
     def final_assembly_task(self) -> Task:
         return Task(
             config=self.tasks_config['final_assembly_task'],
@@ -92,12 +108,14 @@ class PrepareTalkCrew():
             agents=[
                 self.slide_processor_agent(),
                 self.transcript_processor_agent(),
-                self.resource_researcher_agent()
+                self.resource_researcher_agent(),
+                self.transcript_analyzer_agent()
             ],
             tasks=[
                 self.process_slides_task(),
                 self.process_transcript_task(),
                 self.research_resources_task(),
+                self.analyze_transcript_task(),
                 self.final_assembly_task()
             ],
             process=Process.sequential,

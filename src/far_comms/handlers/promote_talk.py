@@ -42,7 +42,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         logger.info(f"Starting PromoteTalk crew for {talk_request.speaker}: {talk_request.title}")
         logger.debug(f"Input transcript length: {len(talk_request.transcript or '')}")
         
-        # Check if transcript is available - required for content generation
+        # Check if transcript and analysis are available - both required for content generation
         if not talk_request.transcript or not talk_request.transcript.strip():
             error_msg = f"Cannot generate social media content without transcript. Please run 'prepare_talk' first to extract transcript from slides/video."
             logger.error(error_msg)
@@ -61,7 +61,40 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
             
             return  # Exit early - cannot proceed without transcript
         
-        logger.info(f"Transcript available ({len(talk_request.transcript)} characters) - proceeding with content generation")
+        # Get Analysis from Coda (from prepare-talk processing) - required for content generation
+        coda_client = CodaClient()
+        analysis_data = ""
+        if coda_ids:
+            try:
+                row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
+                row_data = json.loads(row_data_str)
+                analysis_data = row_data["data"].get("Analysis", "")
+                if analysis_data:
+                    logger.info(f"Retrieved transcript analysis from prepare-talk: {len(analysis_data)} chars")
+                else:
+                    logger.warning("No analysis data found - prepare_talk may not have been run yet")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve analysis data: {e}")
+        
+        # Check if analysis is available - now required since we moved transcript analysis to prepare-talk
+        if not analysis_data or not analysis_data.strip():
+            error_msg = f"Cannot generate social media content without transcript analysis. Please run 'prepare_talk' first to generate analysis data."
+            logger.error(error_msg)
+            
+            # Update Coda with error status
+            if coda_ids:
+                try:
+                    error_updates = {
+                        "Webhook status": "Failed", 
+                        "Webhook progress": error_msg
+                    }
+                    coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
+                except Exception as update_error:
+                    logger.error(f"Failed to update Coda with error status: {update_error}")
+            
+            return  # Exit early - cannot proceed without analysis
+        
+        logger.info(f"Transcript available ({len(talk_request.transcript)} characters) and analysis available ({len(analysis_data)} characters) - proceeding with content generation")
         
         # Load style guides
         docs_dir = get_docs_dir()
@@ -70,7 +103,6 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         style_x = (docs_dir / "style_x.md").read_text() if (docs_dir / "style_x.md").exists() else ""
         
         # Lookup speaker's X handle for Twitter/X content attribution
-        coda_client = CodaClient()
         speaker_x_handle = ""
         try:
             speaker_x_handle = coda_client.get_x_handle(talk_request.speaker)
@@ -82,6 +114,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         # Convert TalkRequest to crew data format
         crew_data = {
             "transcript": talk_request.transcript or "",
+            "analysis": analysis_data,
             "speaker": talk_request.speaker or "",
             "speaker_x_handle": speaker_x_handle,
             "yt_full_link": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",

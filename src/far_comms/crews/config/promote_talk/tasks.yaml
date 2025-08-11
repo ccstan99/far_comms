@@ -1,52 +1,16 @@
 # All tasks follow style_shared.md, style_li.md, and style_x.md requirements
-
-analyze_transcript_task:
-  description: >
-    Analyze {speaker}'s talk transcript to extract core findings, technical details, key insights, and organizational structure.
-    ===
-    TRASNCRIPT: 
-    {transcript}
-    ===
-    Your analysis should:
-    - Identify the main thesis and supporting arguments
-    - Extract the speaker's organizational pattern and talk structure (e.g., "3 problems + 3 solutions", "4 research highlights", "10 key issues", "5 strategic recommendations")
-    - Capture the speaker's own section titles, main points, and flow - preserve their intended logic and structure
-    - Extract specific technical details, numbers, and metrics (if applicable - some talks focus on policy/strategy rather than technical research)
-    - Find surprising or counterintuitive claims
-    - Collect impactful direct quotes from the speaker
-    - Highlight key findings that would interest both technical and non-technical audiences
-  expected_output: >
-    {
-      "speaker": "{speaker} ({affiliation})",
-      "core_thesis": "Main argument in 1 sentence",
-      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
-      "talk_outline": {
-        "structure_type": "Describe the speaker's organizational pattern (e.g., '3 problems + 3 solutions', '4 research highlights', '10 key issues', '5 strategic recommendations')",
-        "main_points": [
-          {"point": "First main point/section title", "details": "Key content and supporting details"},
-          {"point": "Second main point/section title", "details": "Key content and supporting details"},
-          {"point": "Continue for all major sections", "details": "Maintain speaker's intended flow and logic"}
-        ]
-      },
-      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - this is a policy/strategic talk"},
-      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
-      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
-    }
-  agent: transcript_analyzer_agent
-
-# Removed generate_hooks_task - hooks now generated inline by LI and X content writers for better alignment
+# Analysis now comes from prepare-talk via Analysis column - no need to re-analyze transcript
 
 create_li_content_task:
   description: >
     Create LinkedIn content for policymakers and tech professionals, must be accessible to general, non-ML audience.
-    Use both the raw transcript and structured analysis as your source materials.
+    Use the transcript analysis from prepare-talk and raw transcript for quotes.
     ===
     RAW TRANSCRIPT (for authentic hooks and quotes):
     {transcript}
     ---
-    AVAILABLE INPUTS (via context):
-    - Structured transcript analysis with: core_thesis, key_findings, technical_details, surprising_claims, impactful_quotes
-    - Style guides below
+    STRUCTURED ANALYSIS (from prepare-talk Analysis column):
+    {analysis}
     ---    
     STYLE SHARED: 
     {style_shared}
@@ -71,21 +35,21 @@ create_li_content_task:
       "paragraph_summary": "2-3 sentence summary", 
       "bullets": ["≤8 word bullet 1", "≤8 word bullet 2", "≤8 word bullet 3"]
     }
-  context: ["analyze_transcript_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
   description: >
     Create Twitter/X content for ML researchers.
-    Use both the raw transcript and structured analysis as your source materials.
+    Use the transcript analysis from prepare-talk and raw transcript for technical precision.
     ===
     RAW TRANSCRIPT (for authentic hooks and technical precision):
     {transcript}
-    ===
-    AVAILABLE INPUTS (via context):
-    - Structured transcript analysis with: core_thesis, key_findings, technical_details, surprising_claims, impactful_quotes
+    ---
+    STRUCTURED ANALYSIS (from prepare-talk Analysis column):
+    {analysis}
+    ---
+    SPEAKER INFO:
     - Speaker X handle: {speaker_x_handle}
-    - Style guides below 
     ---    
     STYLE SHARED: 
     {style_shared}
@@ -107,7 +71,6 @@ create_x_content_task:
       "generated_hooks": ["Hook option 1", "Hook option 2", "Hook option 3", "Hook option 4", "Hook option 5"],
       "x_content": "Tweet1 content (including selected hook)"
     }
-  context: ["analyze_transcript_task"]
   agent: x_content_writer_agent
 
 fact_check_content_task:
@@ -273,9 +236,10 @@ final_review_task:
         "blocking_issues": [],
         "revision_notes": "Specific feedback if revision needed",
         "cohesion_assessment": "Final assessment of content cohesion and flow",
-        "transcript_analysis": "Full output from analyze_transcript_task",        }
+        "transcript_analysis": "Transcript analysis from prepare-talk Analysis column"
+      }
       }
     }
-  context: ["analyze_transcript_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
+  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
   output_file: "output/{speaker}_final.json"
   agent: final_reviewer_agent

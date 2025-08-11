@@ -20,15 +20,7 @@ class PromoteTalkCrew():
       max_retries=3
     )
 
-  # Multi-Agent Architecture - Phase 1: Foundation
-  @agent
-  def transcript_analyzer_agent(self) -> Agent:
-    return Agent(
-      config=self.agents_config['transcript_analyzer_agent'],
-      llm=self.sonnet_llm,  # Analytical task - Sonnet
-      verbose=True,
-      allow_delegation=False
-    )
+  # Multi-Agent Architecture - Phase 1: Content Creation (Analysis now comes from prepare-talk)
 
   # Removed hook_specialist_agent - LI and X writers now generate their own hooks for better alignment
 
@@ -82,13 +74,7 @@ class PromoteTalkCrew():
       allow_delegation=False
     )
 
-  # Tasks - Sequential Multi-Agent Workflow
-  @task
-  def analyze_transcript_task(self) -> Task:
-    return Task(
-      config=self.tasks_config['analyze_transcript_task'],
-      agent=self.transcript_analyzer_agent()
-    )
+  # Tasks - Sequential Multi-Agent Workflow (Analysis now comes from prepare-talk)
 
   # Removed generate_hooks_task - hooks now generated inline by content writers
 
@@ -135,7 +121,6 @@ class PromoteTalkCrew():
 
     return Crew(
       agents=[
-        self.transcript_analyzer_agent(),
         self.li_content_writer_agent(),
         self.x_content_writer_agent(),
         self.fact_checker_agent(),
@@ -143,7 +128,6 @@ class PromoteTalkCrew():
         self.final_reviewer_agent()
       ],
       tasks=[
-        self.analyze_transcript_task(),
         self.create_li_content_task(),
         self.create_x_content_task(),
         self.fact_check_content_task(),
