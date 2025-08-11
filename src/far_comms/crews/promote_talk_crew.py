@@ -8,15 +8,15 @@ class PromoteTalkCrew():
   tasks_config = 'config/promote_talk/tasks.yaml'
   
   def __init__(self):
-    # High-quality Opus for content creation and final review
+    # High-quality Claude 4.1 Opus for content creation and final review
     self.opus_llm = LLM(
-      model="anthropic/claude-opus-4-20250514",
+      model="anthropic/claude-opus-4-1-20250805",
       max_retries=3
     )
     
-    # Sonnet for analytical/systematic tasks
+    # Claude 4 Sonnet for analytical/systematic tasks
     self.sonnet_llm = LLM(
-      model="anthropic/claude-3-5-sonnet-20241022",
+      model="anthropic/claude-sonnet-4-20250514",
       max_retries=3
     )
 

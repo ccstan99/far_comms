@@ -11,16 +11,10 @@ class PrepareTalkCrew():
     tasks_config = 'config/prepare_talk/tasks.yaml'
     
     def __init__(self):
-        # Use Sonnet for systematic processing tasks
+        # Use Claude 4 Sonnet for systematic processing tasks
         self.sonnet_llm = LLM(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model="anthropic/claude-sonnet-4-20250514",
             max_retries=3
-        )
-        
-        # Use Haiku for lightweight formatting tasks
-        self.haiku_llm = LLM(
-            model="anthropic/claude-3-haiku-20240307",
-            max_retries=2
         )
         
         # Preprocessing is done in the handler, agents work with clean data

@@ -167,7 +167,7 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         transcript_raw = ""
         transcript_source = ""
         
-        # First try local video (faster and more reliable)
+        # Try local video first (faster and more reliable)
         video_path = find_matching_video(speaker_name)
         if video_path:
             logger.info(f"Found matching local video: {video_path}")
@@ -178,31 +178,38 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
                 logger.info(f"Extracted local video transcript: {len(transcript_raw)} characters")
             else:
                 logger.warning(f"Local video transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
-        
-        # If no local video transcript and YouTube URL provided, try YouTube
-        if not transcript_raw and yt_url:
-            logger.info(f"No local video transcript, trying YouTube: {yt_url}")
-            transcript_result = extract_youtube_transcript(yt_url)
-            if transcript_result["success"]:
-                transcript_raw = transcript_result["srt_content"]
-                transcript_source = "youtube"
-                logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
+        else:
+            # No local video found, try YouTube download if URL provided
+            if yt_url:
+                logger.info(f"No local video found, trying YouTube: {yt_url}")
+                transcript_result = extract_youtube_transcript(yt_url)
+                if transcript_result["success"]:
+                    transcript_raw = transcript_result["srt_content"]
+                    transcript_source = "youtube"
+                    logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
+                else:
+                    logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
             else:
-                logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+                logger.warning(f"No local video found and no YouTube URL provided for {speaker_name}")
         
         if not transcript_raw:
             if not video_path and not yt_url:
                 logger.warning(f"No video source found for speaker: {speaker_name} (no local video or YouTube URL)")
-            elif not video_path:
-                logger.warning(f"No matching local video found for speaker: {speaker_name}")
-            elif not yt_url:
+            elif video_path and not yt_url:
                 logger.warning(f"Local video failed and no YouTube URL provided for speaker: {speaker_name}")
+            else:
+                logger.warning(f"Both local video and YouTube failed for speaker: {speaker_name}")
         
         # Initialize crew after preprocessing
         logger.info("Initializing PrepareTalkCrew")
         crew = PrepareTalkCrew()
         
-        # Prepare crew input with preprocessed data
+        # Load style guides for transcript processing
+        from pathlib import Path
+        docs_dir = Path(__file__).parent.parent.parent / "docs"
+        style_transcript = (docs_dir / "prompt_transcript.md").read_text() if (docs_dir / "prompt_transcript.md").exists() else ""
+        
+        # Prepare crew input with preprocessed data and existing content info
         crew_input = {
             "speaker": speaker_name,
             "yt_url": yt_url or "",
@@ -212,12 +219,16 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
             "pdf_path": pdf_path or "",
             "qr_codes": qr_codes,
             "visual_elements": visual_elements,
-            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}"
+            "style_transcript": style_transcript,
+            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}",
+            # Pass info about existing content to crew
+            "slides_already_exist": slides_exist,
+            "srt_already_exists": srt_exists
         }
         
         # Check if we have enough content to proceed
         if not slides_raw and not transcript_raw:
-            error_msg = f"No content found for speaker {speaker_name} - no matching slides or transcript"
+            error_msg = f"Cannot process {speaker_name} - no slides or transcript found (no PDF, no local video, YouTube failed)"
             logger.error(error_msg)
             
             # Update Coda with error
@@ -251,8 +262,18 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         
         # Try to parse as JSON (expected from final_assembly_task)
         try:
-            if result_text.strip().startswith('{') and result_text.strip().endswith('}'):
-                crew_output = json.loads(result_text)
+            # Clean result_text - remove code blocks if present
+            cleaned_text = result_text.strip()
+            if cleaned_text.startswith('```json'):
+                cleaned_text = cleaned_text[7:]  # Remove ```json
+            if cleaned_text.startswith('```'):
+                cleaned_text = cleaned_text[3:]  # Remove ```
+            if cleaned_text.endswith('```'):
+                cleaned_text = cleaned_text[:-3]  # Remove trailing ```
+            cleaned_text = cleaned_text.strip()
+            
+            if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
+                crew_output = json.loads(cleaned_text)
                 logger.info("Successfully parsed crew output as JSON")
             else:
                 # If not JSON, wrap in a basic structure
@@ -284,11 +305,24 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         
         # Reconstruct SRT with original timestamps if we have both raw SRT and cleaned text
         if transcript_raw and "Transcript" in coda_updates:
+            # Extract word counts for validation
+            original_srt_words = len(re.sub(r'\d+\n[\d:,]+ --> [\d:,]+\n', '', transcript_raw).split())
+            cleaned_transcript_words = len(coda_updates["Transcript"].split())
+            word_retention_pct = (cleaned_transcript_words / original_srt_words * 100) if original_srt_words > 0 else 0
+            
+            logger.info(f"Word count validation: Original SRT: {original_srt_words} words, Cleaned: {cleaned_transcript_words} words, Retention: {word_retention_pct:.1f}%")
+            
+            if word_retention_pct < 90:
+                logger.error(f"TRANSCRIPT TRUNCATION DETECTED: Only {word_retention_pct:.1f}% of words retained! Agent failed to preserve verbatim content.")
+            
             try:
                 reconstructed_srt = _reconstruct_srt(transcript_raw, coda_updates["Transcript"])
                 if reconstructed_srt:
                     coda_updates["SRT"] = reconstructed_srt
                     logger.info(f"Reconstructed SRT with original timestamps, length: {len(reconstructed_srt)} chars")
+                else:
+                    logger.warning("SRT reconstruction failed, using original SRT")
+                    coda_updates["SRT"] = transcript_raw
             except Exception as e:
                 logger.warning(f"Failed to reconstruct SRT: {e}")
                 # Fallback to original SRT if reconstruction fails

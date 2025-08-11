@@ -10,6 +10,43 @@ from langchain_community.document_loaders.assemblyai import TranscriptFormat
 logger = logging.getLogger(__name__)
 
 
+def _decode_qr_codes_from_image(img_data: bytes) -> list:
+    """
+    Decode QR codes from image data using pyzbar.
+    
+    Args:
+        img_data: PNG image bytes
+        
+    Returns:
+        List of QR code URLs found
+    """
+    try:
+        from pyzbar import pyzbar
+        from PIL import Image
+        import io
+        
+        # Convert bytes to PIL Image
+        image = Image.open(io.BytesIO(img_data))
+        
+        # Decode QR codes
+        qr_codes = []
+        decoded_objects = pyzbar.decode(image)
+        
+        for obj in decoded_objects:
+            if obj.type == 'QRCODE':
+                qr_data = obj.data.decode('utf-8')
+                qr_codes.append(qr_data)
+                
+        return qr_codes
+        
+    except ImportError:
+        logger.warning("pyzbar not available - cannot decode QR codes")
+        return []
+    except Exception as e:
+        logger.warning(f"QR code decoding failed: {e}")
+        return []
+
+
 def _analyze_pdf_visually(pdf_path: str) -> dict:
     """
     Analyze PDF visually using multimodal LLM to extract QR codes and describe images.
@@ -56,6 +93,9 @@ def _analyze_pdf_visually(pdf_path: str) -> dict:
             img_data = pix.tobytes("png")
             img_base64 = base64.b64encode(img_data).decode()
             
+            # First try to decode QR codes directly using pyzbar
+            qr_urls = _decode_qr_codes_from_image(img_data)
+            
             # Analyze with multimodal LLM
             prompt = """Analyze this slide image and extract:
 1. QR codes: If you see any QR codes, try to read the URL they contain
@@ -98,10 +138,21 @@ Format your response as JSON:
                     
                     analysis = json.loads(json_str)
                     
-                    # Add page info and collect results
+                    # Add decoded QR codes (real URLs from pyzbar)
+                    for qr_url in qr_urls:
+                        results["qr_codes"].append({
+                            "url": qr_url,
+                            "location": f"QR code on page {page_num + 1}",
+                            "page": page_num + 1,
+                            "source": "pyzbar_decoded"
+                        })
+                    
+                    # Add any QR codes detected by Claude (for location info)
                     for qr in analysis.get("qr_codes", []):
-                        qr["page"] = page_num + 1
-                        results["qr_codes"].append(qr)
+                        if not qr_urls:  # Only add if pyzbar didn't find any
+                            qr["page"] = page_num + 1
+                            qr["source"] = "claude_detected"
+                            results["qr_codes"].append(qr)
                     
                     for element in analysis.get("visual_elements", []):
                         element["page"] = page_num + 1
@@ -114,6 +165,19 @@ Format your response as JSON:
                 
             except Exception as e:
                 logger.warning(f"Failed to analyze page {page_num + 1} of PDF: {e}")
+                # Still add QR codes even if visual analysis fails
+                for qr_url in qr_urls:
+                    results["qr_codes"].append({
+                        "url": qr_url,
+                        "location": f"QR code on page {page_num + 1}",
+                        "page": page_num + 1,
+                        "source": "pyzbar_decoded"
+                    })
+                # Add a note about failed analysis
+                results["page_analyses"].append({
+                    "page": page_num + 1,
+                    "analysis": {"error": f"Visual analysis failed: {str(e)}", "qr_codes": qr_urls}
+                })
                 continue
         
         doc.close()
@@ -165,8 +229,19 @@ def extract_pdf_content(pdf_path: str) -> dict:
         text_docs = text_loader.load()
         text_content = "\n\n".join([doc.page_content for doc in text_docs])
         
+        logger.info(f"PyPDFLoader extracted {len(text_docs)} pages with {len(text_content)} chars")
+        
         # Extract visual content (QR codes, images, charts)
         visual_analysis = _analyze_pdf_visually(pdf_path)
+        
+        # Check for missing pages by comparing PDF page count with extracted pages
+        import fitz
+        doc = fitz.open(pdf_path)
+        total_pdf_pages = len(doc)
+        doc.close()
+        
+        if len(text_docs) != total_pdf_pages:
+            logger.warning(f"Page count mismatch: PDF has {total_pdf_pages} pages but PyPDFLoader extracted {len(text_docs)} pages")
         
         # Combine text with visual descriptions
         enhanced_content = text_content
@@ -180,7 +255,8 @@ def extract_pdf_content(pdf_path: str) -> dict:
             "enhanced_content": enhanced_content,
             "visual_analysis": visual_analysis,
             "qr_codes": visual_analysis["qr_codes"],
-            "visual_elements": visual_analysis["visual_elements"]
+            "visual_elements": visual_analysis["visual_elements"],
+            "page_count_info": f"PDF: {total_pdf_pages} pages, Extracted: {len(text_docs)} pages"
         }
     except Exception as e:
         logger.error(f"Error extracting PDF content from {pdf_path}: {e}")

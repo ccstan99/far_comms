@@ -2,6 +2,13 @@ process_slides_task:
   description: >
     Process and clean slide content for speaker: {speaker}
     
+    EXISTING CONTENT CHECK: Slides already exist in Coda = {slides_already_exist}
+    
+    If slides_already_exist = True, SKIP slide processing entirely and return:
+    {{"cleaned_slides": "SKIPPED - Slides already exist in Coda", "processing_notes": "Skipped slide processing - content already exists"}}
+    
+    Otherwise, process the slides normally:
+    
     RAW SLIDES CONTENT:
     {slides_raw}
     
@@ -14,11 +21,14 @@ process_slides_task:
     SOURCE FILE: {pdf_path}
     
     Your processing should:
-    - Clean and structure the provided slide content
-    - Preserve all technical terminology, formulas, and acronyms exactly
+    - PRESERVE ALL ORIGINAL SLIDE TEXT VERBATIM - do not summarize, paraphrase, or rewrite
+    - Clean and structure the provided slide content while keeping exact wording
+    - Preserve all technical terminology, formulas, and acronyms exactly as written
     - Maintain the original slide structure and organization
+    - SKIP decorative visual elements: logos, profile photos, generic images unless they contain important content
+    - Mark important visual elements only: [chart: description] for data charts, [diagram: description] for technical diagrams
     - Include QR codes from the QR CODES FOUND section as verified resources
-    - Include visual elements descriptions in the cleaned content
+    - If any slides appear missing from the raw content, note this in processing_notes
     - Extract and catalog ALL resources mentioned, including:
       * QR code URLs (already verified - add directly to resources)
       * Direct URLs (http/https links) from text
@@ -27,13 +37,11 @@ process_slides_task:
       * DOI references
       * Dataset mentions
       * GitHub repositories
-      * Author/collaborator references
-      * Institution names
     - Identify slide titles, main sections, and organizational structure
     
   expected_output: >
     {
-      "cleaned_slides": "Full cleaned slide content with proper formatting",
+      "cleaned_slides": "VERBATIM slide content with exact original text preserved, visual elements marked as [img: alt], [chart: alt], etc.",
       "slide_structure": {
         "title": "Presentation title",
         "main_sections": ["Section 1", "Section 2", "Section 3"],
@@ -58,6 +66,13 @@ process_transcript_task:
   description: >
     Clean and format transcript for speaker: {speaker}
     
+    EXISTING CONTENT CHECK: SRT already exists in Coda = {srt_already_exists}
+    
+    If srt_already_exists = True, SKIP transcript processing entirely and return:
+    {{"transcript_formatted": "SKIPPED - SRT already exists in Coda", "processing_status": "skipped", "cleaning_notes": "Skipped transcript processing - content already exists"}}
+    
+    Otherwise, process the transcript normally:
+    
     RAW TRANSCRIPT (SRT format from AssemblyAI):
     {transcript_raw}
     
@@ -65,33 +80,39 @@ process_transcript_task:
     SLIDES CONTEXT (from previous task for technical accuracy):
     Use the slides content from the previous task to ensure name spelling and technical terms are correct.
     
-    Your processing should:
-    1. Extract the text content from the SRT transcript (ignore timestamps - they will be preserved automatically):
-       - Extract just the spoken text from the SRT format
-       - Use slide context to correct technical terminology, acronyms, and complex terms
-       - Fix speaker names and affiliations to match slides
-       - CRITICAL: Only fix spelling/terminology - do NOT change, add, or remove any words
-    2. Create readable paragraph format with corrected text:
-       - CRITICAL: Keep EVERY SINGLE WORD from the original transcript - do not remove, summarize, or shorten anything
-       - Only make spelling/terminology corrections, never remove content
-       - Organize the corrected text into natural paragraph breaks at topic transitions  
-       - Group related sentences together
-       - Create substantial paragraphs (50-100 words each)
-       - DO NOT add section headers, titles, or structural elements not in original speech
-    3. Output only the clean paragraph format - SRT will be reconstructed automatically with original timestamps
+    ---
+    TRANSCRIPT STYLE GUIDE:
+    {style_transcript}
+    ---
     
-    CRITICAL: The word count should be nearly identical to the original. Focus only on text accuracy and paragraph formatting. Timestamps will be preserved automatically by the system.
+    CRITICAL REQUIREMENTS - FAILURE TO FOLLOW WILL RESULT IN REJECTION:
+    1. WORD COUNT VALIDATION: Your output must contain 95-105% of the original word count
+    2. VERBATIM PRESERVATION: Keep EVERY SINGLE WORD from the original transcript
+    3. ONLY ALLOWED CHANGES: Fix spelling/terminology using style guide, add paragraph breaks
+    4. FORBIDDEN ACTIONS: Do NOT remove, summarize, shorten, or paraphrase ANY content
+    5. FORBIDDEN ACTIONS: Do NOT add section headers, titles, or structural elements
+    
+    Processing steps:
+    1. Extract text from SRT format (ignore timestamps - preserved automatically)
+    2. Count words in original text and log this number
+    3. Apply transcript style guide corrections ONLY for spelling/terminology
+    4. Use slide context for technical term accuracy
+    5. Organize into paragraphs (50-100 words) at natural topic transitions
+    6. Count words in final output - MUST be within 95-105% of original count
+    7. If word count drops below 95%, you have failed the task - try again
     
   expected_output: >
     {
-      "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT SHOULD BE NEARLY IDENTICAL TO ORIGINAL",
+      "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT MUST BE NEARLY IDENTICAL TO ORIGINAL",
       "transcript_stats": {
-        "duration_minutes": "Actual video duration",
-        "word_count": "Actual word count",
-        "paragraph_count": "Actual number of paragraphs created"
+        "original_word_count": "REQUIRED: Word count from original SRT text",
+        "output_word_count": "REQUIRED: Word count in transcript_formatted",
+        "word_count_percentage": "REQUIRED: (output/original)*100 - MUST be 95-105%",
+        "paragraph_count": "Number of paragraphs created",
+        "duration_minutes": "Video duration if available"
       },
-      "cleaning_notes": "Actual details about spelling/terminology corrections made using slide context",
-      "processing_status": "success|partial|failed with actual details"
+      "cleaning_notes": "Details about spelling/terminology corrections made using slide context",
+      "processing_status": "success|partial|failed - FAIL if word count below 95%"
     }
   agent: transcript_processor_agent
   context:
@@ -113,12 +134,17 @@ research_resources_task:
       * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
       * Try variations with author names from slides + key terms
       * Search academic databases: "site:arxiv.org", "site:dl.acm.org", "site:ieeexplore.ieee.org"
+    - Search for existing social media posts:
+      * Look for X/Twitter posts: "[speaker name] [research topic] site:twitter.com" or "site:x.com"
+      * Look for LinkedIn posts: "[author name] [paper title] site:linkedin.com"
+      * Find posts by the speaker or their institution about this research for potential retweet/repost
     - For all resources, provide simple format:
       * type: paper, codebase, website, dataset, etc.
       * title: Clean page/paper title  
       * url: Working URL (QR code URL for QR resources, found URL for searched resources)
     - Prioritize official/authoritative sources over mirrors
-    - Format results for easy integration into Coda "Resources" column
+    - Format results for Coda "Resources" column: simple text format, NO emojis or icons, one resource per line
+    - Focus on main paper from QR codes, skip institution/company links unless directly relevant
     
   expected_output: >
     {
@@ -148,46 +174,32 @@ final_assembly_task:
   description: >
     Assemble all processed content and prepare final outputs for Coda database update.
     
-    CRITICAL: You must extract the ACTUAL content from previous tasks, not placeholder descriptions.
-    
-    From the slide processing task, extract:
-    - The actual "cleaned_slides" content
-    - The actual "resources_found" list
-    
-    From the transcript processing task, extract:
-    - The actual "transcript_srt" content (with real timestamps)
-    - The actual "transcript_formatted" content (clean paragraphs)
-    
-    From the resource research task, extract:
-    - The actual "resources_formatted" string ready for Coda
-    
-    Assembly requirements:
-    - Combine actual slides content with resources for "Slides" column
-    - Use the actual researched "resources_formatted" for "Resources" column
-    - MANDATORY: Include "SRT" column with actual "transcript_srt" content (with real timestamps)
-    - Use the actual "transcript_formatted" (clean paragraphs) for "Transcript" column
+    Extract the ACTUAL content from previous tasks:
+    - Slides: Use "cleaned_slides" content from slide processing task (if not skipped)
+    - Resources: Use "resources_formatted" string from resource research task  
+    - SRT: Use "transcript_srt" content (with timestamps) from transcript processing task (if not skipped)
+    - Transcript: Use "transcript_formatted" content (clean paragraphs) from transcript processing task (if not skipped)
     - Generate processing summary for "Webhook progress" column
     - Set "Webhook status" to "Done"
     
-    CRITICAL: Your JSON output MUST include all 6 columns: Slides, Resources, SRT, Transcript, Webhook progress, Webhook status
-    
-    DO NOT use placeholder text like "Timestamped transcript in SRT format" - use the real content from previous tasks.
+    IMPORTANT: For any skipped content, do NOT include those fields in coda_updates.
+    Only include fields for content that was actually processed (not skipped).
     
   expected_output: >
     {
       "coda_updates": {
-        "Slides": "[ACTUAL cleaned slides content from slide processing task, not placeholder text]",
-        "Resources": "[ACTUAL resources_formatted string from resource research task, not placeholder text]",
-        "SRT": "[MANDATORY: ACTUAL transcript_srt content with real timestamps from transcript processing task - DO NOT OMIT THIS COLUMN]", 
-        "Transcript": "[ACTUAL transcript_formatted content with clean paragraphs from transcript processing task, not placeholder text]",
-        "Webhook progress": "Processing summary with actual statistics",
+        "Slides": "Complete slides content with visual elements marked",
+        "Resources": "Formatted resource list ready for Coda", 
+        "SRT": "Full SRT transcript with timestamps",
+        "Transcript": "Clean formatted transcript paragraphs",
+        "Webhook progress": "Processing completed successfully: X slides, Y resources, Z words",
         "Webhook status": "Done"
       },
       "processing_summary": {
-        "slides_processed": "Actual number of slides processed",
-        "resources_found": "Actual number of resources with URLs found",
-        "transcript_length": "Actual transcript word count",
-        "total_processing_time": "Actual processing time"
+        "slides_processed": "Number of slides",
+        "resources_found": "Number of resources", 
+        "transcript_length": "Word count",
+        "total_processing_time": "Processing time"
       }
     }
   agent: slide_processor_agent

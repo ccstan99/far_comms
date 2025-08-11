@@ -4,7 +4,7 @@ analyze_transcript_task:
   description: >
     Analyze {speaker}'s talk transcript to extract core findings, technical details, key insights, and organizational structure.
     ===
-    transcript: 
+    TRASNCRIPT: 
     {transcript}
     ===
     Your analysis should:
@@ -43,13 +43,16 @@ create_li_content_task:
     ===
     RAW TRANSCRIPT (for authentic hooks and quotes):
     {transcript}
-    ===
+    ---
     AVAILABLE INPUTS (via context):
     - Structured transcript analysis with: core_thesis, key_findings, technical_details, surprising_claims, impactful_quotes
     - Style guides below
-        
-    style_shared: {style_shared}
-    style_li: {style_li}
+    ---    
+    STYLE SHARED: 
+    {style_shared}
+    ---
+    STYLE LI: 
+    {style_li}
     ===
     Requirements:
     - Generate 5 potential LinkedIn hooks using raw transcript for authentic voice and direct quotes
@@ -82,10 +85,13 @@ create_x_content_task:
     AVAILABLE INPUTS (via context):
     - Structured transcript analysis with: core_thesis, key_findings, technical_details, surprising_claims, impactful_quotes
     - Speaker X handle: {speaker_x_handle}
-    - Style guides below
-        
-    style_shared: {style_shared}
-    style_x: {style_x}
+    - Style guides below 
+    ---    
+    STYLE SHARED: 
+    {style_shared}
+    ---
+    STYLE X: 
+    {style_x}
     ===
     Requirements:
     - Generate 5 potential Twitter/X hooks using raw transcript for technical precision and authentic quotes
@@ -108,9 +114,8 @@ fact_check_content_task:
   description: >
     Verify all content claims against original transcript and provide corrected versions.
     ===
-    TRANSCRIPT: {transcript}
-    SPEAKER: {speaker}
-    EVENT: {event_name}
+    {speaker} ({affiliation}) transcript from {event_name}: 
+    {transcript}
     ===
     PROCESS:
     1. Check every claim against transcript for accuracy
@@ -147,10 +152,8 @@ fact_check_content_task:
 
 voice_authenticity_check_task:
   description: >
-    Apply FAR.AI brand voice and maximum conciseness to fact-checked content.
-    ===
-    SPEAKER: {speaker}
-    AFFILIATION: {affiliation}
+    Apply FAR.AI brand voice and maximum conciseness to fact-checked content 
+    for social media posts for {speaker} ({affiliation}) talk from {event_name}.
     ===
     PROCESS:
     1. Take the corrected content from fact_check_content_task (accuracy verified)
@@ -161,7 +164,7 @@ voice_authenticity_check_task:
     
     SCORING CRITERIA:
     Brand Voice Score (1-5):
-    - 5: Natural, engaging, authentic FAR.AI voice - conversational yet authoritative
+    - 5: Natural, engaging, authentic FAR.AI voice - conversational yet intelligent
     - 4: Strong voice with minor improvements needed
     - 3: Acceptable but somewhat generic or formulaic
     - 2: Generic AI-generated tone, lacks personality
@@ -182,7 +185,7 @@ voice_authenticity_check_task:
       "final_li_paragraph": "FAR.AI-voiced paragraph summary", 
       "final_li_bullets": ["FAR.AI-voiced bullet 1", "FAR.AI-voiced bullet 2", "FAR.AI-voiced bullet 3"],
       "final_x_content": "FAR.AI-voiced Twitter/X core hook + content",
-      "approved_for_next_step": true
+      "approved_for_next_step": true or false
     }
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
@@ -191,7 +194,7 @@ voice_authenticity_check_task:
     - FAR.AI would confidently publish this content
     - Content sounds like FAR.AI, not speaker mimicry
     - LinkedIn <150 words, bullets ≤8 words each
-    - Zero unnecessary words remain
+    - 0 unnecessary words remain
   context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task"]
   agent: voice_checker_agent
 
