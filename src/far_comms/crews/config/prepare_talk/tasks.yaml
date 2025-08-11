@@ -46,7 +46,7 @@ process_slides_task:
     - Maintain the original slide structure and organization
     - SKIP decorative visual elements: logos, profile photos, generic images unless they contain important content
     - Mark important visual elements only: [chart: description] for data charts, [diagram: description] for technical diagrams
-    - Include QR codes from the QR CODES FOUND section: insert [QR code to {URL}] at the relevant slide location so the resource researcher can easily find and use these verified URLs
+    - Include QR codes from the QR CODES FOUND section: insert [QR code to URL] at the relevant slide location so the resource researcher can easily find and use these verified URLs
     - If any slides appear missing from the raw content, note this in processing_notes
     - Extract and catalog MAIN WORK resources only (not comprehensive bibliography):
       * QR code URLs (high priority - intentionally shared by speaker)

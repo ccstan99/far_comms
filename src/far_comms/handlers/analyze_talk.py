@@ -109,7 +109,18 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
                 
                 # Parse the output if it's JSON, otherwise use as string
                 try:
-                    parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
+                    # Handle markdown code block format: ```json\n{...}\n```
+                    if isinstance(crew_output, str) and crew_output.strip().startswith('```json'):
+                        # Extract JSON from markdown code block
+                        json_start = crew_output.find('{')
+                        json_end = crew_output.rfind('}') + 1
+                        if json_start != -1 and json_end > json_start:
+                            json_content = crew_output[json_start:json_end]
+                            parsed_output = json.loads(json_content)
+                        else:
+                            raise json.JSONDecodeError("Could not extract JSON from markdown", crew_output, 0)
+                    else:
+                        parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
                 except (json.JSONDecodeError, TypeError):
                     parsed_output = {"content": crew_output}
                 

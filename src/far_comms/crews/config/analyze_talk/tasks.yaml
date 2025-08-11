@@ -9,7 +9,7 @@ research_resources_task:
     
     Your research should focus on:
     - QR code URLs (high priority):
-      * Look for "[QR code to {URL}]" markers in the slides content
+      * Look for "[QR code to URL]" markers in the slides content
       * These URLs are already verified - do NOT search for them
       * Visit the URL to get the page title and determine resource type (paper, codebase, website, dataset)
       * Extract basic info: type, title, url (keep original QR URL from the marker)
