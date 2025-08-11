@@ -192,17 +192,19 @@ research_resources_task:
 
 analyze_transcript_task:
   description: >
-    Analyze transcript to extract core findings, technical details, key insights, and organizational structure.
-    Only run this analysis if transcript is available from previous processing.
+    Analyze the CLEANED transcript from the transcript processing task to extract core findings, technical details, key insights, and organizational structure.
+    This analysis should use the cleaned, formatted transcript (not the raw transcript) that has been processed and refined by the transcript processor.
     
-    TRANSCRIPT (from transcript processing task):
-    {transcript_formatted}
+    INSTRUCTIONS:
+    1. Look at the transcript processing task output (if available) and extract the "transcript_formatted" content
+    2. If no cleaned transcript is available from the transcript processing task, return an analysis indicating no transcript is available
+    3. Only perform detailed analysis if substantial cleaned transcript content is available
     
     SPEAKER INFO:
     - Speaker: {speaker}
     - Affiliation: {coda_affiliation}
     
-    Your analysis should:
+    Your analysis should (using the cleaned transcript from context):
     - Identify the main thesis and supporting arguments
     - Extract the speaker's organizational pattern and talk structure
     - Capture the speaker's section titles, main points, and flow
@@ -213,19 +215,20 @@ analyze_transcript_task:
     
   expected_output: >
     {
+      "analysis_status": "completed|no_transcript_available",
       "speaker": "{speaker} ({coda_affiliation})",
-      "core_thesis": "Main argument in 1 sentence",
-      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
+      "core_thesis": "Main argument in 1 sentence OR 'No transcript available'",
+      "key_findings": ["Finding 1", "Finding 2", "Finding 3"] OR [],
       "talk_outline": {
-        "structure_type": "Describe the speaker's organizational pattern",
+        "structure_type": "Describe the speaker's organizational pattern OR 'No transcript available'",
         "main_points": [
           {"point": "First main point/section title", "details": "Key content and supporting details"},
           {"point": "Second main point/section title", "details": "Key content and supporting details"}
-        ]
+        ] OR []
       },
-      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"},
-      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
-      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
+      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"} OR {},
+      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"] OR [],
+      "impactful_quotes": ["Direct quote 1", "Direct quote 2"] OR []
     }
   agent: transcript_analyzer_agent
   context:
