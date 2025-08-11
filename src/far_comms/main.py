@@ -16,6 +16,11 @@ from far_comms.handlers.prepare_talk_crew_handler import (
     get_prepare_talk_input, 
     display_prepare_talk_input
 )
+from far_comms.handlers.analyze_talk import (
+    run_analyze_talk,
+    get_analyze_talk_input,
+    display_analyze_talk_input
+)
 import uvicorn
 import os
 import json
@@ -243,6 +248,11 @@ FUNCTION_REGISTRY = {
         "runner": prepare_talk,
         "get_input": get_prepare_talk_input,
         "display_input": display_prepare_talk_input
+    },
+    FunctionName.ANALYZE_TALK: {
+        "runner": run_analyze_talk,
+        "get_input": get_analyze_talk_input,
+        "display_input": display_analyze_talk_input
     }
     # Add new functions here as they're implemented
 }

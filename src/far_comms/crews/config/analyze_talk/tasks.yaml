@@ -1,0 +1,128 @@
+research_resources_task:
+  description: >
+    Research and find actual URLs for the PRIMARY resources identified in slides (not comprehensive bibliography).
+    
+    SLIDES CONTENT (from Coda):
+    {slides_content}
+    
+    Use only the MAIN WORK resources from the slides - typically 1-2 resources max.
+    
+    Your research should focus on:
+    - QR code URLs (high priority):
+      * Look for "[QR code to {URL}]" markers in the slides content
+      * These URLs are already verified - do NOT search for them
+      * Visit the URL to get the page title and determine resource type (paper, codebase, website, dataset)
+      * Extract basic info: type, title, url (keep original QR URL from the marker)
+    - Primary research paper being presented:
+      * Search using queries like "[paper title] [conference] [year]", "[paper title] arXiv"  
+      * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
+      * Try variations with author names + key terms from talk title
+    - Key datasets/codebases that are the main focus:
+      * Only if they are central to the work being presented
+    
+    STRICT EXCLUSIONS:
+    - Do NOT search for social media posts
+    - Do NOT include speaker homepages or institutional links
+    - Do NOT include related work or comprehensive reference lists
+    - Do NOT include background/citation papers
+    
+    Expected result: 0-2 resources typically, max 4 for multi-paper presentations
+    Format: simple text format, NO emojis, one resource per line
+    
+  expected_output: >
+    {
+      "researched_resources": [
+        {
+          "original_reference": "Reference as found in slides",
+          "title": "Full paper/resource title",
+          "url": "Actual URL if found, or 'NOT_FOUND'",
+          "citation": "Complete citation information",
+          "source": "Where URL was found (arXiv, ACM, IEEE, etc.)",
+          "status": "found|partial|not_found",
+          "notes": "Additional information or search attempts"
+        }
+      ],
+      "resources_formatted": "Formatted string ready for Coda Resources column",
+      "research_summary": {
+        "total_resources": "Number of resources processed",
+        "urls_found": "Number of actual URLs found",
+        "citations_only": "Number with citation info but no URL"
+      }
+    }
+  agent: resource_researcher_agent
+
+analyze_transcript_task:
+  description: >
+    Analyze the cleaned transcript to extract core findings, technical details, key insights, and organizational structure.
+    
+    TRANSCRIPT CONTENT (from Coda):
+    {transcript_content}
+    
+    SPEAKER INFO:
+    - Speaker: {speaker}
+    - Affiliation: {affiliation}
+    
+    Your analysis should:
+    - Identify the main thesis and supporting arguments
+    - Extract the speaker's organizational pattern and talk structure
+    - Capture the speaker's section titles, main points, and flow
+    - Extract specific technical details, numbers, and metrics
+    - Find surprising or counterintuitive claims
+    - Collect impactful direct quotes from the speaker
+    - Highlight key findings for both technical and non-technical audiences
+    
+  expected_output: >
+    {
+      "speaker": "{speaker} ({affiliation})",
+      "core_thesis": "Main argument in 1 sentence",
+      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
+      "talk_outline": {
+        "structure_type": "Describe the speaker's organizational pattern",
+        "main_points": [
+          {"point": "First main point/section title", "details": "Key content and supporting details"},
+          {"point": "Second main point/section title", "details": "Key content and supporting details"}
+        ]
+      },
+      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"},
+      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
+      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
+    }
+  agent: transcript_analyzer_agent
+
+final_assembly_task:
+  description: >
+    Assemble research and analysis results and prepare final outputs for Coda database update.
+    
+    Extract the ACTUAL content from previous tasks:
+    - Resources: Use "resources_formatted" string from resource research task  
+    - Analysis: Convert transcript analysis JSON to markdown format for Coda storage
+    - Generate processing summary for "Webhook progress" column
+    - Set "Webhook status" to "Done"
+    
+    TRANSCRIPT ANALYSIS FORMATTING:
+    Convert the transcript analysis JSON output to readable markdown format:
+    - Core Thesis: Display as "## Core Thesis" section
+    - Key Findings: Display as "## Key Findings" with bullet list
+    - Talk Outline: Display as "## Talk Structure" with structured format
+    - Technical Details: Display as "## Technical Details" (if applicable)
+    - Surprising Claims: Display as "## Key Insights" with bullet list
+    - Impactful Quotes: Display as "## Notable Quotes" with quote formatting
+    
+  expected_output: >
+    {
+      "coda_updates": {
+        "Resources": "Formatted resource list ready for Coda",
+        "Analysis": "Transcript analysis in markdown format",
+        "Webhook progress": "Analysis completed successfully: X resources found, analysis generated",
+        "Webhook status": "Done"
+      },
+      "processing_summary": {
+        "resources_found": "Number of resources found",
+        "analysis_completed": "true",
+        "total_processing_time": "Processing time"
+      }
+    }
+  agent: resource_researcher_agent
+  context:
+    - research_resources_task
+    - analyze_transcript_task

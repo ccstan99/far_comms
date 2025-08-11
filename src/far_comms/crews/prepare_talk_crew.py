@@ -38,32 +38,6 @@ class PrepareTalkCrew():
             allow_delegation=False
         )
 
-    @agent
-    def resource_researcher_agent(self) -> Agent:
-        try:
-            from langchain_community.tools import SerperSearchResults
-            search_tool = SerperSearchResults()
-            tools = [search_tool]
-        except ImportError:
-            # Fallback to no tools if SerperSearchResults not available
-            tools = []
-        
-        return Agent(
-            config=self.agents_config['resource_researcher_agent'],
-            llm=self.sonnet_llm,
-            verbose=True,
-            allow_delegation=False,
-            tools=tools
-        )
-
-    @agent
-    def transcript_analyzer_agent(self) -> Agent:
-        return Agent(
-            config=self.agents_config['transcript_analyzer_agent'],
-            llm=self.sonnet_llm,
-            verbose=True,
-            allow_delegation=False
-        )
 
     # Sequential Processing Tasks
     @task
@@ -80,19 +54,6 @@ class PrepareTalkCrew():
             agent=self.transcript_processor_agent()
         )
 
-    @task
-    def research_resources_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['research_resources_task'],
-            agent=self.resource_researcher_agent()
-        )
-
-    @task
-    def analyze_transcript_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['analyze_transcript_task'],
-            agent=self.transcript_analyzer_agent()
-        )
 
     @task
     def final_assembly_task(self) -> Task:
@@ -107,15 +68,11 @@ class PrepareTalkCrew():
         return Crew(
             agents=[
                 self.slide_processor_agent(),
-                self.transcript_processor_agent(),
-                self.resource_researcher_agent(),
-                self.transcript_analyzer_agent()
+                self.transcript_processor_agent()
             ],
             tasks=[
                 self.process_slides_task(),
                 self.process_transcript_task(),
-                self.research_resources_task(),
-                self.analyze_transcript_task(),
                 self.final_assembly_task()
             ],
             process=Process.sequential,

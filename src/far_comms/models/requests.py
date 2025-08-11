@@ -11,6 +11,7 @@ class FunctionName(str, Enum):
     """Available crew function names for Coda webhook"""
     PROMOTE_TALK = "promote_talk"
     PREPARE_TALK = "prepare_talk"
+    ANALYZE_TALK = "analyze_talk"
     PROMOTE_RESEARCH = "promote_research" 
     PROMOTE_EVENT = "promote_event"
 
