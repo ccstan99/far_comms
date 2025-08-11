@@ -2,13 +2,6 @@ process_slides_task:
   description: >
     Process and clean slide content for speaker: {speaker}
     
-    EXISTING CONTENT CHECK: Slides already exist in Coda = {slides_already_exist}
-    
-    If slides_already_exist = True, SKIP slide processing entirely and return:
-    {{"cleaned_slides": "SKIPPED - Slides already exist in Coda", "processing_notes": "Skipped slide processing - content already exists"}}
-    
-    Otherwise, process the slides normally:
-    
     RAW SLIDES CONTENT:
     {slides_raw}
     
@@ -29,14 +22,11 @@ process_slides_task:
     - Mark important visual elements only: [chart: description] for data charts, [diagram: description] for technical diagrams
     - Include QR codes from the QR CODES FOUND section as verified resources
     - If any slides appear missing from the raw content, note this in processing_notes
-    - Extract and catalog ALL resources mentioned, including:
-      * QR code URLs (already verified - add directly to resources)
-      * Direct URLs (http/https links) from text
-      * Research paper titles with conference/journal info (e.g., "MasterKey (NDSS'24)")
-      * arXiv references (e.g., "arXiv:2502.12202")
-      * DOI references
-      * Dataset mentions
-      * GitHub repositories
+    - Extract and catalog MAIN WORK resources only (not comprehensive bibliography):
+      * QR code URLs (high priority - intentionally shared by speaker)
+      * Primary research paper being presented (usually in title/main slides)
+      * Key datasets or codebases that are the focus of the talk
+      * SKIP: speaker homepages, institution links, extensive reference lists, related work citations
     - Identify slide titles, main sections, and organizational structure
     
   expected_output: >
@@ -65,13 +55,6 @@ process_slides_task:
 process_transcript_task:
   description: >
     Clean and format transcript for speaker: {speaker}
-    
-    EXISTING CONTENT CHECK: SRT already exists in Coda = {srt_already_exists}
-    
-    If srt_already_exists = True, SKIP transcript processing entirely and return:
-    {{"transcript_formatted": "SKIPPED - SRT already exists in Coda", "processing_status": "skipped", "cleaning_notes": "Skipped transcript processing - content already exists"}}
-    
-    Otherwise, process the transcript normally:
     
     RAW TRANSCRIPT (SRT format from AssemblyAI):
     {transcript_raw}
@@ -120,31 +103,30 @@ process_transcript_task:
 
 research_resources_task:
   description: >
-    Research and find actual URLs for academic papers and resources identified in slides.
+    Research and find actual URLs for the PRIMARY resources identified in slides (not comprehensive bibliography).
     
-    Use the resources found in the previous slide processing task to research actual URLs and complete citations.
+    Use only the MAIN WORK resources from the previous slide processing task - typically 1-2 resources max.
     
-    Your research should:
-    - For QR code URLs (type: "qr_code"):
+    Your research should focus on:
+    - QR code URLs (high priority):
       * These URLs are already verified - do NOT search for them
       * Visit the URL to get the page title and determine resource type (paper, codebase, website, dataset)
       * Extract basic info: type, title, url (keep original QR URL)
-    - For text references without URLs:
-      * Search using queries like "MasterKey NDSS 2024 paper", "MasterKey NDSS'24 arXiv"  
+    - Primary research paper being presented:
+      * Search using queries like "[paper title] [conference] [year]", "[paper title] arXiv"  
       * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
-      * Try variations with author names from slides + key terms
-      * Search academic databases: "site:arxiv.org", "site:dl.acm.org", "site:ieeexplore.ieee.org"
-    - Search for existing social media posts:
-      * Look for X/Twitter posts: "[speaker name] [research topic] site:twitter.com" or "site:x.com"
-      * Look for LinkedIn posts: "[author name] [paper title] site:linkedin.com"
-      * Find posts by the speaker or their institution about this research for potential retweet/repost
-    - For all resources, provide simple format:
-      * type: paper, codebase, website, dataset, etc.
-      * title: Clean page/paper title  
-      * url: Working URL (QR code URL for QR resources, found URL for searched resources)
-    - Prioritize official/authoritative sources over mirrors
-    - Format results for Coda "Resources" column: simple text format, NO emojis or icons, one resource per line
-    - Focus on main paper from QR codes, skip institution/company links unless directly relevant
+      * Try variations with author names + key terms from talk title
+    - Key datasets/codebases that are the main focus:
+      * Only if they are central to the work being presented
+    
+    STRICT EXCLUSIONS:
+    - Do NOT search for social media posts
+    - Do NOT include speaker homepages or institutional links
+    - Do NOT include related work or comprehensive reference lists
+    - Do NOT include background/citation papers
+    
+    Expected result: 0-2 resources typically, max 4 for multi-paper presentations
+    Format: simple text format, NO emojis, one resource per line
     
   expected_output: >
     {

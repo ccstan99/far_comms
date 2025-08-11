@@ -118,24 +118,32 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         # Initialize Coda client for updates
         coda_client = CodaClient()
         
-        # Check if Slides and SRT columns already have content - skip if both do
+        # Simple "all or nothing" check: if Transcript exists, content is complete
         try:
             row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
             row_data = json.loads(row_data_str)
             row_values = row_data.get("data", {})
-            existing_slides = row_values.get("Slides", "")
-            existing_srt = row_values.get("SRT", "")
+            existing_transcript = row_values.get("Transcript", "")
             
-            # Check what needs to be processed
-            slides_exist = existing_slides and existing_slides.strip()
-            srt_exists = existing_srt and existing_srt.strip()
-            
-            if slides_exist and srt_exists:
-                logger.info(f"Skipping {speaker_name} - both Slides and SRT columns already populated")
-                return {"status": "skipped", "message": "Both Slides and SRT already populated", "speaker": speaker_name}
+            if existing_transcript and existing_transcript.strip():
+                logger.info(f"Skipping {speaker_name} - Transcript exists, content is complete")
+                return {"status": "skipped", "message": "Transcript exists - content complete", "speaker": speaker_name}
+            else:
+                # Clear all related fields before reprocessing to ensure consistency
+                logger.info(f"No transcript found for {speaker_name} - clearing all fields and reprocessing")
+                clear_fields = {
+                    "Slides": "",
+                    "SRT": "", 
+                    "Transcript": "",
+                    "Resources": "",
+                    "Webhook progress": "Reprocessing from scratch..."
+                }
+                updates = [{"row_id": coda_ids.row_id, "updates": clear_fields}]
+                coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.info(f"Cleared fields for fresh processing: {list(clear_fields.keys())}")
                 
         except Exception as e:
-            logger.warning(f"Could not check existing content for {speaker_name}: {e}")
+            logger.warning(f"Could not check/clear existing content for {speaker_name}: {e}")
             # Continue anyway in case it was just a temporary error
         
         # Preprocess content before running crew
@@ -209,7 +217,7 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         docs_dir = Path(__file__).parent.parent.parent / "docs"
         style_transcript = (docs_dir / "prompt_transcript.md").read_text() if (docs_dir / "prompt_transcript.md").exists() else ""
         
-        # Prepare crew input with preprocessed data and existing content info
+        # Prepare crew input with preprocessed data (always fresh processing)
         crew_input = {
             "speaker": speaker_name,
             "yt_url": yt_url or "",
@@ -220,10 +228,7 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
             "qr_codes": qr_codes,
             "visual_elements": visual_elements,
             "style_transcript": style_transcript,
-            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}",
-            # Pass info about existing content to crew
-            "slides_already_exist": slides_exist,
-            "srt_already_exists": srt_exists
+            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}"
         }
         
         # Check if we have enough content to proceed
