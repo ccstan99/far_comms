@@ -144,6 +144,15 @@ class ResearchAnalysisResponse(BaseModel):
         None,
         description="Structured research analysis (null if analysis failed)"
     )
+    files_saved: dict | None = Field(
+        None,
+        description="Information about saved files (JSON and Markdown)",
+        example={
+            "json_path": "output/APE_Attempt_to_Persuade_Eval.json",
+            "markdown_path": "output/APE_Attempt_to_Persuade_Eval.md", 
+            "filename": "APE_Attempt_to_Persuade_Eval"
+        }
+    )
 
 # ============================================================================
 # PROMOTE_EVENT FUNCTION MODELS (TODO) 

@@ -6,10 +6,153 @@ Handler for analyze_research function - processes ML research papers with AI saf
 
 import logging
 import json
+import os
+import re
+from datetime import datetime
+from pathlib import Path
 from far_comms.models.requests import ResearchRequest, ResearchAnalysisOutput
 from far_comms.analyze_research import analyze_research_paper
 
 logger = logging.getLogger(__name__)
+
+def _sanitize_filename(title: str, max_length: int = 100) -> str:
+    """Sanitize paper title for use as filename"""
+    if not title:
+        return "untitled_paper"
+    
+    # Remove/replace problematic characters
+    sanitized = re.sub(r'[<>:"/\\|?*]', '_', title)
+    sanitized = re.sub(r'[^\w\s\-_\.]', '', sanitized)
+    sanitized = re.sub(r'\s+', '_', sanitized)
+    sanitized = sanitized.strip('_').strip('.')
+    
+    # Limit length
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length].rstrip('_')
+    
+    return sanitized or "untitled_paper"
+
+def _save_analysis_to_files(analysis: ResearchAnalysisOutput, pdf_path: str, paper_title: str = None, authors: str = None) -> dict:
+    """Save analysis results to JSON and Markdown files"""
+    try:
+        # Create outputs directory
+        from far_comms.utils.project_paths import get_output_dir
+        output_dir = get_output_dir()
+        output_dir.mkdir(exist_ok=True)
+        
+        # Generate filename
+        title_for_filename = paper_title or Path(pdf_path).stem
+        sanitized_title = _sanitize_filename(title_for_filename)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Handle duplicate filenames
+        base_filename = sanitized_title
+        counter = 1
+        while (output_dir / f"{sanitized_title}.json").exists():
+            sanitized_title = f"{base_filename}_{counter}"
+            counter += 1
+        
+        json_path = output_dir / f"{sanitized_title}.json"
+        md_path = output_dir / f"{sanitized_title}.md"
+        
+        # Prepare data for JSON
+        json_data = {
+            "metadata": {
+                "timestamp": timestamp,
+                "pdf_path": pdf_path,
+                "paper_title": paper_title,
+                "authors": authors,
+                "analysis_date": datetime.now().isoformat()
+            },
+            "analysis": analysis.model_dump()
+        }
+        
+        # Save JSON file
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
+        
+        # Save Markdown file
+        md_content = f"""# ML Research Paper Analysis
+        
+## Metadata
+- **Paper Title**: {paper_title or 'Not provided'}
+- **Authors**: {authors or 'Not provided'}
+- **PDF Path**: {pdf_path}
+- **Analysis Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Technical Analysis
+
+### Core Contribution
+{analysis.core_contribution}
+
+### Methodology
+{analysis.methodology}
+
+### Key Results
+{analysis.key_results}
+
+### Technical Novelty
+{analysis.technical_novelty}
+
+## AI Safety & Alignment Context
+
+### Safety Implications
+{analysis.safety_implications}
+
+### Risk Assessment
+{analysis.risk_assessment}
+
+### Alignment Relevance
+{analysis.alignment_relevance}
+
+## Research Quality & Significance
+
+### Experimental Rigor
+{analysis.experimental_rigor}
+
+### Significance Rating
+{analysis.significance_rating}
+
+### Future Directions
+{analysis.future_directions}
+
+## Practical Applications
+
+### Real-world Applications
+{analysis.real_world_applications}
+
+### Implementation Challenges
+{analysis.implementation_challenges}
+
+## Academic Context
+
+### Related Work Analysis
+{analysis.related_work_analysis}
+
+### Citation-worthy Claims
+"""
+        
+        for i, claim in enumerate(analysis.citation_worthy_claims, 1):
+            md_content += f"{i}. {claim}\n"
+        
+        md_content += "\n---\n*Analysis generated with Claude 4.1 Opus - PhD-level AI safety expertise*\n"
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+        
+        logger.info(f"Analysis saved to {json_path} and {md_path}")
+        
+        return {
+            "json_path": str(json_path),
+            "markdown_path": str(md_path),
+            "filename": sanitized_title
+        }
+        
+    except Exception as e:
+        logger.error(f"Error saving analysis files: {e}")
+        return {
+            "error": f"Failed to save files: {str(e)}"
+        }
 
 def get_analyze_research_input(raw_data: dict) -> dict:
     """Parse raw data for analyze_research function"""
@@ -58,13 +201,25 @@ async def run_analyze_research(function_data: dict, coda_ids=None) -> dict:
         # Analyze the research paper
         analysis = analyze_research_paper(pdf_path, paper_title, authors)
         
+        # Save results to files
+        file_info = _save_analysis_to_files(analysis, pdf_path, paper_title, authors)
+        
         logger.info("Research paper analysis completed successfully")
         
-        return {
+        response = {
             "status": "success", 
             "message": "Research analysis completed successfully",
             "analysis": analysis.model_dump()
         }
+        
+        # Add file save information
+        if "error" not in file_info:
+            response["files_saved"] = file_info
+            response["message"] += f" - Results saved to {file_info['filename']}.json and .md"
+        else:
+            logger.warning(f"File saving failed: {file_info['error']}")
+        
+        return response
         
     except FileNotFoundError as e:
         logger.error(f"PDF file not found: {e}")

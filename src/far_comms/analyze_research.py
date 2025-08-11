@@ -360,6 +360,9 @@ if __name__ == "__main__":
     )
     # Suppress verbose logging from specific libraries
     logging.getLogger('anthropic._base_client').setLevel(logging.WARNING)
-    logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING) 
+    logging.getLogger('anthropic').setLevel(logging.WARNING)
+    logging.getLogger('httpcore').setLevel(logging.WARNING)
     logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
+    logging.getLogger('PIL').setLevel(logging.WARNING)
     main()
