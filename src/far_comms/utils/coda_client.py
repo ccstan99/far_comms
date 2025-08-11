@@ -124,29 +124,11 @@ class CodaClient:
         return self._refresh_column_cache(doc_id, table_id, cache_file)
 
     def get_row(self, doc_id: str, table_id: str, row_id: str) -> str:
-        """Get specific row data with human-readable column names"""
-        # Get column mapping
-        columns_data = json.loads(self.get_columns(doc_id, table_id))
-        columns = columns_data["columns"]
+        """Get specific row data with human-readable column names, always fetch fresh and cache"""
+        cache_file = self.output_dir / f"{table_id}_{row_id}.json"
         
-        # Get row data
-        uri = f'https://coda.io/apis/v1/docs/{doc_id}/tables/{table_id}/rows/{row_id}'
-        response = requests.get(uri, headers=self.coda_headers)
-        response.raise_for_status()
-        row_data = response.json()
-        
-        # Convert to human-readable format
-        readable_data = {
-            "row_id": row_id,
-            "table_name": columns_data["table_name"],
-            "data": {}
-        }
-        
-        for col_id, value in row_data.get("values", {}).items():
-            column_name = columns.get(col_id, col_id)
-            readable_data["data"][column_name] = value
-        
-        return json.dumps(readable_data, indent=2, default=str)
+        # Always fetch fresh data and cache it
+        return self._refresh_row_cache(doc_id, table_id, row_id, cache_file)
 
     def search_rows(self, doc_id: str, table_id: str, filters: dict) -> str:
         """Search for rows matching specific criteria"""
@@ -396,6 +378,35 @@ class CodaClient:
         
         # Safe fallback
         return speaker_name
+
+    def _refresh_row_cache(self, doc_id: str, table_id: str, row_id: str, cache_file) -> str:
+        """Refresh row cache with fresh data from API"""
+        # Get column mapping
+        columns_data = json.loads(self.get_columns(doc_id, table_id))
+        columns = columns_data["columns"]
+        
+        # Get row data
+        uri = f'https://coda.io/apis/v1/docs/{doc_id}/tables/{table_id}/rows/{row_id}'
+        response = requests.get(uri, headers=self.coda_headers)
+        response.raise_for_status()
+        row_data = response.json()
+        
+        # Convert to human-readable format
+        readable_data = {
+            "row_id": row_id,
+            "table_name": columns_data["table_name"],
+            "data": {},
+            "cached_at": datetime.now().isoformat()
+        }
+        
+        for col_id, value in row_data.get("values", {}).items():
+            column_name = columns.get(col_id, col_id)
+            readable_data["data"][column_name] = value
+        
+        # Cache the data
+        cache_file.write_text(json.dumps(readable_data, indent=2, default=str))
+        
+        return json.dumps(readable_data, indent=2, default=str)
 
     def _refresh_column_cache(self, doc_id: str, table_id: str, cache_file) -> str:
         """Refresh column cache with fresh data from API"""

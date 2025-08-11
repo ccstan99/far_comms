@@ -228,7 +228,11 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
             "qr_codes": qr_codes,
             "visual_elements": visual_elements,
             "style_transcript": style_transcript,
-            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}"
+            "processing_notes": f"Slides: {len(slides_raw)} chars, QR codes: {len(qr_codes)}, Visual elements: {len(visual_elements)}, Transcript: {len(transcript_raw)} chars from {transcript_source}",
+            # Pass Coda row data for speaker validation
+            "coda_speaker": row_values.get("Speaker", ""),
+            "coda_affiliation": row_values.get("Affiliation", ""), 
+            "coda_title": row_values.get("Title", "")
         }
         
         # Check if we have enough content to proceed
