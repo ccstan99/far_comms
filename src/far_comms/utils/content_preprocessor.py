@@ -337,9 +337,23 @@ def extract_youtube_transcript(youtube_url: str) -> dict:
                     audio_path = os.path.join(temp_dir, "audio.%(ext)s")
                     
                     ydl_opts = {
-                        'format': 'bestaudio/best',
+                        'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best[height<=480]',
                         'outtmpl': audio_path,
                         'extract_flat': False,
+                        'ignoreerrors': True,
+                        'no_warnings': False,
+                        'extractaudio': True,
+                        'audioformat': 'mp3',
+                        'embed_subs': False,
+                        'writesubtitles': False,
+                        'writeautomaticsub': False,
+                        # Anti-bot measures
+                        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'referer': 'https://www.youtube.com/',
+                        'http_chunk_size': 10485760,
+                        'retries': 3,
+                        'fragment_retries': 3,
+                        'skip_unavailable_fragments': True,
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
