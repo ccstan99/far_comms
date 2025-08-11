@@ -273,29 +273,39 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         
         # Try to parse as JSON (expected from final_assembly_task)
         try:
-            # Clean result_text - remove code blocks if present
-            cleaned_text = result_text.strip()
-            if cleaned_text.startswith('```json'):
-                cleaned_text = cleaned_text[7:]  # Remove ```json
-            if cleaned_text.startswith('```'):
-                cleaned_text = cleaned_text[3:]  # Remove ```
-            if cleaned_text.endswith('```'):
-                cleaned_text = cleaned_text[:-3]  # Remove trailing ```
-            cleaned_text = cleaned_text.strip()
-            
-            if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
-                crew_output = json.loads(cleaned_text)
-                logger.info("Successfully parsed crew output as JSON")
+            # Handle markdown code block format: ```json\n{...}\n```
+            if result_text.strip().startswith('```json'):
+                # Extract JSON from markdown code block
+                json_start = result_text.find('{')
+                json_end = result_text.rfind('}') + 1
+                if json_start != -1 and json_end > json_start:
+                    json_content = result_text[json_start:json_end]
+                    crew_output = json.loads(json_content)
+                    logger.info("Successfully parsed crew output as JSON from markdown block")
+                else:
+                    raise json.JSONDecodeError("Could not extract JSON from markdown", result_text, 0)
             else:
-                # If not JSON, wrap in a basic structure
-                logger.warning("Crew output is not JSON, creating basic structure")
-                crew_output = {
-                    "coda_updates": {
-                        "Webhook progress": f"Processed {speaker_name}: crew completed",
-                        "Webhook status": "Done"
-                    },
-                    "raw_output": result_text
-                }
+                # Clean result_text - remove code blocks if present
+                cleaned_text = result_text.strip()
+                if cleaned_text.startswith('```'):
+                    cleaned_text = cleaned_text[3:]  # Remove ```
+                if cleaned_text.endswith('```'):
+                    cleaned_text = cleaned_text[:-3]  # Remove trailing ```
+                cleaned_text = cleaned_text.strip()
+                
+                if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
+                    crew_output = json.loads(cleaned_text)
+                    logger.info("Successfully parsed crew output as JSON")
+                else:
+                    # If not JSON, wrap in a basic structure
+                    logger.warning("Crew output is not JSON, creating basic structure")
+                    crew_output = {
+                        "coda_updates": {
+                            "Webhook progress": f"Processed {speaker_name}: crew completed",
+                            "Webhook status": "Done"
+                        },
+                        "raw_output": result_text
+                    }
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse crew output as JSON: {e}")
             crew_output = {
