@@ -53,15 +53,10 @@ class ResearchRequest(BaseModel):
         description="Path to PDF file (local path or URL). Examples: 'data/research/paper.pdf' or 'https://arxiv.org/pdf/2301.00001.pdf'",
         example="data/research/APE - paper.pdf"
     )
-    paper_title: str | None = Field(
-        None,
-        description="Optional paper title (will be extracted from PDF if not provided)",
-        example="APE: Attempt to Persuade Eval"
-    )
-    authors: str | None = Field(
-        None,
-        description="Optional author list (will be extracted from PDF if not provided)",  
-        example="John Doe, Jane Smith"
+    project_name: str = Field(
+        ...,
+        description="Short project name for directory structure and file organization (e.g., 'APE_eval', 'constitutional_ai')",
+        example="APE_eval"
     )
     
 class ResearchAnalysisOutput(BaseModel):

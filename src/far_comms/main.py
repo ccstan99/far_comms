@@ -231,27 +231,28 @@ async def analyze_research_endpoint(research_request: ResearchRequest):
     Analyze ML research paper with PhD-level AI safety technical expertise.
     
     This endpoint processes ML research papers and provides comprehensive analysis including:
-    - Core technical contribution and methodology
-    - AI safety implications and risk assessment  
-    - Research quality and significance rating
-    - Practical applications and implementation challenges
-    - Academic context and citation-worthy claims
+    - Complete file extraction (PDF text, metadata, figures)
+    - Structured markdown with headers and embedded figures
+    - Distilled summary preserving researchers' terminology
+    - Organized directory structure for easy access
     
     **Parameters:**
     - **pdf_path**: Local file path or URL to PDF (e.g., 'data/research/paper.pdf' or ArXiv URL)
-    - **paper_title**: Optional paper title (extracted from PDF if not provided)
-    - **authors**: Optional author list (extracted from PDF if not provided)
+    - **project_name**: Short name for directory structure (e.g., 'APE_eval', 'constitutional_ai')
     
     **Returns:**
-    Structured analysis with PhD-level technical insights focused on ML research and AI safety.
-    Results are saved as Markdown files optimized for human review and subsequent LLM processing.
+    Comprehensive analysis with all outputs saved to output/research/{project_name}/
+    - pdf.txt: Raw text extraction
+    - pdf.json: Complete metadata
+    - cleaned.md: Full structured markdown  
+    - distilled.md: Bullet-point summary
+    - figures/: All extracted images
     """
     try:
         # Convert to function_data format expected by handler
         function_data = {
             "pdf_path": research_request.pdf_path,
-            "paper_title": research_request.paper_title,
-            "authors": research_request.authors
+            "project_name": research_request.project_name
         }
         
         # Run analysis synchronously and return results
