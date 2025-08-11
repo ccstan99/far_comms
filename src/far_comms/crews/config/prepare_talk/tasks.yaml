@@ -193,18 +193,17 @@ research_resources_task:
 analyze_transcript_task:
   description: >
     Analyze the CLEANED transcript from the transcript processing task to extract core findings, technical details, key insights, and organizational structure.
-    This analysis should use the cleaned, formatted transcript (not the raw transcript) that has been processed and refined by the transcript processor.
+    This analysis REQUIRES the cleaned, formatted transcript from the transcript processor.
     
     INSTRUCTIONS:
-    1. Look at the transcript processing task output (if available) and extract the "transcript_formatted" content
-    2. If no cleaned transcript is available from the transcript processing task, return an analysis indicating no transcript is available
-    3. Only perform detailed analysis if substantial cleaned transcript content is available
+    Extract the "transcript_formatted" content from the transcript processing task output and perform comprehensive analysis.
+    The transcript MUST be available - if not, this indicates a fundamental workflow error.
     
     SPEAKER INFO:
     - Speaker: {speaker}
     - Affiliation: {coda_affiliation}
     
-    Your analysis should (using the cleaned transcript from context):
+    Your analysis should:
     - Identify the main thesis and supporting arguments
     - Extract the speaker's organizational pattern and talk structure
     - Capture the speaker's section titles, main points, and flow
@@ -215,20 +214,19 @@ analyze_transcript_task:
     
   expected_output: >
     {
-      "analysis_status": "completed|no_transcript_available",
       "speaker": "{speaker} ({coda_affiliation})",
-      "core_thesis": "Main argument in 1 sentence OR 'No transcript available'",
-      "key_findings": ["Finding 1", "Finding 2", "Finding 3"] OR [],
+      "core_thesis": "Main argument in 1 sentence",
+      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
       "talk_outline": {
-        "structure_type": "Describe the speaker's organizational pattern OR 'No transcript available'",
+        "structure_type": "Describe the speaker's organizational pattern",
         "main_points": [
           {"point": "First main point/section title", "details": "Key content and supporting details"},
           {"point": "Second main point/section title", "details": "Key content and supporting details"}
-        ] OR []
+        ]
       },
-      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"} OR {},
-      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"] OR [],
-      "impactful_quotes": ["Direct quote 1", "Direct quote 2"] OR []
+      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"},
+      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
+      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
     }
   agent: transcript_analyzer_agent
   context:
@@ -249,7 +247,7 @@ final_assembly_task:
     - Set "Webhook status" to "Done"
     
     TRANSCRIPT ANALYSIS FORMATTING:
-    If transcript analysis was completed, convert the JSON output to readable markdown format:
+    Convert the transcript analysis JSON output to readable markdown format:
     - Core Thesis: Display as "## Core Thesis" section
     - Key Findings: Display as "## Key Findings" with bullet list
     - Talk Outline: Display as "## Talk Structure" with structured format
@@ -276,11 +274,11 @@ final_assembly_task:
         "Resources": "Formatted resource list ready for Coda", 
         "SRT": "Full SRT transcript with timestamps",
         "Transcript": "Clean formatted transcript paragraphs",
-        "Analysis": "Transcript analysis in markdown format (only if transcript was processed)",
+        "Analysis": "Transcript analysis in markdown format",
         "Speaker": "Updated speaker name (only if validated and updated)",
         "Affiliation": "Updated affiliation (only if validated and updated)",
         "Title": "Updated title (only if validated and updated)",
-        "Webhook progress": "Processing completed successfully: X slides, Y resources, Z words. Analysis: [included/skipped]. Speaker validation: [status and details]",
+        "Webhook progress": "Processing completed successfully: X slides, Y resources, Z words. Analysis: included. Speaker validation: [status and details]",
         "Webhook status": "Done"
       },
       "processing_summary": {
