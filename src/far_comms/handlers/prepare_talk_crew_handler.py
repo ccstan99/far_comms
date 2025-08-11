@@ -94,6 +94,91 @@ def display_prepare_talk_input(function_data: dict) -> dict:
     return function_data
 
 
+def _parse_crew_output_with_repair(result_text: str, speaker_name: str, max_attempts: int = 3) -> dict:
+    """Iteratively repair JSON using json-repair and Haiku until valid"""
+    import json
+    
+    def extract_json_from_markdown(text: str) -> str:
+        """Extract JSON from markdown code blocks"""
+        if text.strip().startswith('```json'):
+            json_start = text.find('{')
+            json_end = text.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                return text[json_start:json_end]
+        return text.strip()
+    
+    def cleanup_with_haiku(malformed_json: str) -> str:
+        """Use Haiku to clean up malformed JSON"""
+        try:
+            from crewai import LLM
+            haiku_llm = LLM(model="anthropic/claude-3-haiku-20240307", max_retries=2)
+            
+            prompt = f"""Fix this malformed JSON to be valid JSON. Return ONLY the corrected JSON with no markdown formatting or extra text:
+
+{malformed_json}"""
+            
+            response = haiku_llm.call(prompt)
+            # Clean any potential markdown formatting from response
+            cleaned = response.strip()
+            if cleaned.startswith('```json'):
+                cleaned = extract_json_from_markdown(cleaned)
+            elif cleaned.startswith('```'):
+                cleaned = cleaned[3:].strip()
+                if cleaned.endswith('```'):
+                    cleaned = cleaned[:-3].strip()
+            
+            return cleaned
+        except Exception as e:
+            logger.warning(f"Haiku cleanup failed: {e}")
+            return malformed_json
+    
+    # Start with the original text
+    current_text = extract_json_from_markdown(result_text)
+    
+    # Quick fix for incomplete JSON objects (missing wrapping braces)
+    stripped = current_text.strip()
+    if (stripped.startswith('"') and not stripped.startswith('{')) or \
+       (stripped.endswith('}') and not stripped.startswith('{')):
+        logger.debug("Detected incomplete JSON object, wrapping with {}")
+        current_text = '{' + stripped + '}'
+    
+    for attempt in range(max_attempts):
+        logger.debug(f"JSON repair attempt {attempt + 1}/{max_attempts}")
+        
+        # Try parsing as-is
+        try:
+            parsed = json.loads(current_text)
+            logger.info(f"Successfully parsed JSON on attempt {attempt + 1}")
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.debug(f"Attempt {attempt + 1} failed: {e}")
+            
+            # Try json-repair library first
+            try:
+                import json_repair
+                repaired_text = json_repair.repair_json(current_text)
+                parsed = json.loads(repaired_text)
+                logger.info(f"Successfully repaired JSON with json-repair on attempt {attempt + 1}")
+                return parsed
+            except (ImportError, Exception) as repair_error:
+                logger.debug(f"json-repair failed on attempt {attempt + 1}: {repair_error}")
+            
+            # If json-repair failed or isn't available, try Haiku cleanup
+            if attempt < max_attempts - 1:  # Don't use Haiku on the last attempt
+                logger.debug(f"Trying Haiku cleanup on attempt {attempt + 1}")
+                current_text = cleanup_with_haiku(current_text)
+    
+    # All attempts failed, return basic structure
+    logger.warning(f"All {max_attempts} JSON repair attempts failed for {speaker_name}")
+    return {
+        "coda_updates": {
+            "Webhook progress": f"Processed {speaker_name}: JSON repair failed after {max_attempts} attempts",
+            "Webhook status": "Done"
+        },
+        "raw_output": f"[JSON repair failed, content length: {len(result_text)}]"
+    }
+
+
 async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
     """Prepare a talk using PrepareTalkCrew multi-agent system
     
@@ -172,35 +257,53 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         else:
             logger.warning(f"No matching PDF found for speaker: {speaker_name}")
         
-        # Preprocess transcript
+        # Preprocess transcript (with caching to avoid re-processing AssemblyAI)
         logger.info(f"Preprocessing transcript for speaker: {speaker_name}")
         transcript_raw = ""
         transcript_source = ""
         
-        # Try local video first (faster and more reliable)
-        video_path = find_matching_video(speaker_name)
-        if video_path:
-            logger.info(f"Found matching local video: {video_path}")
-            transcript_result = extract_local_video_transcript(video_path)
-            if transcript_result["success"]:
-                transcript_raw = transcript_result["srt_content"]
-                transcript_source = "local_video"
-                logger.info(f"Extracted local video transcript: {len(transcript_raw)} characters")
-            else:
-                logger.warning(f"Local video transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+        # Check for cached AssemblyAI transcript first
+        from pathlib import Path
+        output_dir = Path(__file__).parent.parent.parent / "output"
+        output_dir.mkdir(exist_ok=True)
+        cached_transcript_path = output_dir / f"{speaker_name}.srt"
+        
+        if cached_transcript_path.exists():
+            logger.info(f"Found cached transcript: {cached_transcript_path}")
+            transcript_raw = cached_transcript_path.read_text(encoding='utf-8')
+            transcript_source = "cached_assemblyai"
+            logger.info(f"Loaded cached transcript: {len(transcript_raw)} characters")
         else:
-            # No local video found, try YouTube download if URL provided
-            if yt_url:
-                logger.info(f"No local video found, trying YouTube: {yt_url}")
-                transcript_result = extract_youtube_transcript(yt_url)
+            # Try local video first (faster and more reliable)
+            video_path = find_matching_video(speaker_name)
+            if video_path:
+                logger.info(f"Found matching local video: {video_path}")
+                transcript_result = extract_local_video_transcript(video_path)
                 if transcript_result["success"]:
                     transcript_raw = transcript_result["srt_content"]
-                    transcript_source = "youtube"
-                    logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
+                    transcript_source = "local_video"
+                    logger.info(f"Extracted local video transcript: {len(transcript_raw)} characters")
+                    # Cache the transcript for future iterations
+                    cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
+                    logger.info(f"Cached transcript to: {cached_transcript_path}")
                 else:
-                    logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+                    logger.warning(f"Local video transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
             else:
-                logger.warning(f"No local video found and no YouTube URL provided for {speaker_name}")
+                # No local video found, try YouTube download if URL provided
+                if yt_url:
+                    logger.info(f"No local video found, trying YouTube: {yt_url}")
+                    transcript_result = extract_youtube_transcript(yt_url)
+                    if transcript_result["success"]:
+                        transcript_raw = transcript_result["srt_content"]
+                        transcript_source = "youtube"
+                        logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
+                        # Cache the transcript for future iterations
+                        cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
+                        logger.info(f"Cached transcript to: {cached_transcript_path}")
+                    else:
+                        logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+                else:
+                    logger.warning(f"No local video found and no YouTube URL provided for {speaker_name}")
         
         if not transcript_raw:
             if not video_path and not yt_url:
@@ -271,53 +374,74 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
         
         logger.info(f"Crew result length: {len(result_text)}")
         
-        # Try to parse as JSON (expected from final_assembly_task)
-        try:
-            # Handle markdown code block format: ```json\n{...}\n```
-            if result_text.strip().startswith('```json'):
-                # Extract JSON from markdown code block
-                json_start = result_text.find('{')
-                json_end = result_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    json_content = result_text[json_start:json_end]
-                    crew_output = json.loads(json_content)
-                    logger.info("Successfully parsed crew output as JSON from markdown block")
-                else:
-                    raise json.JSONDecodeError("Could not extract JSON from markdown", result_text, 0)
-            else:
-                # Clean result_text - remove code blocks if present
-                cleaned_text = result_text.strip()
-                if cleaned_text.startswith('```'):
-                    cleaned_text = cleaned_text[3:]  # Remove ```
-                if cleaned_text.endswith('```'):
-                    cleaned_text = cleaned_text[:-3]  # Remove trailing ```
-                cleaned_text = cleaned_text.strip()
-                
-                if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
-                    crew_output = json.loads(cleaned_text)
-                    logger.info("Successfully parsed crew output as JSON")
-                else:
-                    # If not JSON, wrap in a basic structure
-                    logger.warning("Crew output is not JSON, creating basic structure")
-                    crew_output = {
-                        "coda_updates": {
-                            "Webhook progress": f"Processed {speaker_name}: crew completed",
-                            "Webhook status": "Done"
-                        },
-                        "raw_output": result_text
-                    }
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse crew output as JSON: {e}")
+        # Debug: Log general format info (no raw content that might contain base64 data)
+        logger.debug(f"Crew output starts with: {result_text[:50] if result_text else 'empty'}...")
+        logger.debug(f"Crew output format: {'JSON markdown block' if result_text.strip().startswith('```json') else 'raw text'}")
+        
+        # Try to parse as JSON with iterative repair (json-repair + Haiku fallback)
+        crew_output = _parse_crew_output_with_repair(result_text, speaker_name)
+        
+        # Ensure crew_output is a dict (safety check)
+        if not isinstance(crew_output, dict):
+            logger.warning(f"Repair function returned {type(crew_output)}, expected dict. Creating fallback structure.")
             crew_output = {
                 "coda_updates": {
-                    "Webhook progress": f"Processed {speaker_name}: crew completed (parse warning)",
+                    "Webhook progress": f"Processed {speaker_name}: repair returned invalid type",
                     "Webhook status": "Done"
                 },
-                "raw_output": result_text
+                "raw_output": f"[Non-dict output: {type(crew_output).__name__}, length: {len(str(crew_output))}]"
             }
         
         # Extract Coda updates from crew output
         coda_updates = crew_output.get("coda_updates", {})
+        
+        # Python post-processing: Handle speaker validation, title casing, and conditional updates
+        processing_summary = crew_output.get("processing_summary", {})
+        speaker_validation = processing_summary.get("speaker_validation", {})
+        
+        if speaker_validation:
+            validation_result = speaker_validation.get("validation_result", "")
+            slide_speaker = speaker_validation.get("slide_speaker", "")
+            slide_affiliation = speaker_validation.get("slide_affiliation", "") 
+            slide_title = speaker_validation.get("slide_title", "")
+            
+            # Convert title to title case
+            if slide_title:
+                slide_title = slide_title.title()
+            
+            # Determine prefixes and updates based on validation result
+            validation_summary = ""
+            if validation_result == "major_mismatch":
+                # Major mismatch: Add warning banner to slides, prefix speaker with **, don't update fields
+                if "Slides" in coda_updates:
+                    coda_updates["Slides"] = "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]\n" + coda_updates["Slides"]
+                validation_summary = f"major_mismatch detected - slide speaker '{slide_speaker}' differs significantly from Coda data"
+                logger.warning(f"Major speaker mismatch detected: slide='{slide_speaker}' vs coda='{speaker_name}'")
+                
+            elif validation_result in ["exact_match", "minor_differences"]:
+                # Exact match or minor differences: Update fields with appropriate prefixes
+                prefix = "" if validation_result == "exact_match" else "* "
+                
+                # Update Speaker field if different from original
+                if slide_speaker and slide_speaker != speaker_name:
+                    coda_updates["Speaker"] = f"{prefix}{slide_speaker}"
+                
+                # Update Affiliation field if different from original
+                original_affiliation = crew_input.get("coda_affiliation", "")
+                if slide_affiliation and slide_affiliation != original_affiliation:
+                    coda_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
+                
+                # Update Title field if different from original (always with title case)
+                original_title = crew_input.get("coda_title", "")
+                if slide_title and slide_title != original_title:
+                    coda_updates["Title"] = f"{prefix}{slide_title}"
+                
+                validation_summary = f"{validation_result} - fields updated as needed"
+                logger.info(f"Speaker validation: {validation_result} - updated fields with prefix '{prefix}'")
+            
+            # Update webhook progress with validation details
+            if "Webhook progress" in coda_updates:
+                coda_updates["Webhook progress"] += f". Speaker validation: {validation_summary}"
         
         # Post-process transcript formatting: convert double newlines to single newlines
         if "Transcript" in coda_updates and coda_updates["Transcript"]:
@@ -362,50 +486,50 @@ async def prepare_talk_crew(function_data: dict, coda_ids: CodaIds) -> dict:
                 if len(value) > 10000:
                     logger.warning(f"Large content in '{key}': {len(value)} chars - may be truncated by Coda")
         
-        # Update Coda in separate batches to handle large content better
+        # Update Coda in 2 batches: main content + optional validation updates
         if coda_updates:
             total_successful = 0
             update_results = []
             
-            # Batch 1: Large content (Slides, SRT, Transcript)
-            large_content_updates = {}
-            for key in ["Slides", "SRT", "Transcript"]:
+            # Batch 1: Main content (Slides, SRT, Transcript, status fields - no Resources)
+            main_content_updates = {}
+            for key in ["Slides", "SRT", "Transcript", "Webhook progress", "Webhook status"]:
                 if key in coda_updates:
-                    large_content_updates[key] = coda_updates[key]
+                    main_content_updates[key] = coda_updates[key]
             
-            if large_content_updates:
-                logger.info(f"Updating large content columns: {list(large_content_updates.keys())}")
+            if main_content_updates:
+                logger.info(f"Updating main content columns: {list(main_content_updates.keys())}")
                 updates = [{
                     "row_id": coda_ids.row_id,
-                    "updates": large_content_updates
+                    "updates": main_content_updates
                 }]
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-                update_results.append(f"Large content: {result}")
+                update_results.append(f"Main content: {result}")
                 if "successful_updates" in result:
                     result_data = json.loads(result)
                     total_successful += result_data.get("successful_updates", 0)
                 else:
-                    total_successful += len(large_content_updates)  # Assume success if no error
+                    total_successful += len(main_content_updates)  # Assume success if no error
             
-            # Batch 2: Small content (Resources, status fields)
-            small_content_updates = {}
-            for key in ["Resources", "Webhook progress", "Webhook status"]:
+            # Batch 2: Optional validation updates (only if fields changed)
+            validation_updates = {}
+            for key in ["Speaker", "Affiliation", "Title"]:
                 if key in coda_updates:
-                    small_content_updates[key] = coda_updates[key]
+                    validation_updates[key] = coda_updates[key]
             
-            if small_content_updates:
-                logger.info(f"Updating small content columns: {list(small_content_updates.keys())}")
+            if validation_updates:
+                logger.info(f"Updating validation columns: {list(validation_updates.keys())}")
                 updates = [{
                     "row_id": coda_ids.row_id,
-                    "updates": small_content_updates
+                    "updates": validation_updates
                 }]
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-                update_results.append(f"Small content: {result}")
+                update_results.append(f"Validation: {result}")
                 if "successful_updates" in result:
                     result_data = json.loads(result)
                     total_successful += result_data.get("successful_updates", 0)
                 else:
-                    total_successful += len(small_content_updates)  # Assume success if no error
+                    total_successful += len(validation_updates)  # Assume success if no error
             
             logger.info(f"Updated Coda for {speaker_name} in {len(update_results)} batches: {update_results}")
             

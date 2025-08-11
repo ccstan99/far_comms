@@ -19,25 +19,20 @@ process_slides_task:
     - Title: "{coda_title}"
     
     CRITICAL SPEAKER VALIDATION:
-    Before processing slides, examine the FIRST SLIDE to validate speaker information against Coda data.
+    Before processing slides, examine the FIRST SLIDE to extract speaker information and compare against Coda data.
     
-    VALIDATION RULES:
-    1. Speaker name validation:
-       - Minor variations OK: Robert -> Bob, Tom -> Thomas, Dr. John -> John
-       - Major changes NOT OK: Adam Gleave -> Adam Kalai, Ben Bucknall -> Ben Cottier
-       - If acceptable variation: prefix updated name with "* "
-       - If major mismatch: prefix with "** " and add banner (see below)
+    EXTRACT FROM FIRST SLIDE:
+    - Speaker name as it appears on the slide
+    - Affiliation as it appears on the slide  
+    - Title as it appears on the slide
     
-    2. Affiliation validation:
-       - Update if different from Coda, prefix with "* "
+    ASSESSMENT GUIDELINES:
+    Compare what you found vs the Coda data and assess the degree of difference:
+    - "exact_match": Information is identical
+    - "minor_differences": Small variations (Robert/Bob, abbreviated titles, etc.)
+    - "major_mismatch": Completely different person/content (Adam Gleave vs Adam Kalai)
     
-    3. Title validation:
-       - Update if different from Coda, prefix with "* "
-    
-    4. Major mismatch handling:
-       - If there's a major difference suggesting wrong slides, DON'T update any fields
-       - Prefix speaker name with "** " 
-       - Add banner to first line of cleaned_slides: "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]"
+    DO NOT add prefixes or modify the extracted information - just report what you found.
     
     Your processing should:
     - PRESERVE ALL ORIGINAL SLIDE TEXT VERBATIM - do not summarize, paraphrase, or rewrite
@@ -64,16 +59,11 @@ process_slides_task:
         "slide_count": "Number of slides processed"
       },
       "speaker_validation": {
-        "slide_speaker": "Speaker name found on first slide",
-        "slide_affiliation": "Affiliation found on first slide", 
-        "slide_title": "Title found on first slide",
-        "validation_result": "valid|minor_differences|major_mismatch",
-        "updates_made": {
-          "speaker_updated": "Updated speaker name with prefix if changed",
-          "affiliation_updated": "Updated affiliation with prefix if changed",
-          "title_updated": "Updated title with prefix if changed"
-        },
-        "validation_notes": "Explanation of validation decisions and any issues"
+        "slide_speaker": "Exact speaker name as found on first slide",
+        "slide_affiliation": "Exact affiliation as found on first slide", 
+        "slide_title": "Exact title as found on first slide",
+        "validation_result": "exact_match|minor_differences|major_mismatch",
+        "validation_notes": "Brief explanation of assessment reasoning"
       },
       "resources_found": [
         {
@@ -152,17 +142,8 @@ final_assembly_task:
     - Generate processing summary for "Webhook progress" column
     - Set "Webhook status" to "Done"
     
-    CRITICAL SPEAKER VALIDATION HANDLING:
-    From the slide processing task "speaker_validation" section:
-    1. If validation_result is "valid" or "minor_differences", apply updates to Coda:
-       - If "speaker_updated" exists: update "Speaker" column with the prefixed value
-       - If "affiliation_updated" exists: update "Affiliation" column with the prefixed value  
-       - If "title_updated" exists: update "Title" column with the prefixed value
-    2. If validation_result is "major_mismatch", do NOT update speaker fields
-    3. Include validation details in "Webhook progress" for transparency
-    
-    IMPORTANT: For any skipped content, do NOT include those fields in coda_updates.
-    Only include fields for content that was actually processed (not skipped).
+    NOTE: Speaker validation and field updates will be handled by Python post-processing.
+    Just include the raw slides content and validation data - do not make decisions about field updates.
     
   expected_output: >
     {
@@ -170,10 +151,7 @@ final_assembly_task:
         "Slides": "Complete slides content with visual elements marked",
         "SRT": "Full SRT transcript with timestamps",
         "Transcript": "Clean formatted transcript paragraphs",
-        "Speaker": "Updated speaker name (only if validated and updated)",
-        "Affiliation": "Updated affiliation (only if validated and updated)",
-        "Title": "Updated title (only if validated and updated)",
-        "Webhook progress": "Processing completed successfully: X slides processed, Y words transcribed. Speaker validation: [status and details]",
+        "Webhook progress": "Processing completed successfully: X slides processed, Y words transcribed",
         "Webhook status": "Done"
       },
       "processing_summary": {

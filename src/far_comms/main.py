@@ -28,9 +28,9 @@ import logging
 from dotenv import load_dotenv
 from far_comms.utils.project_paths import get_project_root, get_docs_dir, get_output_dir
 
-# Configure logging
+# Configure logging - temporarily set to DEBUG for Haiku testing
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)

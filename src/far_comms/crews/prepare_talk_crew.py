@@ -11,9 +11,9 @@ class PrepareTalkCrew():
     tasks_config = 'config/prepare_talk/tasks.yaml'
     
     def __init__(self):
-        # Use Claude 4 Sonnet for systematic processing tasks
+        # TEMPORARY: Use Haiku for quick testing
         self.sonnet_llm = LLM(
-            model="anthropic/claude-sonnet-4-20250514",
+            model="anthropic/claude-3-haiku-20240307",
             max_retries=3
         )
         

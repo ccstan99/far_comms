@@ -115,15 +115,29 @@ def _analyze_pdf_visually(pdf_path: str, speaker_name: str = None) -> dict:
 1. QR codes: If you see any QR codes, try to read the URL they contain
 2. Visual elements: Describe any charts, diagrams, tables, or images with brief alt text
 3. Important text: Any key text that might be missed by OCR
-4. Image richness: Determine if this slide is visually interesting for social media
+4. Image richness: BE VERY SELECTIVE - only for slides with compelling visual data
+
+STRICT CRITERIA FOR "is_image_rich": Only mark as "true" if slide contains:
+✅ Complex workflow diagrams with arrows/boxes/connections (like process flows)
+✅ Data tables with numbers/results/metrics (not just text lists)  
+✅ Charts/graphs with data visualization or performance comparisons
+✅ Technical system diagrams with visual components
+✅ Comparison tables showing quantitative results
+
+❌ DO NOT mark as image-rich:
+❌ Title slides with just names/affiliations/logos
+❌ Bullet point lists (even with fancy formatting)
+❌ Text-heavy slides with minimal visuals
+❌ Simple layouts that are mostly text
+❌ Basic organizational info or contact details
 
 Format your response as JSON:
 {
   "qr_codes": [{"url": "detected_url", "location": "description of where on slide"}],
   "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief alt text"}],
   "key_text": ["any important text visible"],
-  "is_image_rich": "true|false - true if slide contains compelling charts, diagrams, visualizations, or interesting graphics suitable for social media",
-  "social_media_potential": "brief explanation of why this slide would/wouldn't work for social media"
+  "is_image_rich": "true|false - ONLY true for slides with quantitative data, complex diagrams, or rich visual content worth sharing on social media",
+  "social_media_potential": "brief explanation focusing on visual complexity and data presentation value"
 }"""
 
             try:
