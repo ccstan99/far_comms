@@ -100,13 +100,15 @@ final_assembly_task:
     - Set "Webhook status" to "Done"
     
     TRANSCRIPT ANALYSIS FORMATTING:
-    Convert the transcript analysis JSON output to readable markdown format:
+    Convert the transcript analysis JSON output to readable markdown format for Coda display:
+    - Use single newlines (\n) between sections, NOT double newlines (\n\n)
     - Core Thesis: Display as "## Core Thesis" section
     - Key Findings: Display as "## Key Findings" with bullet list
     - Talk Outline: Display as "## Talk Structure" with structured format
     - Technical Details: Display as "## Technical Details" (if applicable)
     - Surprising Claims: Display as "## Key Insights" with bullet list
     - Impactful Quotes: Display as "## Notable Quotes" with quote formatting
+    - IMPORTANT: Separate sections with single \n, not \n\n for proper Coda formatting
     
   expected_output: >
     {
