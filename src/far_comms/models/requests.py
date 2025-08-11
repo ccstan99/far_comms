@@ -157,9 +157,8 @@ class ResearchAnalysisResponse(BaseModel):
     )
     files_saved: dict | None = Field(
         None,
-        description="Information about saved files (JSON and Markdown)",
+        description="Information about saved Markdown file (primary format for human review)",
         example={
-            "json_path": "output/APE_Attempt_to_Persuade_Eval.json",
             "markdown_path": "output/APE_Attempt_to_Persuade_Eval.md", 
             "filename": "APE_Attempt_to_Persuade_Eval"
         }

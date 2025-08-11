@@ -33,7 +33,7 @@ def _sanitize_filename(title: str, max_length: int = 100) -> str:
     return sanitized or "untitled_paper"
 
 def _save_analysis_to_files(analysis: ResearchAnalysisOutput, pdf_path: str, paper_title: str = None, authors: str = None) -> dict:
-    """Save analysis results to JSON and Markdown files"""
+    """Save analysis results to Markdown file (primary format for human review)"""
     try:
         # Create outputs directory
         from far_comms.utils.project_paths import get_output_dir
@@ -45,33 +45,16 @@ def _save_analysis_to_files(analysis: ResearchAnalysisOutput, pdf_path: str, pap
         sanitized_title = _sanitize_filename(title_for_filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Handle duplicate filenames
+        # Handle duplicate filenames (check markdown first as primary format)
         base_filename = sanitized_title
         counter = 1
-        while (output_dir / f"{sanitized_title}.json").exists():
+        while (output_dir / f"{sanitized_title}.md").exists():
             sanitized_title = f"{base_filename}_{counter}"
             counter += 1
         
-        json_path = output_dir / f"{sanitized_title}.json"
         md_path = output_dir / f"{sanitized_title}.md"
         
-        # Prepare data for JSON
-        json_data = {
-            "metadata": {
-                "timestamp": timestamp,
-                "pdf_path": pdf_path,
-                "paper_title": paper_title,
-                "authors": authors,
-                "analysis_date": datetime.now().isoformat()
-            },
-            "analysis": analysis.model_dump()
-        }
-        
-        # Save JSON file
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(json_data, f, indent=2, ensure_ascii=False)
-        
-        # Save Markdown file
+        # Save Markdown file (primary format for human review)
         md_content = f"""# ML Research Paper Analysis
         
 ## Metadata
@@ -145,10 +128,9 @@ def _save_analysis_to_files(analysis: ResearchAnalysisOutput, pdf_path: str, pap
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(md_content)
         
-        logger.info(f"Analysis saved to {json_path} and {md_path}")
+        logger.info(f"Analysis saved to {md_path}")
         
         return {
-            "json_path": str(json_path),
             "markdown_path": str(md_path),
             "filename": sanitized_title
         }
@@ -220,7 +202,7 @@ async def run_analyze_research(function_data: dict, coda_ids=None) -> dict:
         # Add file save information
         if "error" not in file_info:
             response["files_saved"] = file_info
-            response["message"] += f" - Results saved to {file_info['filename']}.json and .md"
+            response["message"] += f" - Results saved to {file_info['filename']}.md"
         else:
             logger.warning(f"File saving failed: {file_info['error']}")
         

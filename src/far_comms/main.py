@@ -222,8 +222,8 @@ async def promote_talk_endpoint(
     "/analyze_research",
     response_model=ResearchAnalysisResponse,
     summary="Analyze ML Research Paper",
-    description="Analyze an ML research paper with PhD-level AI safety expertise using Claude 4.1 Opus. Accepts local file paths or URLs.",
-    response_description="Detailed technical analysis including safety implications, significance rating, and academic context",
+    description="Analyze an ML research paper with PhD-level AI safety expertise using Claude 4.1 Opus. Saves results as Markdown file for human review. Accepts local file paths or URLs.",
+    response_description="Detailed technical analysis saved as Markdown file, optimized for human review and subsequent LLM processing",
     tags=["Research Analysis"]
 )
 async def analyze_research_endpoint(research_request: ResearchRequest):
@@ -244,6 +244,7 @@ async def analyze_research_endpoint(research_request: ResearchRequest):
     
     **Returns:**
     Structured analysis with PhD-level technical insights focused on ML research and AI safety.
+    Results are saved as Markdown files optimized for human review and subsequent LLM processing.
     """
     try:
         # Convert to function_data format expected by handler
