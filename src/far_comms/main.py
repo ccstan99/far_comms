@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import (
-    FunctionName, TalkRequest, CodaIds
+    FunctionName, TalkRequest, ResearchRequest, ResearchAnalysisResponse, CodaIds
 )
 from far_comms.handlers.promote_talk import (
     run_promote_talk, 
@@ -21,6 +21,11 @@ from far_comms.handlers.analyze_talk import (
     get_analyze_talk_input,
     display_analyze_talk_input
 )
+from far_comms.handlers.analyze_research_handler import (
+    run_analyze_research,
+    get_analyze_research_input, 
+    display_analyze_research_input
+)
 import uvicorn
 import os
 import json
@@ -28,11 +33,16 @@ import logging
 from dotenv import load_dotenv
 from far_comms.utils.project_paths import get_project_root, get_docs_dir, get_output_dir
 
-# Configure logging - temporarily set to DEBUG for Haiku testing
+# Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Suppress verbose logging from specific libraries
+logging.getLogger('anthropic._base_client').setLevel(logging.WARNING)
+logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
@@ -205,6 +215,51 @@ async def promote_talk_endpoint(
         return {"error": f"Failed to process talk request: {e}"}
 
 
+@app.post(
+    "/analyze_research",
+    response_model=ResearchAnalysisResponse,
+    summary="Analyze ML Research Paper",
+    description="Analyze an ML research paper with PhD-level AI safety expertise using Claude 4.1 Opus. Accepts local file paths or URLs.",
+    response_description="Detailed technical analysis including safety implications, significance rating, and academic context",
+    tags=["Research Analysis"]
+)
+async def analyze_research_endpoint(research_request: ResearchRequest):
+    """
+    Analyze ML research paper with PhD-level AI safety technical expertise.
+    
+    This endpoint processes ML research papers and provides comprehensive analysis including:
+    - Core technical contribution and methodology
+    - AI safety implications and risk assessment  
+    - Research quality and significance rating
+    - Practical applications and implementation challenges
+    - Academic context and citation-worthy claims
+    
+    **Parameters:**
+    - **pdf_path**: Local file path or URL to PDF (e.g., 'data/research/paper.pdf' or ArXiv URL)
+    - **paper_title**: Optional paper title (extracted from PDF if not provided)
+    - **authors**: Optional author list (extracted from PDF if not provided)
+    
+    **Returns:**
+    Structured analysis with PhD-level technical insights focused on ML research and AI safety.
+    """
+    try:
+        # Convert to function_data format expected by handler
+        function_data = {
+            "pdf_path": research_request.pdf_path,
+            "paper_title": research_request.paper_title,
+            "authors": research_request.authors
+        }
+        
+        # Run analysis synchronously and return results
+        result = await run_analyze_research(function_data, None)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_research endpoint: {e}", exc_info=True)
+        return {"error": f"Failed to process research analysis request: {e}"}
+
+
 async def get_input(function_name: FunctionName, this_row: str, doc_id: str) -> tuple[CodaIds, any]:
     """Get input data for a specific function by fetching from Coda and parsing"""
     logger.info(f"Getting input for {function_name.value} - this_row: {this_row}, doc_id: {doc_id}")
@@ -253,6 +308,11 @@ FUNCTION_REGISTRY = {
         "runner": run_analyze_talk,
         "get_input": get_analyze_talk_input,
         "display_input": display_analyze_talk_input
+    },
+    FunctionName.PROMOTE_RESEARCH: {
+        "runner": run_analyze_research,
+        "get_input": get_analyze_research_input,
+        "display_input": display_analyze_research_input
     }
     # Add new functions here as they're implemented
 }
