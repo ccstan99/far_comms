@@ -796,17 +796,25 @@ def _extract_sections_from_content(content: str) -> list[dict]:
                 header_match = f"## {clean_title}"
                 level = 2
         
-        # If we found a header, save previous section and start new one
+        # If we found a header, decide whether to start new section or add to current
         if header_match:
-            if current_section:
-                sections.append(current_section)
-            
-            current_section = {
-                'title': header_match,
-                'content': '',
-                'level': level,
-                'raw_title': line_stripped
-            }
+            # Only start new section for H1 (#) and H2 (##) headers
+            # H3 (###) and below get included in the current H2 section
+            if level <= 2:
+                # Save previous section and start new one
+                if current_section:
+                    sections.append(current_section)
+                
+                current_section = {
+                    'title': header_match,
+                    'content': '',
+                    'level': level,
+                    'raw_title': line_stripped
+                }
+            else:
+                # H3+ headers get added to current section content
+                if current_section:
+                    current_section['content'] += line + '\n'
         else:
             # Add content to current section
             if current_section:
@@ -933,10 +941,19 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
                 title_section_found = True
                 continue
             
-            # Skip very short sections or those that look like artifacts
-            if len(section['content'].strip()) < 50:
-                logger.info(f"Skipping short section: {section['title']}")
+            # Handle section length constraints
+            content_length = len(section['content'].strip())
+            
+            # Skip truly empty sections (very short with no meaningful content)
+            if content_length < 10:
+                logger.info(f"Skipping empty section: {section['title']}")
                 continue
+            
+            # For very long sections (>8000 chars), we may need to split by H3 later
+            # but for now, include them as-is and let LLM handle chunking
+            if content_length > 8000:
+                logger.info(f"Large section detected: {section['title']} ({content_length} chars)")
+                # Could add H3 subdivision logic here in the future
                 
             main_sections.append(section)
         
@@ -1003,27 +1020,34 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
             logger.info(f"Processing section {i+1}/{len(main_sections)}: {section['title']}")
             
             # Create section-specific prompt
-            section_prompt = f"""Clean and format this section of an academic paper. 
+            section_prompt = f"""CRITICAL: You are cleaning text formatting ONLY. Do NOT add, expand, or paraphrase content.
 
 SECTION: {section['title']}
 
-REQUIREMENTS:
+STRICT REQUIREMENTS:
 1. Use the exact header: {section['title']}
-2. Clean the content: fix formatting, ensure proper paragraphs
-3. Use figure placeholders in format: [Figure #: brief description] where figures should appear
-4. Maintain academic tone and technical accuracy
-5. Remove any duplicate headers or metadata
-6. If this is the Abstract section, provide the complete abstract text
+2. PRESERVE original text exactly - only fix formatting issues (line breaks, spacing, etc.)
+3. DO NOT add any figures unless explicitly mentioned in the original text
+4. DO NOT paraphrase, expand, or rewrite sentences
+5. DO NOT add new content or explanations
+6. Remove duplicate headers or metadata only
+7. Keep original wording, citations, and structure
+
+FORMATTING FIXES ONLY:
+- Fix paragraph breaks
+- Remove excessive spacing
+- Clean up bullet points if needed
+- Preserve all original content verbatim
 
 CONTENT TO CLEAN:
 {section['content'][:8000]}
 
-Return ONLY the cleaned section content with the header."""
+Return ONLY the cleaned section with original content preserved exactly."""
 
             try:
                 response = client.messages.create(
-                    model="claude-3-5-haiku-20241022",  # Use Haiku for individual sections
-                    max_tokens=3000,
+                    model="claude-sonnet-4-20250514",  # Use Sonnet for better instruction following
+                    max_tokens=4000,
                     messages=[{"role": "user", "content": section_prompt}]
                 )
                 
