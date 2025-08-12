@@ -99,12 +99,29 @@ import os
 import sys
 import re
 import base64
+import shutil
 from pathlib import Path
 from datetime import datetime
 from far_comms.models.requests import ResearchRequest, ResearchAnalysisOutput
 from far_comms.utils.content_preprocessor import extract_pdf_content
 from anthropic import Anthropic
 import fitz  # PyMuPDF
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, skip
+    pass
+
+# Try importing PyMuPDF4LLM for better markdown extraction
+try:
+    import pymupdf4llm
+    PYMUPDF4LLM_AVAILABLE = True
+except ImportError:
+    PYMUPDF4LLM_AVAILABLE = False
+    logger.warning("PyMuPDF4LLM not available, falling back to standard extraction")
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +340,7 @@ def _extract_figures_from_pdf(pdf_path: str, paper_title: str, max_page: int = N
 def _extract_pdf_metadata_and_content(pdf_path: str) -> dict:
     """
     Extract comprehensive PDF metadata, content, and structure using PyMuPDF.
-    Returns dict with metadata, raw text, and visual content info.
+    Returns dict with metadata, raw text, structured content, and visual content info.
     """
     doc = fitz.open(pdf_path)
     
@@ -347,11 +364,27 @@ def _extract_pdf_metadata_and_content(pdf_path: str) -> dict:
         'is_encrypted': doc.is_encrypted,
     }
     
-    # Extract raw text content
+    # Extract structured content using PyMuPDF's dict format
+    structured_content = []
+    for page_num in range(doc.page_count):
+        page = doc[page_num]
+        try:
+            page_dict = page.get_text('dict')
+            structured_content.append({
+                'page': page_num + 1,
+                'blocks': page_dict.get('blocks', []),
+                'width': page_dict.get('width', 0),
+                'height': page_dict.get('height', 0)
+            })
+        except Exception as e:
+            logger.warning(f"Failed to extract structured content from page {page_num + 1}: {e}")
+            structured_content.append({'page': page_num + 1, 'blocks': [], 'error': str(e)})
+    
+    # Extract raw text content in natural reading order (top-left to bottom-right)
     raw_text_pages = []
     for page_num in range(doc.page_count):
         page = doc[page_num]
-        page_text = page.get_text()
+        page_text = page.get_text(sort=True)  # Sort text from top-left to bottom-right
         raw_text_pages.append(page_text)
     
     raw_text = '\n\n'.join(raw_text_pages)
@@ -423,6 +456,7 @@ def _extract_pdf_metadata_and_content(pdf_path: str) -> dict:
         'pdf_metadata': pdf_metadata,
         'document_structure': document_structure,
         'visual_content': visual_content,
+        'structured_content': structured_content,
         'extracted_from_first_page': extracted_info,
         'raw_text': raw_text,
         'raw_text_length': len(raw_text)
@@ -549,23 +583,185 @@ def _format_paper_header(extracted_info: dict, pdf_metadata: dict) -> str:
     
     authors_clean = ', '.join(cleaned_parts)
     
-    # Get affiliations
+    # Get affiliations and clean up numbers
     affiliations = extracted_info.get('affiliations_from_text', '')
+    if affiliations:
+        # Remove superscript numbers from affiliations
+        affiliations_clean = re.sub(r'\d+', '', affiliations).strip()
+        # Clean up extra spaces and commas
+        affiliations_clean = re.sub(r'\s*,\s*', ', ', affiliations_clean)
+        affiliations_clean = re.sub(r',\s*,', ',', affiliations_clean)  # Remove double commas
+        affiliations_clean = affiliations_clean.strip(', ')  # Remove leading/trailing commas
+    else:
+        affiliations_clean = ''
     
     # Format header
-    header = f"# TITLE: {title}\n"
-    header += f"### AUTHORS: {authors_clean}\n"
+    header = f"# {title}\n\n"
+    header += f"**Authors:** {authors_clean}\n\n"
     
-    if affiliations:
-        header += f"### AFFILIATIONS: {affiliations}\n"
+    if affiliations_clean:
+        header += f"**Affiliations:** {affiliations_clean}\n\n"
     
-    header += "\n---\n\n"
+    header += "---\n\n"
     
     return header
 
-def _create_cleaned_markdown(raw_text: str, title: str, figure_data: dict = None, pdf_data: dict = None) -> tuple[str, dict]:
+def _extract_with_pymupdf4llm(pdf_path: str, save_raw: bool = False, output_dir: Path = None) -> str:
+    """
+    Extract markdown using PyMuPDF4LLM for better structure and formatting.
+    """
+    if not PYMUPDF4LLM_AVAILABLE:
+        raise ImportError("PyMuPDF4LLM not available")
+    
+    logger.info("Using PyMuPDF4LLM for markdown extraction")
+    md_text = pymupdf4llm.to_markdown(pdf_path)
+    
+    # Save raw PyMuPDF4LLM output if requested
+    if save_raw and output_dir:
+        raw_path = output_dir / "pdf.md"
+        with open(raw_path, 'w', encoding='utf-8') as f:
+            f.write(md_text)
+        logger.info(f"Saved raw PyMuPDF4LLM output to {raw_path}")
+    
+    # Simple post-processing to fix header format
+    lines = md_text.split('\n')
+    processed_lines = []
+    
+    for line in lines:
+        # Convert bold section numbers to proper headers
+        if re.match(r'^\*\*(\d+\.)\s+([A-Z][a-zA-Z\s]+)\*\*$', line):
+            match = re.match(r'^\*\*(\d+\.)\s+([A-Z][a-zA-Z\s]+)\*\*$', line)
+            section_num = match.group(1)
+            section_name = match.group(2)
+            processed_lines.append(f'## {section_num} {section_name}')
+        # Convert abstract to proper header if it appears
+        elif line.strip().lower().startswith('**persuasion is a powerful capability'):
+            processed_lines.append('## Abstract')
+            processed_lines.append('')
+            processed_lines.append(line.replace('**', ''))
+        else:
+            processed_lines.append(line)
+    
+    return '\n'.join(processed_lines)
+
+def _clean_text_with_haiku(text_content: str, title: str) -> str:
+    """
+    Use Claude Haiku to clean up text structure, identify sections, and format properly.
+    Falls back to regex-based cleanup if API key unavailable.
+    """
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.info("No Anthropic API key found, using regex-based text cleanup")
+            return _regex_based_cleanup(text_content, title)
+        
+        from anthropic import Anthropic
+        client = Anthropic(api_key=api_key)
+        
+        # Split into smaller chunks if text is too long
+        max_chunk_size = 15000  # chars
+        if len(text_content) > max_chunk_size:
+            # Process in chunks, focusing on the beginning where structure matters most
+            chunk = text_content[:max_chunk_size]
+        else:
+            chunk = text_content
+            
+        cleanup_prompt = f"""You are a research paper formatter. Clean this text into proper markdown format.
+
+RULES:
+1. ONLY return the cleaned markdown text - no comments, explanations, or meta-text
+2. Label the abstract section as "## Abstract" 
+3. Convert numbered sections to h2: "## 1. Introduction", "## 2. Related Work"
+4. Fix missing spaces: "targetedpolitical" → "targeted political"
+5. Remove duplicate title/author info in the text body
+6. Clean paragraph breaks
+
+Paper: {title}
+
+Text to format:
+{chunk}
+
+[Return only the formatted markdown - no other text]"""
+        
+        response = client.messages.create(
+            model="claude-3-5-haiku-20241022",  # Use Haiku as suggested
+            max_tokens=4000,
+            messages=[{
+                "role": "user",
+                "content": cleanup_prompt
+            }]
+        )
+        
+        cleaned_chunk = response.content[0].text
+        
+        # If we processed only a chunk, combine with the rest
+        if len(text_content) > max_chunk_size:
+            # Use the cleaned beginning + remaining text
+            remaining_text = text_content[max_chunk_size:]
+            return cleaned_chunk + "\n\n" + remaining_text
+        else:
+            return cleaned_chunk
+            
+    except Exception as e:
+        logger.warning(f"LLM text cleanup failed: {e}, using regex fallback")
+        return _regex_based_cleanup(text_content, title)
+
+def _extract_structured_text_from_blocks(structured_content: list) -> str:
+    """
+    Extract clean text from PyMuPDF structured blocks, preserving better formatting.
+    """
+    text_lines = []
+    
+    for page_data in structured_content:
+        if 'error' in page_data:
+            continue
+            
+        page_num = page_data['page']
+        blocks = page_data.get('blocks', [])
+        
+        for block in blocks:
+            if block.get('type') == 0:  # Text block
+                lines = block.get('lines', [])
+                for line in lines:
+                    spans = line.get('spans', [])
+                    line_text = ''
+                    for span in spans:
+                        text = span.get('text', '').strip()
+                        if text:
+                            # Check if this might be a header based on font size/flags
+                            flags = span.get('flags', 0)
+                            size = span.get('size', 0)
+                            
+                            # Bold text (flags & 16) and large text might be headers
+                            if (flags & 16) and size > 12:  # Bold and large
+                                # Check if it looks like a section header
+                                if re.match(r'^\d+\.?\s+[A-Z][a-zA-Z\s]+$', text) or text.isupper():
+                                    text = f'\n## {text}\n'
+                            
+                            line_text += text + ' '
+                    
+                    if line_text.strip():
+                        text_lines.append(line_text.strip())
+            
+            # Add some spacing between blocks
+            if text_lines and not text_lines[-1].endswith('\n'):
+                text_lines.append('')
+    
+    return '\n'.join(text_lines)
+
+def _regex_based_cleanup(text_content: str, title: str) -> str:
+    """
+    Minimal regex-based fallback for text cleanup when Claude Haiku is not available.
+    """
+    # Just do basic space fixing - let the markdown processing handle structure
+    text_content = re.sub(r'([a-z])([A-Z])', r'\1 \2', text_content)  # Fix concatenated words
+    text_content = re.sub(r'([a-z])\.([A-Z])', r'\1. \2', text_content)  # Fix sentence spacing
+    return text_content
+
+def _create_cleaned_markdown(raw_text: str, title: str, figure_data: dict = None, pdf_data: dict = None, pdf_path: str = None, output_dir: Path = None) -> tuple[str, dict]:
     """
     Create cleaned markdown version filtering out references/appendix and inserting figures.
+    Uses Claude Haiku for text structure cleanup, then applies figure insertion.
     Returns (markdown_content, filter_stats)
     """
     lines = raw_text.split('\n')
@@ -599,18 +795,121 @@ def _create_cleaned_markdown(raw_text: str, title: str, figure_data: dict = None
     # Get main content
     main_lines = lines[:end_idx]
     
-    # Track current page number roughly for figure insertion
-    current_page = 1
-    lines_per_page = len(main_lines) / 21 if main_lines else 50  # Estimate based on total pages
+    # Filter out duplicate title/author information from the beginning
+    filtered_lines = []
+    skip_initial_metadata = True
     
-    # Convert to Markdown with structure and insert figures
+    # Get title and authors to look for duplicates
+    extracted_title = pdf_data.get('extracted_from_first_page', {}).get('title_from_text', '') if pdf_data else ''
+    extracted_authors = pdf_data.get('extracted_from_first_page', {}).get('authors_from_text', '') if pdf_data else ''
+    pdf_title = pdf_data.get('pdf_metadata', {}).get('title', '') if pdf_data else ''
+    
+    # Create patterns to identify duplicate content
+    title_words = []
+    if extracted_title:
+        title_words.extend(extracted_title.lower().split()[:5])  # First 5 words
+    if pdf_title:
+        title_words.extend(pdf_title.lower().split()[:5])
+    
+    author_names = []
+    if extracted_authors:
+        # Extract individual names (split by comma, remove numbers)
+        names = [re.sub(r'\d+', '', name).strip() for name in extracted_authors.split(',')]
+        author_names.extend([name.lower() for name in names if len(name) > 2])
+    
+    for i, line in enumerate(main_lines):
+        line_stripped = line.strip()
+        
+        if skip_initial_metadata and i < 50:  # Only check first 50 lines
+            # Skip empty lines
+            if len(line_stripped) == 0:
+                continue
+                
+            # Skip lines that contain title words (partial match)
+            line_lower = line_stripped.lower()
+            if title_words and any(word in line_lower and len(word) > 3 for word in title_words):
+                logger.debug(f"Skipping potential duplicate title: {line_stripped[:50]}...")
+                continue
+                
+            # Skip lines that contain author names
+            if author_names and any(name in line_lower for name in author_names):
+                logger.debug(f"Skipping potential duplicate author: {line_stripped[:50]}...")
+                continue
+                
+            # Skip arXiv identifiers and affiliations
+            if (line_stripped.startswith('arXiv:') or 
+                re.match(r'^\d+[A-Za-z,\s]+(University|Institute|AI|MIT|Vector)', line_stripped) or
+                re.match(r'^\d+FAR\.AI', line_stripped)):
+                logger.debug(f"Skipping metadata: {line_stripped[:50]}...")
+                continue
+            
+            # Once we hit substantial content that's not metadata, stop skipping
+            elif (len(line_stripped) > 50 and 
+                  not any(word in line_lower for word in ['university', 'institute', 'arxiv']) and
+                  not re.match(r'^\d+[A-Za-z]', line_stripped)):
+                skip_initial_metadata = False
+                filtered_lines.append(line)
+        else:
+            filtered_lines.append(line)
+    
+    # Track current page number roughly for figure insertion  
+    current_page = 1
+    lines_per_page = len(filtered_lines) / 21 if filtered_lines else 50
+    
+    # Try PyMuPDF4LLM first for best results, then fall back to other methods
+    try:
+        if PYMUPDF4LLM_AVAILABLE and pdf_path:
+            logger.info("Using PyMuPDF4LLM for extraction")
+            cleaned_text = _extract_with_pymupdf4llm(pdf_path, save_raw=True, output_dir=output_dir)
+            # Filter out references section
+            lines = cleaned_text.split('\n')
+            end_idx = len(lines)
+            for i, line in enumerate(lines):
+                if re.search(r'references?|bibliography', line.lower().strip()):
+                    end_idx = i
+                    break
+            cleaned_text = '\n'.join(lines[:end_idx])
+        else:
+            raise ImportError("PyMuPDF4LLM not available or no PDF path")
+    except Exception as e:
+        logger.info(f"PyMuPDF4LLM failed ({e}), falling back to structured extraction")
+        
+        # Try using structured content extraction
+        if pdf_data and 'structured_content' in pdf_data:
+            try:
+                structured_text = _extract_structured_text_from_blocks(pdf_data['structured_content'])
+                # Filter structured text the same way
+                structured_lines = structured_text.split('\n')
+                # Apply same filtering logic
+                end_idx = len(structured_lines)
+                for i, line in enumerate(structured_lines):
+                    line_lower = line.lower().strip()
+                    if line_lower in ['references', 'bibliography', 'appendix']:
+                        end_idx = i
+                        break
+                
+                main_content = '\n'.join(structured_lines[:end_idx])
+                logger.info(f"Using structured content extraction: {len(main_content)} chars")
+            except Exception as e2:
+                logger.warning(f"Structured extraction failed: {e2}, using raw text")
+                main_content = '\n'.join(filtered_lines)
+        else:
+            main_content = '\n'.join(filtered_lines)
+        
+        # Use Claude Haiku (or regex fallback) to clean up text structure
+        cleaned_text = _clean_text_with_haiku(main_content, title)
+    
+    # Then process for figures and final formatting (fallback if Haiku didn't run)
+    cleaned_lines = cleaned_text.split('\n')
+    
+    # Track current page number roughly for figure insertion  
+    current_page = 1
+    lines_per_page = len(cleaned_lines) / 21 if cleaned_lines else 50
+    
+    # Convert to final Markdown with figure insertion (minimal processing if LLM did the work)
     md_content = []
     
-    for line_idx, line in enumerate(main_lines):
-        line = line.strip()
-        if not line:
-            continue
-        
+    for line_idx, line in enumerate(cleaned_lines):
         # Estimate current page for figure insertion
         estimated_page = int(line_idx / lines_per_page) + 1
         
@@ -620,28 +919,8 @@ def _create_cleaned_markdown(raw_text: str, title: str, figure_data: dict = None
                 md_content.append(fig_md)
             current_page = estimated_page
         
-        # Detect section headers
-        is_header = False
-        
-        # Check for numbered sections like '1. Introduction', '2.1 Background'
-        if re.match(r'^\d+\.?\s+[A-Z][a-zA-Z\s]+$', line):
-            level = line.count('.') + 1
-            header_prefix = '#' * min(level + 1, 4)
-            md_content.append(f'\n{header_prefix} {line}\n')
-        # Check for all-caps headers
-        elif line.isupper() and len(line.split()) <= 5:
-            md_content.append(f'\n## {line.title()}\n')
-        # Check for title case headers that are short
-        elif (line.istitle() and len(line.split()) <= 8 and 
-              not any(word in line.lower() for word in ['figure', 'table', 'algorithm', 'equation'])):
-            md_content.append(f'\n### {line}\n')
-        else:
-            # Regular content - check if it's a figure caption
-            if line.startswith('Figure ') or line.startswith('Table ') or line.startswith('Algorithm '):
-                # Skip original figure captions since we're inserting actual figures
-                continue
-            else:
-                md_content.append(line + ' ')
+        # Add the line (LLM should have cleaned structure already, or we do minimal processing)
+        md_content.append(line)
     
     # Insert any remaining figures at the end
     for page_num, fig_markdowns in figure_markdown.items():
@@ -813,6 +1092,11 @@ def _save_research_outputs(pdf_path: str, paper_title: str, pdf_data: dict, clea
             'pdf_metadata': pdf_data['pdf_metadata'],
             'document_structure': pdf_data['document_structure'],
             'visual_content': pdf_data['visual_content'],
+            'structured_content_stats': {
+                'pages_with_blocks': len([p for p in pdf_data.get('structured_content', []) if 'blocks' in p]),
+                'total_blocks': sum(len(p.get('blocks', [])) for p in pdf_data.get('structured_content', [])),
+                'extraction_method': 'pymupdf_dict'
+            },
             'extracted_from_first_page': pdf_data['extracted_from_first_page'],
             'figure_extraction': figures_result or {'success': False, 'error': 'Not attempted'},
             'processing_stats': {
@@ -822,6 +1106,7 @@ def _save_research_outputs(pdf_path: str, paper_title: str, pdf_data: dict, clea
             }
         }
         
+        # Save PDF metadata and processing stats as pdf.json
         metadata_path = paper_output_dir / "pdf.json"
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2)
@@ -867,12 +1152,13 @@ def analyze_research_paper(pdf_path: str, paper_title: str = None, authors: str 
     Comprehensive ML research paper analysis with figure extraction and structured output.
     
     PROCESSING PIPELINE:
-    1. **PDF Extraction**: PyMuPDF extracts raw text, metadata, and visual content analysis
-    2. **Figure Extraction**: Saves all images from pages before references section
-    3. **Content Processing**: Creates cleaned markdown with formatted headers and embedded figures
-    4. **Distillation**: Generates bullet-point summary preserving authors' terminology  
-    5. **File Organization**: Saves 5 outputs in structured directory format
-    6. **Claude Analysis**: PhD-level AI safety technical analysis using Claude 4.1 Opus
+    1. **Directory Cleanup**: Removes existing output directory for fresh start
+    2. **PDF Extraction**: PyMuPDF extracts raw text, metadata, and visual content analysis
+    3. **Figure Extraction**: Saves all images from pages before references section
+    4. **Content Processing**: Creates cleaned markdown with formatted headers and embedded figures
+    5. **Distillation**: Generates bullet-point summary preserving authors' terminology  
+    6. **File Organization**: Saves 5 outputs in structured directory format
+    7. **Claude Analysis**: PhD-level AI safety technical analysis using Claude 4.1 Opus
     
     OUTPUT STRUCTURE:
     Creates directory: output/research/{paper_title}/
@@ -913,6 +1199,25 @@ def analyze_research_paper(pdf_path: str, paper_title: str = None, authors: str 
         paper_title = (pdf_data['pdf_metadata']['title'] or 
                       pdf_data['extracted_from_first_page']['title_from_text'] or 
                       Path(pdf_path).stem)
+                      
+    # Clean up existing output directory for fresh start
+    from far_comms.utils.project_paths import get_output_dir
+    
+    def sanitize_dirname(title: str) -> str:
+        sanitized = re.sub(r'[<>:"/\\|?*]', '_', title)
+        sanitized = re.sub(r'[^\w\s\-_\.]', '', sanitized)
+        sanitized = re.sub(r'\s+', '_', sanitized)
+        return sanitized.strip('_').strip('.')[:100]
+    
+    sanitized_title = sanitize_dirname(paper_title)
+    output_dir = get_output_dir() / "research" / sanitized_title
+    
+    if output_dir.exists():
+        logger.info(f"Removing existing output directory: {output_dir}")
+        shutil.rmtree(output_dir)
+    
+    logger.info(f"Creating fresh output directory: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Determine authors from metadata or extraction  
     if not authors:
@@ -941,7 +1246,7 @@ def analyze_research_paper(pdf_path: str, paper_title: str = None, authors: str 
     
     # STEP 3: Create cleaned markdown (filters out references/appendix) with figures and header
     logger.info("Creating cleaned markdown version with figures and header...")
-    cleaned_md, filter_stats = _create_cleaned_markdown(pdf_data['raw_text'], paper_title, figures_result, pdf_data)
+    cleaned_md, filter_stats = _create_cleaned_markdown(pdf_data['raw_text'], paper_title, figures_result, pdf_data, pdf_path, output_dir)
     logger.info(f"Filtered content: {filter_stats['retention_percentage']:.1f}% retained ({filter_stats['removed_lines']} lines removed)")
     if filter_stats.get('figures_inserted', 0) > 0:
         logger.info(f"Inserted {filter_stats['figures_inserted']} figures into cleaned markdown")
