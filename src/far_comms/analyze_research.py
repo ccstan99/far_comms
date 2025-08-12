@@ -836,13 +836,63 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
         pdf_txt = pdf_txt_path.read_text(encoding='utf-8') if pdf_txt_path.exists() else ""
         pdf_json = json.loads(pdf_json_path.read_text(encoding='utf-8')) if pdf_json_path.exists() else {}
         
-        # Get metadata from pdf.json
-        title = (pdf_json.get('extracted_from_first_page', {}).get('title_from_text') or 
-                pdf_json.get('pdf_metadata', {}).get('title') or 
-                'Unknown Title')
+        # Extract title, authors, affiliations from PyMuPDF4LLM output (much better quality)
+        title = 'Unknown Title'
+        authors_text = ''
+        affiliations_text = ''
         
-        authors_text = pdf_json.get('extracted_from_first_page', {}).get('authors_from_text', '')
-        affiliations_text = pdf_json.get('extracted_from_first_page', {}).get('affiliations_from_text', '')
+        if pdf_md:
+            # Extract title from first line (usually formatted as # Title)
+            lines = pdf_md.split('\n')
+            for line in lines[:10]:  # Check first 10 lines
+                line_stripped = line.strip()
+                if line_stripped.startswith('#') and len(line_stripped) > 5:
+                    # Clean title - remove markdown and bold formatting
+                    title_clean = re.sub(r'^#+\s*', '', line_stripped)
+                    title_clean = re.sub(r'\*\*', '', title_clean)  # Remove bold
+                    title_clean = title_clean.strip()
+                    if len(title_clean) > 10:  # Make sure it's a real title
+                        title = title_clean
+                        break
+            
+            # Extract authors (look for author names in italics/bold after title)
+            in_author_section = False
+            author_lines = []
+            for line in lines[:20]:  # Check first 20 lines
+                line_stripped = line.strip()
+                # Look for author patterns
+                if ('_**' in line_stripped or '**' in line_stripped) and not line_stripped.startswith('#'):
+                    # This looks like author formatting
+                    author_lines.append(line_stripped)
+                    in_author_section = True
+                elif in_author_section and line_stripped and not line_stripped.startswith('**') and '[' not in line_stripped:
+                    # Look for affiliations (numbers followed by institutions)
+                    if any(word in line_stripped.lower() for word in ['university', 'institute', 'ai', 'mit', 'lab']):
+                        affiliations_text = line_stripped
+                        break
+            
+            # Parse authors from collected lines
+            if author_lines:
+                authors_combined = ' '.join(author_lines)
+                # Remove markdown formatting
+                authors_combined = re.sub(r'_\*\*|\*\*_|\*\*|_', '', authors_combined)
+                # Remove reference numbers in brackets
+                authors_combined = re.sub(r'\[\d+,?\d*,?\d*,?\d*\]', '', authors_combined)
+                # Clean up extra spaces
+                authors_combined = re.sub(r'\s+', ' ', authors_combined).strip()
+                authors_text = authors_combined
+        
+        # Fallback to pdf.json if PyMuPDF4LLM extraction failed
+        if title == 'Unknown Title':
+            title = (pdf_json.get('extracted_from_first_page', {}).get('title_from_text') or 
+                    pdf_json.get('pdf_metadata', {}).get('title') or 
+                    'Unknown Title')
+        
+        if not authors_text:
+            authors_text = pdf_json.get('extracted_from_first_page', {}).get('authors_from_text', '')
+            
+        if not affiliations_text:
+            affiliations_text = pdf_json.get('extracted_from_first_page', {}).get('affiliations_from_text', '')
         
         # Extract sections from both md and txt content
         logger.info("Extracting sections from PDF content...")
@@ -853,26 +903,43 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
         sections = md_sections if md_sections else txt_sections
         logger.info(f"Found {len(sections)} sections to process")
         
-        # Filter out references/bibliography and appendix sections
+        # Filter out references/bibliography and appendix sections, and artifacts
         main_sections = []
         for section in sections:
             title_lower = section['title'].lower()
-            if any(ref_word in title_lower for ref_word in ['reference', 'bibliography', 'appendix', 'acknowledgment', 'acknowledgement']):
-                logger.info(f"Stopping at section: {section['title']}")
+            raw_title_lower = section.get('raw_title', '').lower()
+            
+            # Stop at references, bibliography, appendices, or weird artifacts
+            if any(ref_word in title_lower or ref_word in raw_title_lower for ref_word in [
+                'reference', 'bibliography', 'appendix', 'acknowledgment', 'acknowledgement',
+                'scores', 'overall_reasoning', 'reasoning about', 'question 1', 'question 2', 'question 3'
+            ]):
+                logger.info(f"Stopping at section: {section['title']} (raw: {section.get('raw_title', 'N/A')})")
                 break
+            
+            # Skip very short sections or those that look like artifacts
+            if len(section['content'].strip()) < 50:
+                logger.info(f"Skipping short section: {section['title']}")
+                continue
+                
             main_sections.append(section)
         
         logger.info(f"Processing {len(main_sections)} main sections")
         
-        # Create header
+        # Create header with proper title, authors, and abstract
         cleaned_parts = []
         cleaned_parts.append(f"# {title}")
+        cleaned_parts.append("")
+        
         if authors_text:
             # Clean authors list
             authors_clean = re.sub(r'\d+', '', authors_text)  # Remove superscript numbers
             authors_clean = re.sub(r'\s+', ' ', authors_clean).strip()
             cleaned_parts.append(f"**Authors:** {authors_clean}")
-        cleaned_parts.append("")
+            cleaned_parts.append("")
+        
+        # Add abstract section at the top (will be processed separately but include placeholder)
+        abstract_placeholder_added = False
         
         # Process each section with LLM
         section_summaries = {}
@@ -888,9 +955,10 @@ SECTION: {section['title']}
 REQUIREMENTS:
 1. Use the exact header: {section['title']}
 2. Clean the content: fix formatting, ensure proper paragraphs
-3. Include [Figure X] placeholders where figures should appear
+3. Use figure placeholders in format: [Figure #: brief description] where figures should appear
 4. Maintain academic tone and technical accuracy
 5. Remove any duplicate headers or metadata
+6. If this is the Abstract section, provide the complete abstract text
 
 CONTENT TO CLEAN:
 {section['content'][:8000]}
@@ -911,9 +979,11 @@ Return ONLY the cleaned section content with the header."""
                 # Extract summary for metadata
                 section_title_clean = section['title'].lower().replace('#', '').strip()
                 if 'abstract' in section_title_clean:
-                    # Get full abstract text for metadata
+                    # Get full abstract text for metadata - remove header and clean
                     abstract_content = cleaned_section.replace(section['title'], '').strip()
-                    section_summaries['abstract'] = abstract_content[:500]  # First 500 chars
+                    abstract_content = re.sub(r'^#+\s*', '', abstract_content)  # Remove any remaining headers
+                    abstract_content = abstract_content.replace('## Abstract', '').strip()
+                    section_summaries['abstract'] = abstract_content[:800]  # Increased to 800 chars for full abstract
                 elif 'introduction' in section_title_clean:
                     section_summaries['introduction'] = f"Study introduces {title.split(':')[0]} addressing key challenges in the field."
                 elif any(word in section_title_clean for word in ['method', 'approach', 'design']):
@@ -1494,6 +1564,19 @@ def analyze_research_paper(pdf_path: str, paper_title: str = None, authors: str 
         }
         with open(pdf_json_path, 'w', encoding='utf-8') as f:
             json.dump(temp_json, f, indent=2)
+    
+    # Ensure pdf.md exists (PyMuPDF4LLM output)
+    if not pdf_md_path.exists():
+        # Try to generate pdf.md using PyMuPDF4LLM if available
+        if PYMUPDF4LLM_AVAILABLE and pdf_path:
+            logger.info("Generating pdf.md using PyMuPDF4LLM...")
+            try:
+                md_text = pymupdf4llm.to_markdown(pdf_path)
+                with open(pdf_md_path, 'w', encoding='utf-8') as f:
+                    f.write(md_text)
+                logger.info(f"Saved PyMuPDF4LLM output to {pdf_md_path}")
+            except Exception as e:
+                logger.warning(f"Failed to generate pdf.md: {e}")
     
     # Use LLM to create cleaned content and extract structured metadata
     cleaned_md, coda_metadata = _create_cleaned_content_with_llm(
