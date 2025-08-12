@@ -43,3 +43,26 @@ prepare_talk() →
 ```
 
 This maintains the current quality and functionality while being more maintainable for a small team.
+
+# TODO: Research Analysis System
+
+## Current Status
+The research analysis system (`analyze_research.py`) is now functional and merged to main with core issues resolved:
+- ✅ Fixed section-by-section LLM processing (no more truncation)
+- ✅ Eliminated LLM hallucination of fake figures and content expansion  
+- ✅ Added proper abstract extraction from PyMuPDF4LLM
+- ✅ Removed duplicate title/authors sections
+- ✅ H2+H3 section grouping working properly
+
+## Phase 1: Content Quality Improvements
+- [ ] **Fix author parsing** - Some names are merged together (e.g. "Jean-Francois Godbout Thomas Costello")
+- [ ] **Parse actual affiliations** - Currently showing placeholder text instead of real institutions
+- [ ] **Improve figure integration** - Add better alt text descriptions based on actual figure content
+- [ ] **Add author handle lookup** - Use promote_talk Coda table to find social media handles for researchers
+
+## Phase 2: System Integration  
+- [ ] **Full promote_research system** - Complete pipeline for blog posts, animations, and social media content generation from research papers
+- [ ] **Quality validation** - Ensure research analysis output meets standards for social media content generation
+
+## Architecture Notes
+The current system uses direct Python + LLM calls (Claude Sonnet) for section processing, which works well for the small team. This approach should be maintained for consistency with the overall architecture vision above.
