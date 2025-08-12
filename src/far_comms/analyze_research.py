@@ -905,6 +905,8 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
         
         # Filter out references/bibliography and appendix sections, and artifacts
         main_sections = []
+        title_section_found = False
+        
         for section in sections:
             title_lower = section['title'].lower()
             raw_title_lower = section.get('raw_title', '').lower()
@@ -916,6 +918,20 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
             ]):
                 logger.info(f"Stopping at section: {section['title']} (raw: {section.get('raw_title', 'N/A')})")
                 break
+            
+            # Skip duplicate title sections (we already have title in header)
+            # Check for various patterns that indicate this is a duplicate title section
+            is_title_section = (
+                ('thought that counts' in title_lower and 'evaluating' in title_lower) or
+                ('attempt' in title_lower and 'frontier llms' in title_lower and 'persuade' in title_lower) or
+                (section['title'].startswith('**') and 'thought that counts' in title_lower) or
+                (len(section['title']) > 80 and any(word in title_lower for word in ['thought', 'counts', 'evaluating', 'attempt']))
+            )
+            
+            if not title_section_found and is_title_section:
+                logger.info(f"Skipping duplicate title section: {section['title']}")
+                title_section_found = True
+                continue
             
             # Skip very short sections or those that look like artifacts
             if len(section['content'].strip()) < 50:
@@ -938,8 +954,47 @@ def _create_cleaned_content_with_llm(pdf_md_path: Path, pdf_txt_path: Path, pdf_
             cleaned_parts.append(f"**Authors:** {authors_clean}")
             cleaned_parts.append("")
         
-        # Add abstract section at the top (will be processed separately but include placeholder)
-        abstract_placeholder_added = False
+        # Extract and add abstract section from PyMuPDF4LLM content
+        abstract_content = ""
+        if pdf_md:
+            # Look for abstract in the PyMuPDF4LLM content
+            lines = pdf_md.split('\n')
+            in_abstract = False
+            abstract_lines = []
+            
+            for line in lines:
+                line_stripped = line.strip()
+                # Check if we found the start of abstract
+                if (not in_abstract and 
+                    ('persuasion is a powerful capability' in line_stripped.lower() or
+                     line_stripped.lower().startswith('persuasion is') or
+                     (line_stripped and not line_stripped.startswith('#') and 
+                      'persuad' in line_stripped.lower() and len(line_stripped) > 50))):
+                    in_abstract = True
+                    abstract_lines.append(line_stripped)
+                elif in_abstract:
+                    # Stop when we hit a section header or other content
+                    if (line_stripped.startswith('#') or 
+                        line_stripped.startswith('**1.') or 
+                        'introduction' in line_stripped.lower() or
+                        len(abstract_lines) > 10):  # Reasonable abstract length limit
+                        break
+                    elif line_stripped:  # Add non-empty lines
+                        abstract_lines.append(line_stripped)
+            
+            if abstract_lines:
+                abstract_content = ' '.join(abstract_lines)
+                # Clean up the abstract content
+                abstract_content = re.sub(r'\s+', ' ', abstract_content).strip()
+                # Remove markdown formatting artifacts
+                abstract_content = re.sub(r'\*\*', '', abstract_content)  # Remove bold
+                abstract_content = re.sub(r'_', '', abstract_content)     # Remove italics
+                
+        if abstract_content:
+            cleaned_parts.append("## Abstract")
+            cleaned_parts.append("")
+            cleaned_parts.append(abstract_content)
+            cleaned_parts.append("")
         
         # Process each section with LLM
         section_summaries = {}
