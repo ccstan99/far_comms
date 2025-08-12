@@ -1,0 +1,689 @@
+#!/usr/bin/env python
+
+import json
+import logging
+import re
+from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
+from far_comms.utils.coda_client import CodaClient
+from far_comms.models.requests import CodaIds
+from far_comms.utils.json_repair import json_repair
+# Removed LangChain PromptTemplate due to conflicts with JSON braces in templates
+
+logger = logging.getLogger(__name__)
+
+
+def smart_title_case(title: str) -> str:
+    """Convert to title case while preserving acronyms like LLMs, AI, ML, etc."""
+    if not title:
+        return title
+    
+    # Common acronyms that should stay uppercase
+    acronyms = {'AI', 'ML', 'LLM', 'LLMS', 'NLP', 'GPT', 'API', 'URL', 'HTTP', 'HTTPS', 'PDF', 'JSON', 'XML', 'SQL', 'GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'USB', 'WiFi', 'IoT', 'VR', 'AR', 'UI', 'UX', 'CEO', 'CTO', 'PhD', 'MSc', 'BSc'}
+    
+    # First apply standard title case
+    title_cased = title.title()
+    
+    # Then fix known acronyms back to uppercase
+    for acronym in acronyms:
+        # Replace title-cased version with uppercase version
+        title_cased = re.sub(r'\b' + re.escape(acronym.capitalize()) + r'\b', acronym, title_cased)
+        # Also handle plural forms
+        if acronym.endswith('S'):
+            singular = acronym[:-1]
+            title_cased = re.sub(r'\b' + re.escape(singular.capitalize()) + r's\b', acronym, title_cased)
+    
+    return title_cased
+
+
+def titles_equivalent(title1: str, title2: str) -> bool:
+    """Check if two titles are equivalent (ignoring case differences)."""
+    if not title1 or not title2:
+        return title1 == title2
+    
+    # Normalize both titles: strip, normalize whitespace, convert to lowercase for comparison
+    norm1 = ' '.join(title1.strip().split()).lower()
+    norm2 = ' '.join(title2.strip().split()).lower()
+    
+    return norm1 == norm2
+
+
+def is_placeholder_text(text: str) -> bool:
+    """Check if text is missing/empty and shouldn't overwrite good Coda data."""
+    # LLM should return empty string for missing data, not placeholder text
+    return not text or not text.strip()
+
+
+def get_prepare_talk_input(raw_data: dict) -> dict:
+    """Parse raw Coda data for prepare_talk - needs speaker name and YouTube URL"""
+    return {
+        "speaker": raw_data.get("Speaker", ""),
+        "yt_url": raw_data.get("YT url", "")
+    }
+
+
+def display_prepare_talk_input(function_data: dict) -> dict:
+    """Format function input for webhook display - no long fields to truncate"""
+    return function_data
+
+
+def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: str = "", coda_title: str = "") -> Dict[str, Any]:
+    """
+    Process slides independently - extract, clean, validate speaker, find resources.
+    Maintains current functionality without CrewAI.
+    
+    Returns:
+        dict: Processed slides data with validation and resources
+    """
+    try:
+        logger.info(f"Processing slides for speaker: {speaker_name}")
+        
+        # Import here to avoid circular imports
+        from far_comms.utils.content_preprocessor import find_matching_pdf, extract_pdf_content
+        from anthropic import Anthropic
+        import os
+        
+        # Find and extract PDF content
+        pdf_path = find_matching_pdf(speaker_name)
+        if not pdf_path:
+            logger.warning(f"No matching PDF found for speaker: {speaker_name}")
+            return {
+                "success": False,
+                "error": f"No PDF found for {speaker_name}",
+                "cleaned_slides": "",
+                "slide_structure": {"title": "", "main_sections": [], "slide_count": 0},
+                "speaker_validation": {},
+                "resources_found": [],
+                "technical_terms": []
+            }
+        
+        logger.info(f"Found matching PDF: {pdf_path}")
+        slides_data = extract_pdf_content(pdf_path, speaker_name)
+        slides_raw = slides_data["enhanced_content"]  # Enhanced content with visual descriptions
+        qr_codes = slides_data["qr_codes"]
+        visual_elements = slides_data["visual_elements"]
+        saved_images = slides_data["saved_images"]
+        
+        logger.info(f"Extracted slides: {len(slides_raw)} chars, {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images saved")
+        
+        # Load prompt from docs/clean_slides.md
+        docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
+        clean_slides_prompt_path = docs_dir / "clean_slides.md"
+        
+        if not clean_slides_prompt_path.exists():
+            raise FileNotFoundError(f"clean_slides.md not found at {clean_slides_prompt_path}")
+        
+        prompt_template = clean_slides_prompt_path.read_text()
+        
+        # Use string replacement to avoid conflicts with JSON braces in template
+        slides_prompt = prompt_template.replace("{speaker}", speaker_name)
+        slides_prompt = slides_prompt.replace("{slides_raw}", slides_raw)
+        slides_prompt = slides_prompt.replace("{qr_codes}", json.dumps(qr_codes, indent=2))
+        slides_prompt = slides_prompt.replace("{visual_elements}", json.dumps(visual_elements, indent=2))
+        slides_prompt = slides_prompt.replace("{pdf_path}", pdf_path)
+        slides_prompt = slides_prompt.replace("{coda_speaker}", coda_speaker)
+        slides_prompt = slides_prompt.replace("{coda_affiliation}", coda_affiliation)
+        slides_prompt = slides_prompt.replace("{coda_title}", coda_title)
+        
+        # Use LLM to process slides
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY required for slide processing")
+        
+        client = Anthropic(api_key=api_key)
+        
+        # Call LLM with Sonnet (better for complex JSON output than Haiku)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",  # Use Sonnet for better JSON reliability
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": slides_prompt
+            }]
+        )
+        
+        result_text = response.content[0].text
+        logger.info(f"LLM slide processing completed: {len(result_text)} characters")
+        
+        # Parse JSON response using json_repair utility
+        fallback_result = {
+            "success": False,
+            "error": "JSON parsing failed",
+            "cleaned_slides": slides_raw[:2000],  # Truncated raw content as fallback
+            "slide_structure": {"title": "Processing failed", "main_sections": [], "slide_count": 0},
+            "speaker_validation": {},
+            "resources_found": [],
+            "technical_terms": [],
+            "processing_notes": f"LLM processing failed, using raw content"
+        }
+        
+        result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
+        
+        # Debug: Check if result is the expected type
+        if not isinstance(result, dict):
+            logger.error(f"json_repair returned {type(result)} instead of dict. Content: {str(result)[:200]}")
+            # If it's a list with one dict, extract the dict
+            if isinstance(result, list):
+                logger.info(f"Result is list with {len(result)} items")
+                if len(result) == 1 and isinstance(result[0], dict):
+                    logger.info("Extracting dict from single-item list")
+                    result = result[0]
+                    logger.info(f"Successfully extracted dict with keys: {list(result.keys())}")
+                else:
+                    logger.error(f"List format not supported - length: {len(result)}, first item type: {type(result[0]) if result else 'empty'}")
+                    result = fallback_result
+            else:
+                logger.error(f"Unexpected result type: {type(result)}")
+                result = fallback_result
+        
+        # Add success metadata if parsing succeeded
+        if result != fallback_result:
+            result["success"] = True
+            result["pdf_path"] = pdf_path
+            result["processing_stats"] = {
+                "slides_chars": len(slides_raw),
+                "qr_codes_found": len(qr_codes),
+                "visual_elements": len(visual_elements),
+                "images_saved": len(saved_images)
+            }
+            logger.info(f"Successfully processed slides for {speaker_name}")
+        else:
+            logger.error(f"Failed to parse slide processing JSON after repair attempts")
+        
+        return result
+            
+    except Exception as e:
+        logger.error(f"Error processing slides for {speaker_name}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "cleaned_slides": "",
+            "slide_structure": {"title": "", "main_sections": [], "slide_count": 0},
+            "speaker_validation": {},
+            "resources_found": [],
+            "technical_terms": [],
+            "processing_notes": f"Slide processing failed: {e}"
+        }
+
+
+def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str = "") -> Dict[str, Any]:
+    """
+    Process transcript independently - extract, clean with LLM, preserve verbatim content.
+    Maintains current functionality without CrewAI.
+    
+    Returns:
+        dict: Processed transcript data with SRT and formatted versions
+    """
+    try:
+        logger.info(f"Processing transcript for speaker: {speaker_name}")
+        
+        # Import here to avoid circular imports
+        from far_comms.utils.content_preprocessor import (
+            find_matching_video, extract_youtube_transcript, extract_local_video_transcript
+        )
+        from anthropic import Anthropic
+        import os
+        
+        # Get transcript using same logic as current implementation (with caching)
+        output_dir = Path(__file__).parent.parent.parent / "output"
+        output_dir.mkdir(exist_ok=True)
+        cached_transcript_path = output_dir / f"{speaker_name}.srt"
+        
+        transcript_raw = ""
+        transcript_source = ""
+        
+        if cached_transcript_path.exists():
+            logger.info(f"Found cached transcript: {cached_transcript_path}")
+            transcript_raw = cached_transcript_path.read_text(encoding='utf-8')
+            transcript_source = "cached_assemblyai"
+            logger.info(f"Loaded cached transcript: {len(transcript_raw)} characters")
+        else:
+            # Try local video first (faster and more reliable)
+            video_path = find_matching_video(speaker_name)
+            if video_path:
+                logger.info(f"Found matching local video: {video_path}")
+                transcript_result = extract_local_video_transcript(video_path)
+                if transcript_result["success"]:
+                    transcript_raw = transcript_result["srt_content"]
+                    transcript_source = "local_video"
+                    logger.info(f"Extracted local video transcript: {len(transcript_raw)} characters")
+                    # Cache the transcript
+                    cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
+                    logger.info(f"Cached transcript to: {cached_transcript_path}")
+                else:
+                    logger.warning(f"Local video transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+            else:
+                # No local video found, try YouTube if URL provided
+                if yt_url:
+                    logger.info(f"No local video found, trying YouTube: {yt_url}")
+                    transcript_result = extract_youtube_transcript(yt_url)
+                    if transcript_result["success"]:
+                        transcript_raw = transcript_result["srt_content"]
+                        transcript_source = "youtube"
+                        logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
+                        # Cache the transcript
+                        cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
+                        logger.info(f"Cached transcript to: {cached_transcript_path}")
+                    else:
+                        logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
+                else:
+                    logger.warning(f"No local video found and no YouTube URL provided for {speaker_name}")
+        
+        if not transcript_raw:
+            logger.warning(f"No transcript found for {speaker_name}")
+            return {
+                "success": False,
+                "error": f"No transcript found for {speaker_name}",
+                "transcript_formatted": "",
+                "transcript_srt": "",
+                "transcript_stats": {},
+                "cleaning_notes": "No transcript to process",
+                "processing_status": "failed"
+            }
+        
+        # Load docs directory path
+        docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
+        
+        # Load prompt from docs/clean_transcript.md
+        clean_transcript_prompt_path = docs_dir / "clean_transcript.md"
+        
+        if not clean_transcript_prompt_path.exists():
+            raise FileNotFoundError(f"clean_transcript.md not found at {clean_transcript_prompt_path}")
+        
+        prompt_template = clean_transcript_prompt_path.read_text()
+        
+        # Use string replacement to avoid conflicts with JSON braces in template
+        transcript_prompt = prompt_template.replace("{speaker}", speaker_name)
+        transcript_prompt = transcript_prompt.replace("{transcript_raw}", transcript_raw)
+        transcript_prompt = transcript_prompt.replace("{transcript_source}", transcript_source)
+        transcript_prompt = transcript_prompt.replace("{slide_context}", slide_context[:2000])
+        
+        # Use LLM to process transcript
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY required for transcript processing")
+        
+        client = Anthropic(api_key=api_key)
+        
+        # Call LLM with Sonnet (better for complex JSON output than Haiku)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": transcript_prompt
+            }]
+        )
+        
+        result_text = response.content[0].text
+        logger.info(f"LLM transcript processing completed: {len(result_text)} characters")
+        
+        # Parse JSON response using json_repair utility
+        # Extract text from SRT for fallback formatting
+        srt_text = re.sub(r'\d+\n[\d:,]+ --> [\d:,]+\n', '', transcript_raw)
+        srt_text = re.sub(r'\n+', ' ', srt_text).strip()
+        
+        fallback_result = {
+            "success": False,
+            "error": "JSON parsing failed",
+            "transcript_formatted": srt_text,
+            "transcript_srt": transcript_raw,
+            "transcript_stats": {
+                "original_word_count": len(srt_text.split()),
+                "output_word_count": len(srt_text.split()),
+                "word_count_percentage": 100.0,
+                "paragraph_count": 1
+            },
+            "cleaning_notes": "LLM processing failed, using raw SRT text",
+            "processing_status": "failed",
+            "transcript_source": transcript_source
+        }
+        
+        result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
+        
+        # Debug: Check if result is the expected type
+        if not isinstance(result, dict):
+            logger.error(f"json_repair returned {type(result)} instead of dict. Content: {str(result)[:200]}")
+            # If it's a list with one dict, extract the dict
+            if isinstance(result, list):
+                logger.info(f"Result is list with {len(result)} items")
+                if len(result) == 1 and isinstance(result[0], dict):
+                    logger.info("Extracting dict from single-item list")
+                    result = result[0]
+                    logger.info(f"Successfully extracted dict with keys: {list(result.keys())}")
+                else:
+                    logger.error(f"List format not supported - length: {len(result)}, first item type: {type(result[0]) if result else 'empty'}")
+                    result = fallback_result
+            else:
+                logger.error(f"Unexpected result type: {type(result)}")
+                result = fallback_result
+        
+        # Add success metadata if parsing succeeded
+        if result != fallback_result:
+            result["transcript_srt"] = transcript_raw
+            result["success"] = True
+            result["transcript_source"] = transcript_source
+            
+            # Validate word count retention
+            word_count_raw = result.get("transcript_stats", {}).get("word_count_percentage", 0)
+            # Handle both float and string formats (e.g., "100.0%" or 100.0)
+            if isinstance(word_count_raw, str):
+                word_count_pct = float(word_count_raw.rstrip('%'))
+            else:
+                word_count_pct = float(word_count_raw)
+            if word_count_pct < 95:
+                logger.error(f"TRANSCRIPT TRUNCATION DETECTED: Only {word_count_pct:.1f}% of words retained!")
+                result["processing_status"] = "failed"
+            
+            logger.info(f"Successfully processed transcript for {speaker_name}, word retention: {word_count_pct:.1f}%")
+        else:
+            logger.error(f"Failed to parse transcript processing JSON after repair attempts")
+        
+        return result
+            
+    except Exception as e:
+        logger.error(f"Error processing transcript for {speaker_name}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "transcript_formatted": "",
+            "transcript_srt": "",
+            "transcript_stats": {},
+            "cleaning_notes": f"Transcript processing failed: {e}",
+            "processing_status": "failed",
+            "transcript_source": ""
+        }
+
+
+def _reconstruct_srt(original_srt: str, cleaned_text: str) -> str:
+    """
+    Reconstruct SRT format using original timestamps with cleaned text content.
+    (Copied from original handler to maintain functionality)
+    """
+    try:
+        # Parse original SRT to extract timestamps and text segments
+        srt_pattern = r'(\d+)\n([\d:,]+ --> [\d:,]+)\n(.*?)(?=\n\d+\n|\n*$)'
+        srt_matches = re.findall(srt_pattern, original_srt, re.DOTALL)
+        
+        if not srt_matches:
+            logger.warning("No SRT segments found in original transcript")
+            return None
+            
+        # Extract just the text from original SRT
+        original_text_segments = []
+        for _, _, text in srt_matches:
+            # Clean the text segment (remove extra whitespace, newlines)
+            clean_segment = re.sub(r'\s+', ' ', text.strip())
+            if clean_segment:
+                original_text_segments.append(clean_segment)
+        
+        original_text = ' '.join(original_text_segments)
+        
+        # Clean the cleaned_text for comparison (remove paragraph breaks, extra spaces)
+        cleaned_text_normalized = re.sub(r'\s+', ' ', cleaned_text.strip())
+        
+        # Simple approach: if the texts are similar length and content, map word by word
+        original_words = original_text.split()
+        cleaned_words = cleaned_text_normalized.split()
+        
+        logger.info(f"Original words: {len(original_words)}, Cleaned words: {len(cleaned_words)}")
+        
+        # If word counts are very different, fall back to original
+        if abs(len(original_words) - len(cleaned_words)) > len(original_words) * 0.1:
+            logger.warning(f"Word count difference too large, using original SRT")
+            return None
+        
+        # Map cleaned words back to SRT segments proportionally
+        reconstructed_srt = []
+        cleaned_word_idx = 0
+        
+        for seq_num, timestamp, original_segment_text in srt_matches:
+            original_segment_words = re.sub(r'\s+', ' ', original_segment_text.strip()).split()
+            segment_word_count = len(original_segment_words)
+            
+            if segment_word_count == 0:
+                continue
+                
+            # Take corresponding words from cleaned text
+            end_idx = min(cleaned_word_idx + segment_word_count, len(cleaned_words))
+            segment_cleaned_words = cleaned_words[cleaned_word_idx:end_idx]
+            cleaned_word_idx = end_idx
+            
+            if segment_cleaned_words:
+                cleaned_segment_text = ' '.join(segment_cleaned_words)
+                reconstructed_srt.append(f"{seq_num}\n{timestamp}\n{cleaned_segment_text}\n")
+        
+        return '\n'.join(reconstructed_srt)
+        
+    except Exception as e:
+        logger.error(f"Error reconstructing SRT: {e}")
+        return None
+
+
+async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
+    """
+    Simplified prepare_talk handler that calls two independent functions.
+    Maintains current functionality and quality without CrewAI.
+    
+    Returns:
+        dict: {"status": "success|skipped|failed", "message": "details", "speaker": "name"}
+    """
+    try:
+        logger.info(f"Starting simplified prepare_talk for row {coda_ids.row_id}")
+        
+        # Get speaker name and YouTube URL from function_data
+        speaker_name = function_data.get("speaker", "")
+        yt_url = function_data.get("yt_url", "")
+        
+        if not speaker_name:
+            logger.error("No speaker name found in function_data")
+            return {"status": "failed", "message": "No speaker name found in function_data", "speaker": ""}
+            
+        logger.info(f"Processing speaker: {speaker_name}")
+        if yt_url:
+            logger.info(f"YouTube URL provided: {yt_url}")
+        
+        # Initialize Coda client for updates
+        coda_client = CodaClient()
+        
+        # Check existing content to determine what needs processing
+        try:
+            row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
+            row_data = json.loads(row_data_str)
+            row_values = row_data.get("data", {})
+            
+            # Check what content already exists
+            existing_slides = row_values.get("Slides", "")
+            existing_transcript = row_values.get("Transcript", "")
+            
+            slides_exist = existing_slides and existing_slides.strip()
+            transcript_exists = existing_transcript and existing_transcript.strip()
+            
+            # If both exist, skip entirely
+            if slides_exist and transcript_exists:
+                logger.info(f"Skipping {speaker_name} - both Slides and Transcript exist, content is complete")
+                return {"status": "skipped", "message": "Both Slides and Transcript exist - content complete", "speaker": speaker_name}
+            
+            # Log what needs processing
+            needs_processing = []
+            if not slides_exist:
+                needs_processing.append("slides")
+            if not transcript_exists:
+                needs_processing.append("transcript")
+            
+            logger.info(f"Processing needed for {speaker_name}: {', '.join(needs_processing)}")
+                
+        except Exception as e:
+            logger.warning(f"Could not check existing content for {speaker_name}: {e}")
+            # Continue anyway in case it was just a temporary error - assume both need processing
+            row_values = {}
+            slides_exist = False
+            transcript_exists = False
+        
+        # Call functions conditionally based on what's missing
+        slides_result = {"success": True, "cleaned_slides": "", "speaker_validation": {}}  # Default empty result
+        transcript_result = {"success": True, "transcript_formatted": "", "transcript_srt": ""}  # Default empty result
+        
+        if not slides_exist:
+            logger.info("Processing slides...")
+            slides_result = process_slides(
+                speaker_name, 
+                row_values.get("Speaker", ""), 
+                row_values.get("Affiliation", ""), 
+                row_values.get("Title", "")
+            )
+            
+            # Update Coda immediately after slides processing
+            if slides_result.get("success"):
+                logger.info("Updating Coda with slides results immediately...")
+                slides_coda_updates = {"Slides": slides_result.get("cleaned_slides", "")}
+                
+                # Handle speaker validation immediately
+                speaker_validation = slides_result.get("speaker_validation", {})
+                if speaker_validation:
+                    validation_result = speaker_validation.get("validation_result", "")
+                    slide_speaker = speaker_validation.get("slide_speaker", "")
+                    slide_affiliation = speaker_validation.get("slide_affiliation", "") 
+                    slide_title = speaker_validation.get("slide_title", "")
+                    
+                    # Smart title case that preserves acronyms
+                    if slide_title:
+                        slide_title = smart_title_case(slide_title)
+                    
+                    if validation_result == "major_mismatch":
+                        if "Slides" in slides_coda_updates:
+                            slides_coda_updates["Slides"] = "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]\n" + slides_coda_updates["Slides"]
+                        logger.warning(f"Major speaker mismatch detected: slide='{slide_speaker}' vs coda='{speaker_name}'")
+                    elif validation_result in ["exact_match", "minor_differences"]:
+                        prefix = "" if validation_result == "exact_match" else "* "
+                        # Only update if slide data is valid and different (never replace good data with placeholders)
+                        if slide_speaker and slide_speaker != speaker_name and not is_placeholder_text(slide_speaker):
+                            slides_coda_updates["Speaker"] = f"{prefix}{slide_speaker}"
+                        original_affiliation = row_values.get("Affiliation", "")
+                        if slide_affiliation and slide_affiliation != original_affiliation and not is_placeholder_text(slide_affiliation):
+                            slides_coda_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
+                        original_title = row_values.get("Title", "")
+                        # Only update title if there are meaningful differences beyond case and it's not placeholder text
+                        if slide_title and not titles_equivalent(slide_title, original_title) and not is_placeholder_text(slide_title):
+                            slides_coda_updates["Title"] = f"{prefix}{slide_title}"
+                
+                # Update slides in Coda immediately
+                updates = [{"row_id": coda_ids.row_id, "updates": slides_coda_updates}]
+                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.info(f"Immediate slides update: {result}")
+            else:
+                logger.error(f"Slides processing failed: {slides_result.get('error', 'Unknown error')}")
+        else:
+            logger.info("Skipping slides processing - Slides column already has content")
+            
+        if not transcript_exists:
+            logger.info("Processing transcript...")
+            # Use slide context for transcript processing (from existing or newly processed slides)
+            if slides_exist:
+                slide_context = existing_slides[:2000]  # Use existing slides for context
+            else:
+                slide_context = slides_result.get("cleaned_slides", "")[:2000]  # Use newly processed slides
+            transcript_result = process_transcript(speaker_name, yt_url, slide_context)
+            
+            # Update Coda immediately after transcript processing
+            if transcript_result.get("success"):
+                logger.info("Updating Coda with transcript results immediately...")
+                formatted_transcript = transcript_result.get("transcript_formatted", "")
+                # Post-process: convert double newlines to single newlines
+                formatted_transcript = formatted_transcript.replace("\n\n", "\n")
+                
+                transcript_coda_updates = {"Transcript": formatted_transcript}
+                
+                # Reconstruct SRT with original timestamps
+                original_srt = transcript_result.get("transcript_srt", "")
+                if original_srt and formatted_transcript:
+                    reconstructed_srt = _reconstruct_srt(original_srt, formatted_transcript)
+                    if reconstructed_srt:
+                        transcript_coda_updates["SRT"] = reconstructed_srt
+                        logger.info(f"Reconstructed SRT with original timestamps")
+                    else:
+                        logger.warning("SRT reconstruction failed, using original SRT")
+                        transcript_coda_updates["SRT"] = original_srt
+                elif original_srt:
+                    transcript_coda_updates["SRT"] = original_srt
+                
+                # Update transcript in Coda immediately
+                updates = [{"row_id": coda_ids.row_id, "updates": transcript_coda_updates}]
+                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+                logger.info(f"Immediate transcript update: {result}")
+            else:
+                logger.error(f"Transcript processing failed: {transcript_result.get('error', 'Unknown error')}")
+        else:
+            logger.info("Skipping transcript processing - Transcript column already has content")
+        
+        # Check if we have enough content to proceed
+        if not slides_result.get("success") and not transcript_result.get("success"):
+            error_msg = f"Cannot process {speaker_name} - both slides and transcript processing failed"
+            logger.error(error_msg)
+            
+            # Update Coda with error
+            coda_updates = {
+                "Webhook status": "Error",
+                "Webhook progress": error_msg
+            }
+            updates = [{"row_id": coda_ids.row_id, "updates": coda_updates}]
+            coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+            
+            return {"status": "failed", "message": error_msg, "speaker": speaker_name}
+        
+        # Set final status since immediate updates were done
+        status_parts = []
+        
+        if not slides_exist:
+            slides_status = "processed" if slides_result.get("success") else "failed"
+            status_parts.append(f"slides {slides_status}")
+        else:
+            status_parts.append("slides skipped (existing)")
+            
+        if not transcript_exists:
+            transcript_status = "processed" if transcript_result.get("success") else "failed"
+            status_parts.append(f"transcript {transcript_status}")
+        else:
+            status_parts.append("transcript skipped (existing)")
+        
+        final_status_message = f"Processed {speaker_name}: {', '.join(status_parts)}"
+        
+        # Update final webhook status
+        final_updates = {
+            "Webhook progress": final_status_message,
+            "Webhook status": "Done"
+        }
+        updates = [{"row_id": coda_ids.row_id, "updates": final_updates}]
+        result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+        logger.info(f"Final status update: {result}")
+        
+        # Count successful processes
+        successful_processes = sum([
+            1 for result_obj in [slides_result, transcript_result] 
+            if result_obj.get("success")
+        ])
+        
+        if successful_processes > 0:
+            return {"status": "success", "message": final_status_message, "speaker": speaker_name}
+        else:
+            return {"status": "failed", "message": "No processing succeeded", "speaker": speaker_name}
+            
+    except Exception as e:
+        logger.error(f"Error in prepare_talk: {e}", exc_info=True)
+        
+        # Try to update Coda with error status
+        try:
+            coda_client = CodaClient()
+            error_updates = {
+                "Webhook status": "Error",
+                "Webhook progress": f"Prepare talk failed: {str(e)}"
+            }
+            updates = [{
+                "row_id": coda_ids.row_id,
+                "updates": error_updates
+            }]
+            coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+        except Exception as update_error:
+            logger.error(f"Failed to update Coda with error status: {update_error}")
+        
+        return {"status": "failed", "message": f"Prepare talk error: {str(e)}", "speaker": function_data.get("speaker", "")}

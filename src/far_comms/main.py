@@ -11,8 +11,8 @@ from far_comms.handlers.promote_talk import (
     get_promote_talk_input,
     display_promote_talk_input
 )
-from far_comms.handlers.prepare_talk_crew_handler import (
-    prepare_talk_crew as prepare_talk,
+from far_comms.handlers.prepare_talk_simple import (
+    prepare_talk,
     get_prepare_talk_input, 
     display_prepare_talk_input
 )
