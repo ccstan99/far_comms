@@ -67,7 +67,7 @@ def display_input(function_data: dict) -> dict:
     return function_data
 
 
-def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: str = "", coda_title: str = "") -> Dict[str, Any]:
+def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str = "", coda_affiliation: str = "", coda_title: str = "", table_id: str = "unknown") -> Dict[str, Any]:
     """
     Process slides independently - extract, clean, validate speaker, find resources.
     Maintains current functionality without CrewAI.
@@ -99,18 +99,149 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         
         logger.info(f"Found matching PDF: {pdf_path}")
         
-        # Extract markdown baseline using pymupdf4llm
+        # Extract markdown and images using pymupdf4llm as primary method
         import pymupdf4llm
-        slides_md_baseline = pymupdf4llm.to_markdown(pdf_path)
+        import pymupdf
+        from pathlib import Path
+        
+        # Create organized output directory structure: output/{table_id}/{speaker_name}/
+        output_base = Path(__file__).parent.parent.parent.parent / "output" 
+        speaker_output_dir = output_base / table_id / speaker_name.replace(" ", "_")
+        images_dir = speaker_output_dir / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Extract markdown with images using pymupdf4llm
+        slides_md_baseline = pymupdf4llm.to_markdown(
+            pdf_path,
+            write_images=True,
+            image_path=str(images_dir),
+            ignore_images=False
+        )
         logger.info(f"Extracted markdown baseline: {len(slides_md_baseline)} chars")
         
-        # Extract additional metadata (QR codes, visual elements) using existing method
-        slides_data = extract_pdf(pdf_path, speaker_name)
-        qr_codes = slides_data["qr_codes"]
-        visual_elements = slides_data["visual_elements"]
-        saved_images = slides_data["saved_images"]
+        # Initialize Anthropic client for image analysis  
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        client = None
+        if api_key:
+            try:
+                from anthropic import Anthropic
+                client = Anthropic(api_key=api_key)
+            except Exception as e:
+                logger.warning(f"Anthropic client setup failed: {e}")
         
-        logger.info(f"Extracted metadata: {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images saved")
+        # Extract QR codes from first and last slides using pyzbar
+        qr_codes = []
+        doc = pymupdf.open(pdf_path)
+        for page_num in [0, len(doc)-1]:  # First and last page
+            page = doc[page_num]
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+            img_data = pix.tobytes('png')
+            
+            # Convert to PIL Image for pyzbar
+            from PIL import Image
+            from io import BytesIO
+            try:
+                from pyzbar import pyzbar
+                img = Image.open(BytesIO(img_data))
+                detected_qrs = pyzbar.decode(img)
+                for qr in detected_qrs:
+                    qr_url = qr.data.decode('utf-8')
+                    qr_codes.append({
+                        "url": qr_url,
+                        "page": page_num + 1,
+                        "location": f"Page {page_num + 1} ({'first' if page_num == 0 else 'last'} slide)"
+                    })
+                    logger.info(f"Found QR code: {qr_url} on page {page_num + 1}")
+            except ImportError:
+                logger.warning("pyzbar not available for QR code detection")
+            except Exception as e:
+                logger.warning(f"QR code detection failed on page {page_num + 1}: {e}")
+        
+        # Extract metadata from slide 1 if pymupdf4llm missed title/author
+        slide_1_metadata = {}
+        if not any(word in slides_md_baseline.lower() for word in ["author", "title"]):
+            logger.info("Title/author not found in pymupdf4llm output, analyzing slide 1")
+            try:
+                page_1 = doc[0]
+                pix_1 = page_1.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+                img_data_1 = pix_1.tobytes('png')
+                img_base64_1 = base64.b64encode(img_data_1).decode()
+                
+                if client:
+                    response = client.messages.create(
+                        model="claude-3-haiku-20240307",
+                        max_tokens=400,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"Analyze this title slide. Extract: 1) Presentation title 2) Speaker name(s) 3) Affiliation(s). Return JSON format: {{\"title\": \"...\", \"authors\": [\"name1\", \"name2\"], \"affiliations\": [\"aff1\", \"aff2\"]}}. If not visible, use empty string/array. Expected speaker: {speaker_name}"},
+                                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64_1}}
+                            ]
+                        }]
+                    )
+                    
+                    metadata_text = response.content[0].text.strip()
+                    # Try to parse JSON response
+                    try:
+                        slide_1_metadata = json.loads(metadata_text)
+                        logger.info(f"Extracted slide 1 metadata: {slide_1_metadata}")
+                    except:
+                        logger.warning(f"Could not parse slide 1 metadata JSON: {metadata_text}")
+                        
+            except Exception as e:
+                logger.warning(f"Slide 1 metadata extraction failed: {e}")
+        
+        doc.close()
+        
+        # Generate basic image descriptions using Haiku on extracted images
+        visual_elements = []
+        saved_images = []
+        
+        # Find images extracted by pymupdf4llm
+        image_files = list(images_dir.glob("*.png"))
+        if image_files:
+            logger.info(f"Found {len(image_files)} images extracted by pymupdf4llm")
+            
+            # Analyze images with Haiku for basic alt text
+            if client:
+                    
+                    for img_file in image_files[:5]:  # Limit to first 5 images to control costs
+                        try:
+                            with open(img_file, 'rb') as f:
+                                img_data = f.read()
+                            img_base64 = base64.b64encode(img_data).decode()
+                            
+                            response = client.messages.create(
+                                model="claude-3-haiku-20240307",  # 20x cheaper than Sonnet
+                                max_tokens=300,
+                                messages=[{
+                                    "role": "user", 
+                                    "content": [
+                                        {"type": "text", "text": "Briefly describe this slide image. Focus on: 1) Charts/tables with data 2) Technical diagrams 3) Key visual elements. One sentence per element, be concise."},
+                                        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64}}
+                                    ]
+                                }]
+                            )
+                            
+                            description = response.content[0].text.strip()
+                            visual_elements.append({
+                                "type": "image_analysis",
+                                "description": description,
+                                "file": img_file.name
+                            })
+                            saved_images.append(str(img_file))
+                            
+                        except Exception as e:
+                            logger.warning(f"Haiku analysis failed for {img_file.name}: {e}")
+                            # Fallback to basic file info
+                            visual_elements.append({
+                                "type": "image",
+                                "description": f"Image from slide: {img_file.name}",
+                                "file": img_file.name
+                            })
+                            saved_images.append(str(img_file))
+        
+        logger.info(f"Processing complete: {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images")
         
         # Load prompt from docs/clean_slides.md
         docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
@@ -121,11 +252,11 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         
         prompt_template = prompt_path.read_text()
         
-        # Use string replacement to avoid conflicts with JSON braces in template
-        slides_prompt = prompt_template.replace("{speaker}", speaker_name)
+        # Use string replacement to avoid conflicts with JSON braces in template  
+        slides_prompt = prompt_template.replace("{speaker}", f"{speaker_name} ({affiliation})")
         slides_prompt = slides_prompt.replace("{slides_md_baseline}", slides_md_baseline)
-        slides_prompt = slides_prompt.replace("{qr_codes}", json.dumps(qr_codes, indent=2))
-        slides_prompt = slides_prompt.replace("{visual_elements}", json.dumps(visual_elements, indent=2))
+        slides_prompt = slides_prompt.replace("{qr_codes}", json.dumps(qr_codes, indent=2) if qr_codes else "None found")
+        slides_prompt = slides_prompt.replace("{visual_elements}", json.dumps(visual_elements, indent=2) if visual_elements else "None processed")
         slides_prompt = slides_prompt.replace("{pdf_path}", pdf_path)
         slides_prompt = slides_prompt.replace("{coda_speaker}", coda_speaker)
         slides_prompt = slides_prompt.replace("{coda_affiliation}", coda_affiliation)
