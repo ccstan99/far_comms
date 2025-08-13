@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
-import json
+import asyncio
+import base64
+import json 
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -119,7 +122,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         )
         logger.info(f"Extracted markdown baseline: {len(slides_md_baseline)} chars")
         
-        # Initialize Anthropic client for image analysis  
+        # Initialize Anthropic client for image analysis
         api_key = os.getenv("ANTHROPIC_API_KEY")
         client = None
         if api_key:
