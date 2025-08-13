@@ -345,6 +345,34 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             result["visual_elements"] = visual_elements  
             result["saved_images"] = saved_images
             result["slide_1_metadata"] = slide_1_metadata
+            
+            # Create simplified copies of LLM-analyzed images 
+            try:
+                simplified_copies = []
+                
+                for i, visual_element in enumerate(visual_elements, 1):
+                    if "file" in visual_element:
+                        # Find original image path
+                        original_filename = visual_element["file"]
+                        original_path = speaker_output_dir / "images" / original_filename
+                        
+                        if original_path.exists():
+                            # Create simplified copy: {speaker}_{number}.png in speaker directory
+                            simplified_name = f"{speaker_name.replace(' ', '_')}_{i}.png"
+                            simplified_path = speaker_output_dir / simplified_name
+                            
+                            import shutil
+                            shutil.copy2(original_path, simplified_path)
+                            simplified_copies.append(str(simplified_path))
+                            logger.info(f"Created simplified copy: {simplified_name}")
+                
+                result["simplified_image_copies"] = simplified_copies
+                logger.info(f"Created {len(simplified_copies)} simplified image copies")
+                
+            except Exception as e:
+                logger.warning(f"Failed to create simplified image copies: {e}")
+                result["simplified_image_copies"] = []
+            
             result["processing_stats"] = {
                 "markdown_baseline_chars": len(slides_md_baseline),
                 "qr_codes_found": len(qr_codes),
@@ -383,18 +411,17 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                 with open(debug_json_path, 'w', encoding='utf-8') as f:
                     json.dump(debug_data, f, indent=2, ensure_ascii=False)
                 
-                # Also save raw markdown files for easy inspection
-                raw_markdown_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_raw.md"
+                # Save pymupdf4llm raw output for reference
                 pymupdf4llm_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_pymupdf4llm.md"
-                
-                with open(raw_markdown_path, 'w', encoding='utf-8') as f:
-                    f.write(slides_md_baseline)
-                
-                # For consistency, save the same content as pymupdf4llm.md 
                 with open(pymupdf4llm_path, 'w', encoding='utf-8') as f:
                     f.write(slides_md_baseline)
                 
-                logger.info(f"Debug files saved: {debug_json_path.name}, {raw_markdown_path.name}, {pymupdf4llm_path.name}")
+                # Save cleaned slides markdown (what goes to Coda)
+                cleaned_slides_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides.md"
+                with open(cleaned_slides_path, 'w', encoding='utf-8') as f:
+                    f.write(result.get("cleaned_slides", ""))
+                
+                logger.info(f"Debug files saved: {debug_json_path.name}, {pymupdf4llm_path.name}, {cleaned_slides_path.name}")
                 
             except Exception as e:
                 logger.warning(f"Failed to save debug JSON: {e}")
