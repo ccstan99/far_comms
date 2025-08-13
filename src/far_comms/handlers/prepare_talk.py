@@ -552,6 +552,11 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                     slide_affiliation = speaker_validation.get("slide_affiliation", "") 
                     slide_title = speaker_validation.get("slide_title", "")
                     
+                    # Debug validation comparison
+                    logger.info(f"Validation result: {validation_result}")
+                    logger.info(f"Slide data: speaker='{slide_speaker}', affiliation='{slide_affiliation}', title='{slide_title}'")
+                    logger.info(f"Coda data: speaker='{speaker_name}', affiliation='{affiliation}', title='{title}'")
+                    
                     # Smart title case that preserves acronyms
                     if slide_title:
                         slide_title = smart_title_case(slide_title)
