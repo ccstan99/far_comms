@@ -160,6 +160,20 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"QR code detection failed on page {page_num + 1}: {e}")
         
+        # Generate full slide images (much more useful than pymupdf4llm fragments)
+        try:
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+                slide_filename = f"slide_{page_num + 1:02d}.png"
+                slide_path = speaker_output_dir / slide_filename
+                pix.save(str(slide_path))
+            logger.info(f"Generated {len(doc)} full slide images")
+        except Exception as e:
+            logger.warning(f"Failed to generate full slide images: {e}")
+        
+        doc.close()  # Close document after using it
+        
         # Quick string search for speaker name validation (faster than LLM analysis)
         slide_1_metadata = {}
         speaker_name_found = False
@@ -217,19 +231,30 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         
         doc.close()
         
-        # Generate basic image descriptions using Haiku on extracted images
+        # Generate basic image descriptions using Haiku on full slide images (better than fragments)
         visual_elements = []
         saved_images = []
         
-        # Find images extracted by pymupdf4llm
-        image_files = list(images_dir.glob("*.png"))
-        if image_files:
-            logger.info(f"Found {len(image_files)} images extracted by pymupdf4llm")
+        # Find full slide images we just generated
+        slide_files = list(speaker_output_dir.glob("slide_*.png"))
+        if slide_files:
+            logger.info(f"Found {len(slide_files)} full slide images for analysis")
             
-            # Analyze images with Haiku for basic alt text
+            # Also keep pymupdf4llm fragments for fallback
+            image_files = list(images_dir.glob("*.png"))
+            if image_files:
+                logger.info(f"Found {len(image_files)} pymupdf4llm image fragments as fallback")
+            
+            # Analyze key slides with Haiku for descriptions (prioritize full slides over fragments)
             if client:
+                    # Analyze a few representative full slides (title, middle, end)
+                    key_slides = []
+                    if len(slide_files) >= 3:
+                        key_slides = [slide_files[0], slide_files[len(slide_files)//2], slide_files[-1]]
+                    else:
+                        key_slides = slide_files[:3]
                     
-                    for img_file in image_files[:5]:  # Limit to first 5 images to control costs
+                    for img_file in key_slides:  # Analyze key full slides
                         try:
                             with open(img_file, 'rb') as f:
                                 img_data = f.read()

@@ -107,6 +107,17 @@ def _analyze_pdf_visually(pdf_path: str, speaker_name: str = None) -> dict:
             img_data = pix.tobytes("png")
             img_base64 = base64.b64encode(img_data).decode()
             
+            # Save full slide image for easy access
+            slide_filename = f"slide_{page_num + 1:02d}.png"
+            slide_path = output_dir / slide_filename
+            
+            try:
+                with open(slide_path, "wb") as slide_file:
+                    slide_file.write(img_data)
+                logger.info(f"Saved full slide {page_num + 1} as {slide_filename}")
+            except Exception as save_error:
+                logger.warning(f"Failed to save full slide {page_num + 1}: {save_error}")
+            
             # First try to decode QR codes directly using pyzbar
             qr_urls = _decode_qr_codes_from_image(img_data)
             
