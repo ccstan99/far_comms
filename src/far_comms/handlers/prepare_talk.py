@@ -79,7 +79,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             # If both exist, skip entirely
             if slides_exist and transcript_exists:
                 logger.info(f"Skipping {speaker_name} - both Slides and Transcript exist, content is complete")
-                return {"status": "skipped", "message": "Both Slides and Transcript exist - content complete", "speaker": speaker_name}
+                return {"status": "skipped", "message": "slides skipped, transcript skipped", "speaker": speaker_name}
             
             # Log what needs processing
             needs_processing = []
@@ -237,18 +237,18 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         status_parts = []
         
         if not slides_exist:
-            slides_status = "processed" if slides_result.get("success") else "failed"
+            slides_status = "processed" if slides_result.get("success") else "FAILED"
             status_parts.append(f"slides {slides_status}")
         else:
-            status_parts.append("slides skipped (existing)")
+            status_parts.append("slides skipped")
             
         if not transcript_exists:
-            transcript_status = "processed" if transcript_result.get("success") else "failed"
+            transcript_status = "processed" if transcript_result.get("success") else "FAILED"
             status_parts.append(f"transcript {transcript_status}")
         else:
-            status_parts.append("transcript skipped (existing)")
+            status_parts.append("transcript skipped")
         
-        status_msg = f"Processed {speaker_name}: {', '.join(status_parts)}"
+        status_msg = f"{speaker_name}: {', '.join(status_parts)}"
         
         # Update final webhook status
         final_updates = {

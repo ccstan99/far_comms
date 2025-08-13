@@ -195,7 +195,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                         messages=[{
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": f"Analyze this title slide. Extract: 1) Presentation title 2) Speaker name(s) 3) Affiliation(s). Return JSON format: {{\"title\": \"...\", \"authors\": [\"name1\", \"name2\"], \"affiliations\": [\"aff1\", \"aff2\"]}}. If not visible, use empty string/array. Expected speaker: {speaker_name}"},
+                                {"type": "text", "text": f"Analyze this title slide. Extract: 1) Presentation title 2) Speaker name(s) 3) Affiliation(s). Return JSON format: {{\"speaker_name\": \"exact name as written\", \"affiliation\": \"institution\", \"talk_title\": \"presentation title\"}}. Expected speaker: {speaker_name}"},
                                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64_1}}
                             ]
                         }]
