@@ -351,6 +351,48 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                 "visual_elements": len(visual_elements),
                 "images_saved": len(saved_images)
             }
+            
+            # Save debug JSON file for debugging purposes
+            try:
+                from datetime import datetime
+                debug_json_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_debug.json"
+                debug_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "input": {
+                        "speaker_name": speaker_name,
+                        "pdf_path": pdf_path,
+                        "table_id": table_id,
+                        "coda_speaker": coda_speaker,
+                        "coda_affiliation": coda_affiliation,
+                        "coda_title": coda_title
+                    },
+                    "extraction_results": {
+                        "markdown_baseline_length": len(slides_md_baseline),
+                        "qr_codes": qr_codes,
+                        "visual_elements": visual_elements,
+                        "slide_1_metadata": slide_1_metadata,
+                        "saved_images": saved_images
+                    },
+                    "llm_processing": {
+                        "raw_response": result_text,
+                        "parsed_result": result,
+                        "processing_stats": result["processing_stats"]
+                    }
+                }
+                
+                with open(debug_json_path, 'w', encoding='utf-8') as f:
+                    json.dump(debug_data, f, indent=2, ensure_ascii=False)
+                
+                # Also save raw markdown for easy inspection
+                markdown_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_raw.md"
+                with open(markdown_path, 'w', encoding='utf-8') as f:
+                    f.write(slides_md_baseline)
+                
+                logger.info(f"Debug files saved: {debug_json_path.name}, {markdown_path.name}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to save debug JSON: {e}")
+                
             logger.info(f"Successfully processed slides for {speaker_name}")
         else:
             logger.error(f"Failed to parse slide processing JSON after repair attempts")
