@@ -54,7 +54,7 @@ def is_placeholder_text(text: str) -> bool:
     return not text or not text.strip()
 
 
-def get_prepare_talk_input(raw_data: dict) -> dict:
+def get_input(raw_data: dict) -> dict:
     """Parse raw Coda data for prepare_talk - needs speaker name and YouTube URL"""
     return {
         "speaker": raw_data.get("Speaker", ""),
@@ -62,7 +62,7 @@ def get_prepare_talk_input(raw_data: dict) -> dict:
     }
 
 
-def display_prepare_talk_input(function_data: dict) -> dict:
+def display_input(function_data: dict) -> dict:
     """Format function input for webhook display - no long fields to truncate"""
     return function_data
 
@@ -79,12 +79,12 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         logger.info(f"Processing slides for speaker: {speaker_name}")
         
         # Import here to avoid circular imports
-        from far_comms.utils.content_preprocessor import find_matching_pdf, extract_pdf_content
+        from far_comms.utils.content_preprocessor import find_pdf, extract_pdf
         from anthropic import Anthropic
         import os
         
         # Find and extract PDF content
-        pdf_path = find_matching_pdf(speaker_name)
+        pdf_path = find_pdf(speaker_name)
         if not pdf_path:
             logger.warning(f"No matching PDF found for speaker: {speaker_name}")
             return {
@@ -98,7 +98,7 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
             }
         
         logger.info(f"Found matching PDF: {pdf_path}")
-        slides_data = extract_pdf_content(pdf_path, speaker_name)
+        slides_data = extract_pdf(pdf_path, speaker_name)
         slides_raw = slides_data["enhanced_content"]  # Enhanced content with visual descriptions
         qr_codes = slides_data["qr_codes"]
         visual_elements = slides_data["visual_elements"]
@@ -108,12 +108,12 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         
         # Load prompt from docs/clean_slides.md
         docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
-        clean_slides_prompt_path = docs_dir / "clean_slides.md"
+        prompt_path = docs_dir / "clean_slides.md"
         
-        if not clean_slides_prompt_path.exists():
-            raise FileNotFoundError(f"clean_slides.md not found at {clean_slides_prompt_path}")
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"clean_slides.md not found at {prompt_path}")
         
-        prompt_template = clean_slides_prompt_path.read_text()
+        prompt_template = prompt_path.read_text()
         
         # Use string replacement to avoid conflicts with JSON braces in template
         slides_prompt = prompt_template.replace("{speaker}", speaker_name)
@@ -219,7 +219,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         
         # Import here to avoid circular imports
         from far_comms.utils.content_preprocessor import (
-            find_matching_video, extract_youtube_transcript, extract_local_video_transcript
+            find_video, extract_youtube, extract_video
         )
         from anthropic import Anthropic
         import os
@@ -227,43 +227,43 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         # Get transcript using same logic as current implementation (with caching)
         output_dir = Path(__file__).parent.parent.parent / "output"
         output_dir.mkdir(exist_ok=True)
-        cached_transcript_path = output_dir / f"{speaker_name}.srt"
+        cache_path = output_dir / f"{speaker_name}.srt"
         
         transcript_raw = ""
         transcript_source = ""
         
-        if cached_transcript_path.exists():
-            logger.info(f"Found cached transcript: {cached_transcript_path}")
-            transcript_raw = cached_transcript_path.read_text(encoding='utf-8')
+        if cache_path.exists():
+            logger.info(f"Found cached transcript: {cache_path}")
+            transcript_raw = cache_path.read_text(encoding='utf-8')
             transcript_source = "cached_assemblyai"
             logger.info(f"Loaded cached transcript: {len(transcript_raw)} characters")
         else:
             # Try local video first (faster and more reliable)
-            video_path = find_matching_video(speaker_name)
+            video_path = find_video(speaker_name)
             if video_path:
                 logger.info(f"Found matching local video: {video_path}")
-                transcript_result = extract_local_video_transcript(video_path)
+                transcript_result = extract_video(video_path)
                 if transcript_result["success"]:
                     transcript_raw = transcript_result["srt_content"]
                     transcript_source = "local_video"
                     logger.info(f"Extracted local video transcript: {len(transcript_raw)} characters")
                     # Cache the transcript
-                    cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
-                    logger.info(f"Cached transcript to: {cached_transcript_path}")
+                    cache_path.write_text(transcript_raw, encoding='utf-8')
+                    logger.info(f"Cached transcript to: {cache_path}")
                 else:
                     logger.warning(f"Local video transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
             else:
                 # No local video found, try YouTube if URL provided
                 if yt_url:
                     logger.info(f"No local video found, trying YouTube: {yt_url}")
-                    transcript_result = extract_youtube_transcript(yt_url)
+                    transcript_result = extract_youtube(yt_url)
                     if transcript_result["success"]:
                         transcript_raw = transcript_result["srt_content"]
                         transcript_source = "youtube"
                         logger.info(f"Extracted YouTube transcript: {len(transcript_raw)} characters")
                         # Cache the transcript
-                        cached_transcript_path.write_text(transcript_raw, encoding='utf-8')
-                        logger.info(f"Cached transcript to: {cached_transcript_path}")
+                        cache_path.write_text(transcript_raw, encoding='utf-8')
+                        logger.info(f"Cached transcript to: {cache_path}")
                     else:
                         logger.warning(f"YouTube transcript extraction failed: {transcript_result.get('error', 'Unknown error')}")
                 else:
@@ -285,12 +285,12 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
         
         # Load prompt from docs/clean_transcript.md
-        clean_transcript_prompt_path = docs_dir / "clean_transcript.md"
+        prompt_path = docs_dir / "clean_transcript.md"
         
-        if not clean_transcript_prompt_path.exists():
-            raise FileNotFoundError(f"clean_transcript.md not found at {clean_transcript_prompt_path}")
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"clean_transcript.md not found at {prompt_path}")
         
-        prompt_template = clean_transcript_prompt_path.read_text()
+        prompt_template = prompt_path.read_text()
         
         # Use string replacement to avoid conflicts with JSON braces in template
         transcript_prompt = prompt_template.replace("{speaker}", speaker_name)
@@ -536,7 +536,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             # Update Coda immediately after slides processing
             if slides_result.get("success"):
                 logger.info("Updating Coda with slides results immediately...")
-                slides_coda_updates = {"Slides": slides_result.get("cleaned_slides", "")}
+                slides_updates = {"Slides": slides_result.get("cleaned_slides", "")}
                 
                 # Handle speaker validation immediately
                 speaker_validation = slides_result.get("speaker_validation", {})
@@ -551,24 +551,24 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                         slide_title = smart_title_case(slide_title)
                     
                     if validation_result == "major_mismatch":
-                        if "Slides" in slides_coda_updates:
-                            slides_coda_updates["Slides"] = "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]\n" + slides_coda_updates["Slides"]
+                        if "Slides" in slides_updates:
+                            slides_updates["Slides"] = "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]\n" + slides_updates["Slides"]
                         logger.warning(f"Major speaker mismatch detected: slide='{slide_speaker}' vs coda='{speaker_name}'")
                     elif validation_result in ["exact_match", "minor_differences"]:
                         prefix = "" if validation_result == "exact_match" else "* "
                         # Only update if slide data is valid and different (never replace good data with placeholders)
                         if slide_speaker and slide_speaker != speaker_name and not is_placeholder_text(slide_speaker):
-                            slides_coda_updates["Speaker"] = f"{prefix}{slide_speaker}"
+                            slides_updates["Speaker"] = f"{prefix}{slide_speaker}"
                         original_affiliation = row_values.get("Affiliation", "")
                         if slide_affiliation and slide_affiliation != original_affiliation and not is_placeholder_text(slide_affiliation):
-                            slides_coda_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
+                            slides_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
                         original_title = row_values.get("Title", "")
                         # Only update title if there are meaningful differences beyond case and it's not placeholder text
                         if slide_title and not titles_equivalent(slide_title, original_title) and not is_placeholder_text(slide_title):
-                            slides_coda_updates["Title"] = f"{prefix}{slide_title}"
+                            slides_updates["Title"] = f"{prefix}{slide_title}"
                 
                 # Update slides in Coda immediately
-                updates = [{"row_id": coda_ids.row_id, "updates": slides_coda_updates}]
+                updates = [{"row_id": coda_ids.row_id, "updates": slides_updates}]
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
                 logger.info(f"Immediate slides update: {result}")
             else:
@@ -592,23 +592,23 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                 # Post-process: convert double newlines to single newlines
                 formatted_transcript = formatted_transcript.replace("\n\n", "\n")
                 
-                transcript_coda_updates = {"Transcript": formatted_transcript}
+                transcript_updates = {"Transcript": formatted_transcript}
                 
                 # Reconstruct SRT with original timestamps
                 original_srt = transcript_result.get("transcript_srt", "")
                 if original_srt and formatted_transcript:
                     reconstructed_srt = _reconstruct_srt(original_srt, formatted_transcript)
                     if reconstructed_srt:
-                        transcript_coda_updates["SRT"] = reconstructed_srt
+                        transcript_updates["SRT"] = reconstructed_srt
                         logger.info(f"Reconstructed SRT with original timestamps")
                     else:
                         logger.warning("SRT reconstruction failed, using original SRT")
-                        transcript_coda_updates["SRT"] = original_srt
+                        transcript_updates["SRT"] = original_srt
                 elif original_srt:
-                    transcript_coda_updates["SRT"] = original_srt
+                    transcript_updates["SRT"] = original_srt
                 
                 # Update transcript in Coda immediately
-                updates = [{"row_id": coda_ids.row_id, "updates": transcript_coda_updates}]
+                updates = [{"row_id": coda_ids.row_id, "updates": transcript_updates}]
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
                 logger.info(f"Immediate transcript update: {result}")
             else:
@@ -646,11 +646,11 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         else:
             status_parts.append("transcript skipped (existing)")
         
-        final_status_message = f"Processed {speaker_name}: {', '.join(status_parts)}"
+        status_msg = f"Processed {speaker_name}: {', '.join(status_parts)}"
         
         # Update final webhook status
         final_updates = {
-            "Webhook progress": final_status_message,
+            "Webhook progress": status_msg,
             "Webhook status": "Done"
         }
         updates = [{"row_id": coda_ids.row_id, "updates": final_updates}]
@@ -664,7 +664,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         ])
         
         if successful_processes > 0:
-            return {"status": "success", "message": final_status_message, "speaker": speaker_name}
+            return {"status": "success", "message": status_msg, "speaker": speaker_name}
         else:
             return {"status": "failed", "message": "No processing succeeded", "speaker": speaker_name}
             

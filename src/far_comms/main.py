@@ -11,10 +11,10 @@ from far_comms.handlers.promote_talk import (
     get_promote_talk_input,
     display_promote_talk_input
 )
-from far_comms.handlers.prepare_talk_simple import (
+from far_comms.handlers.prepare_talk import (
     prepare_talk,
-    get_prepare_talk_input, 
-    display_prepare_talk_input
+    get_input as get_prepare_talk_input, 
+    display_input as display_prepare_talk_input
 )
 from far_comms.handlers.analyze_talk import (
     run_analyze_talk,

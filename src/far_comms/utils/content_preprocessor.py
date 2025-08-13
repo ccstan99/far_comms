@@ -248,7 +248,7 @@ Format your response as JSON:
         return {"qr_codes": [], "visual_elements": [], "page_analyses": [], "saved_images": []}
 
 
-def find_matching_pdf(speaker_name: str) -> str:
+def find_pdf(speaker_name: str) -> str:
     """Find PDF file that best matches speaker name"""
     pdf_files = glob.glob("data/slides/*.pdf")
     if not pdf_files:
@@ -276,7 +276,7 @@ def find_matching_pdf(speaker_name: str) -> str:
     return best_match if best_score > 0 else None
 
 
-def extract_pdf_content(pdf_path: str, speaker_name: str = None) -> dict:
+def extract_pdf(pdf_path: str, speaker_name: str = None) -> dict:
     """Extract both text and visual content from PDF"""
     try:
         # Extract text content
@@ -326,7 +326,7 @@ def extract_pdf_content(pdf_path: str, speaker_name: str = None) -> dict:
         }
 
 
-def find_matching_video(speaker_name: str) -> str:
+def find_video(speaker_name: str) -> str:
     """Find video file that best matches speaker name"""
     video_patterns = ["*.mp4", "*.mkv", "*.avi", "*.mov", "*.webm", "*.m4a", "*.wav"]
     video_files = []
@@ -359,7 +359,7 @@ def find_matching_video(speaker_name: str) -> str:
     return best_match if best_score > 0 else None
 
 
-def extract_youtube_transcript(youtube_url: str) -> dict:
+def extract_youtube(youtube_url: str) -> dict:
     """Extract transcript from YouTube using AssemblyAI with yt-dlp fallback"""
     try:
         # First try direct URL with AssemblyAI
@@ -449,7 +449,7 @@ def extract_youtube_transcript(youtube_url: str) -> dict:
             return {"success": False, "error": error_str}
 
 
-def extract_local_video_transcript(video_path: str) -> dict:
+def extract_video(video_path: str) -> dict:
     """Extract transcript from local video file using AssemblyAI"""
     try:
         # Use SRT format for timestamps

@@ -103,7 +103,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from far_comms.models.requests import ResearchRequest, ResearchAnalysisOutput
-from far_comms.utils.content_preprocessor import extract_pdf_content
+from far_comms.utils.content_preprocessor import extract_pdf
 from anthropic import Anthropic
 import fitz  # PyMuPDF
 
