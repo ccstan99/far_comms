@@ -5,6 +5,9 @@ import logging
 from far_comms.crews.analyze_talk_crew import AnalyzeTalkCrew
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
+# Slide and transcript processing utilities now available:
+# from far_comms.utils.slide_processor import process_slides
+# from far_comms.utils.transcript_processor import process_transcript
 
 logger = logging.getLogger(__name__)
 
