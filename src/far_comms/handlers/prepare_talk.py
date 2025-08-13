@@ -160,9 +160,30 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"QR code detection failed on page {page_num + 1}: {e}")
         
-        # Extract metadata from slide 1 if pymupdf4llm missed title/author
+        # Quick string search for speaker name validation (faster than LLM analysis)
         slide_1_metadata = {}
-        if not any(word in slides_md_baseline.lower() for word in ["author", "title"]):
+        speaker_name_found = False
+        
+        # Search for speaker name in first 1000 chars (likely title slide area)
+        md_beginning = slides_md_baseline[:1000].lower()
+        speaker_parts = speaker_name.lower().split()
+        
+        # Check if all parts of speaker name appear in the markdown beginning
+        if len(speaker_parts) >= 2:  # Full name (first + last)
+            first_name, last_name = speaker_parts[0], speaker_parts[-1]
+            if first_name in md_beginning and last_name in md_beginning:
+                speaker_name_found = True
+                logger.info(f"Speaker name found via string search: '{speaker_name}' in markdown")
+                slide_1_metadata = {
+                    "validation_result": "exact_match",
+                    "validation_method": "string_search",
+                    "slide_speaker": speaker_name,  # Use confirmed name
+                    "slide_affiliation": "",  # Will be found by LLM if needed
+                    "slide_title": ""  # Will be found by LLM if needed
+                }
+        
+        # Fallback to LLM analysis if string search didn't find speaker name
+        if not speaker_name_found and not any(word in slides_md_baseline.lower() for word in ["author", "title"]):
             logger.info("Title/author not found in pymupdf4llm output, analyzing slide 1")
             try:
                 page_1 = doc[0]
@@ -686,6 +707,19 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                 
                 # Handle speaker validation immediately
                 speaker_validation = slides_result.get("speaker_validation", {})
+                slide_1_metadata = slides_result.get("slide_1_metadata", {})
+                
+                # Use string search result if available, otherwise use LLM validation
+                if slide_1_metadata.get("validation_method") == "string_search":
+                    logger.info("Using string search validation result (faster than LLM)")
+                    speaker_validation = {
+                        "slide_speaker": slide_1_metadata.get("slide_speaker", ""),
+                        "slide_affiliation": slide_1_metadata.get("slide_affiliation", ""),
+                        "slide_title": slide_1_metadata.get("slide_title", ""),
+                        "validation_result": slide_1_metadata.get("validation_result", "exact_match"),
+                        "validation_notes": f"Speaker name found via string search in markdown: '{slide_1_metadata.get('slide_speaker', '')}'"
+                    }
+                
                 if speaker_validation:
                     validation_result = speaker_validation.get("validation_result", "")
                     slide_speaker = speaker_validation.get("slide_speaker", "")
