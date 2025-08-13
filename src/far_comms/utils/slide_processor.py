@@ -379,14 +379,37 @@ Format response as JSON:
         client = Anthropic(api_key=api_key)
         
         # Call LLM with Sonnet (better for complex JSON output than Haiku)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",  # Use Sonnet for better JSON reliability
-            max_tokens=8000,
-            messages=[{
-                "role": "user",
-                "content": slides_prompt
-            }]
-        )
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",  # Use Sonnet for better JSON reliability
+                    max_tokens=8000,
+                    messages=[{
+                        "role": "user",
+                        "content": slides_prompt
+                    }]
+                )
+                break  # Success, exit retry loop
+            except Exception as e:
+                logger.warning(f"API call attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt == max_retries - 1:  # Last attempt
+                    logger.error(f"All {max_retries} API attempts failed for {speaker_name}")
+                    # Return fallback result instead of raising
+                    fallback_result = {
+                        "success": False,
+                        "error": f"API error after {max_retries} attempts: {str(e)}",
+                        "cleaned_slides": slides_md_baseline[:2000],
+                        "slide_structure": {"title": "API Error", "main_sections": [], "slide_count": 0},
+                        "speaker_validation": {},
+                        "resources_found": [],
+                        "technical_terms": [],
+                        "qr_codes": qr_codes or [],
+                        "visual_elements": visual_elements or []
+                    }
+                    return fallback_result
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
         
         result_text = response.content[0].text
         logger.info(f"LLM slide processing completed: {len(result_text)} characters")
