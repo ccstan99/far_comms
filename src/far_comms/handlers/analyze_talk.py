@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import json
 import logging
 from far_comms.crews.analyze_talk_crew import AnalyzeTalkCrew
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
+from far_comms.utils.json_repair import json_repair
 # Slide and transcript processing utilities now available:
 # from far_comms.utils.slide_processor import process_slides
 # from far_comms.utils.transcript_processor import process_transcript
@@ -110,22 +110,8 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
             try:
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
                 
-                # Parse the output if it's JSON, otherwise use as string
-                try:
-                    # Handle markdown code block format: ```json\n{...}\n```
-                    if isinstance(crew_output, str) and crew_output.strip().startswith('```json'):
-                        # Extract JSON from markdown code block
-                        json_start = crew_output.find('{')
-                        json_end = crew_output.rfind('}') + 1
-                        if json_start != -1 and json_end > json_start:
-                            json_content = crew_output[json_start:json_end]
-                            parsed_output = json.loads(json_content)
-                        else:
-                            raise json.JSONDecodeError("Could not extract JSON from markdown", crew_output, 0)
-                    else:
-                        parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
-                except (json.JSONDecodeError, TypeError):
-                    parsed_output = {"content": crew_output}
+                # Parse the output using json_repair for robust handling
+                parsed_output = json_repair(crew_output, fallback_value={"content": crew_output})
                 
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 

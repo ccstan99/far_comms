@@ -7,6 +7,7 @@ from far_comms.crews.promote_talk_crew import PromoteTalkCrew
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import TalkRequest, CodaIds
 from far_comms.utils.project_paths import get_docs_dir
+from far_comms.utils.json_repair import json_repair
 
 logger = logging.getLogger(__name__)
 
@@ -149,11 +150,8 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 # Extract structured data from crew result
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
                 
-                # Parse the output if it's JSON, otherwise use as string
-                try:
-                    parsed_output = json.loads(crew_output) if isinstance(crew_output, str) else crew_output
-                except (json.JSONDecodeError, TypeError):
-                    parsed_output = {"content": crew_output}
+                # Parse the output using json_repair for robust handling
+                parsed_output = json_repair(crew_output, fallback_value={"content": crew_output})
                 
                 logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 

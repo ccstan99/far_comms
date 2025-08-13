@@ -104,6 +104,7 @@ from pathlib import Path
 from datetime import datetime
 from far_comms.models.requests import ResearchRequest, ResearchAnalysisOutput
 from far_comms.utils.content_preprocessor import extract_pdf
+from far_comms.utils.json_repair import json_repair
 from anthropic import Anthropic
 import fitz  # PyMuPDF
 
@@ -1801,22 +1802,18 @@ Provide your analysis in structured JSON format matching the ResearchAnalysisOut
             json_str = analysis_text[json_start:json_end]
             
             try:
-                analysis_data = json.loads(json_str)
+                # Use json_repair for robust JSON parsing
+                analysis_data = json_repair(json_str, fallback_value={})
+                
+                if not analysis_data:
+                    raise ValueError("Failed to parse Claude analysis as JSON")
                 
                 # Validate and create ResearchAnalysisOutput
                 return ResearchAnalysisOutput(**analysis_data)
                 
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse analysis JSON: {e}")
-                # Try json-repair as fallback
-                try:
-                    import json_repair
-                    repaired_json = json_repair.repair_json(json_str)
-                    analysis_data = json.loads(repaired_json)
-                    return ResearchAnalysisOutput(**analysis_data)
-                except Exception as repair_error:
-                    logger.error(f"JSON repair also failed: {repair_error}")
-                    raise ValueError(f"Failed to parse Claude analysis as JSON: {e}")
+            except Exception as e:
+                logger.error(f"Failed to create ResearchAnalysisOutput: {e}")
+                raise ValueError(f"Failed to parse Claude analysis: {e}")
         else:
             raise ValueError("No JSON structure found in Claude response")
             

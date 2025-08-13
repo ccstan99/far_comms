@@ -203,10 +203,10 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                     
                     metadata_text = response.content[0].text.strip()
                     # Try to parse JSON response
-                    try:
-                        slide_1_metadata = json.loads(metadata_text)
+                    slide_1_metadata = json_repair(metadata_text, fallback_value={})
+                    if slide_1_metadata:
                         logger.info(f"Extracted slide 1 metadata: {slide_1_metadata}")
-                    except:
+                    else:
                         logger.warning(f"Could not parse slide 1 metadata JSON: {metadata_text}")
                         
             except Exception as e:
@@ -276,16 +276,12 @@ Format response as JSON:
                             
                             response_text = response.content[0].text.strip()
                             
-                            # Parse JSON response
+                            # Parse JSON response with better error handling
                             try:
-                                import json
-                                # Extract JSON from response
-                                if "{" in response_text and "}" in response_text:
-                                    json_start = response_text.find("{")
-                                    json_end = response_text.rfind("}") + 1
-                                    json_str = response_text[json_start:json_end]
-                                    analysis = json.loads(json_str)
-                                    
+                                # Extract JSON from response using json_repair for robustness
+                                analysis = json_repair(response_text, max_attempts=2, fallback_value={})
+                                
+                                if analysis and isinstance(analysis, dict):
                                     # Handle title slide differently
                                     if is_first_slide:
                                         slide_analysis = {
@@ -328,18 +324,19 @@ Format response as JSON:
                                     # QR codes only detected via pyzbar (actual image analysis)
                                     
                                 else:
-                                    # Fallback if no JSON
+                                    # Empty or invalid analysis result
+                                    logger.warning(f"No valid analysis for slide {slide_num} ({img_file.name})")
                                     visual_elements.append({
                                         "type": "image_analysis",
-                                        "description": response_text,
+                                        "description": response_text[:200] + ("..." if len(response_text) > 200 else ""),
                                         "file": img_file.name,
                                         "slide_number": slide_num
                                     })
-                            except json.JSONDecodeError as je:
-                                logger.warning(f"JSON parsing failed for slide {slide_num} ({img_file.name}): {je}")
+                            except Exception as parse_error:
+                                logger.warning(f"JSON parsing failed for slide {slide_num} ({img_file.name}): {parse_error}")
                                 visual_elements.append({
                                     "type": "image_analysis", 
-                                    "description": response_text,
+                                    "description": response_text[:200] + ("..." if len(response_text) > 200 else ""),
                                     "file": img_file.name,
                                     "slide_number": slide_num
                                 })
