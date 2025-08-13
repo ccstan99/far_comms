@@ -262,33 +262,87 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                             
                             response = client.messages.create(
                                 model="claude-3-haiku-20240307",  # 20x cheaper than Sonnet
-                                max_tokens=300,
+                                max_tokens=500,
                                 messages=[{
                                     "role": "user", 
                                     "content": [
-                                        {"type": "text", "text": "Briefly describe this slide image. Focus on: 1) Charts/tables with data 2) Technical diagrams 3) Key visual elements. One sentence per element, be concise."},
+                                        {"type": "text", "text": """Analyze this full slide image and determine if it's "image-rich" for social media.
+
+STRICT CRITERIA FOR "is_image_rich": Only mark as "true" if slide contains:
+✅ Complex workflow diagrams with arrows/boxes/connections (like process flows)
+✅ Data tables with numbers/results/metrics (not just text lists)  
+✅ Charts/graphs with data visualization or performance comparisons
+✅ Technical system diagrams with visual components
+✅ Comparison tables showing quantitative results
+
+❌ DO NOT mark as image-rich:
+❌ Title slides with just names/affiliations/logos
+❌ Bullet point lists (even with fancy formatting)
+❌ Text-heavy slides with minimal visuals
+❌ Simple layouts that are mostly text
+
+Format response as JSON:
+{
+  "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief description"}],
+  "is_image_rich": "true|false - ONLY true for slides with quantitative data, complex diagrams, or rich visual content",
+  "social_media_potential": "brief explanation of visual complexity and data value"
+}"""},
                                         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64}}
                                     ]
                                 }]
                             )
                             
-                            description = response.content[0].text.strip()
-                            visual_elements.append({
-                                "type": "image_analysis",
-                                "description": description,
-                                "file": img_file.name
-                            })
-                            saved_images.append(str(img_file))
+                            response_text = response.content[0].text.strip()
+                            
+                            # Parse JSON response
+                            try:
+                                import json
+                                # Extract JSON from response
+                                if "{" in response_text and "}" in response_text:
+                                    json_start = response_text.find("{")
+                                    json_end = response_text.rfind("}") + 1
+                                    json_str = response_text[json_start:json_end]
+                                    analysis = json.loads(json_str)
+                                    
+                                    # Add slide analysis
+                                    slide_analysis = {
+                                        "type": "full_slide_analysis",
+                                        "description": f"Visual elements: {len(analysis.get('visual_elements', []))}, Image-rich: {analysis.get('is_image_rich', 'false')}",
+                                        "file": img_file.name,
+                                        "is_image_rich": analysis.get("is_image_rich", "false").lower() == "true",
+                                        "social_media_potential": analysis.get("social_media_potential", ""),
+                                        "visual_elements_detail": analysis.get("visual_elements", [])
+                                    }
+                                    visual_elements.append(slide_analysis)
+                                    
+                                    # Save image-rich slides for social media use
+                                    if slide_analysis["is_image_rich"]:
+                                        saved_images.append(str(img_file))
+                                        logger.info(f"Identified image-rich slide: {img_file.name}")
+                                    
+                                else:
+                                    # Fallback if no JSON
+                                    visual_elements.append({
+                                        "type": "image_analysis",
+                                        "description": response_text,
+                                        "file": img_file.name
+                                    })
+                            except json.JSONDecodeError as je:
+                                logger.warning(f"JSON parsing failed for {img_file.name}: {je}")
+                                visual_elements.append({
+                                    "type": "image_analysis", 
+                                    "description": response_text,
+                                    "file": img_file.name
+                                })
                             
                         except Exception as e:
                             logger.warning(f"Haiku analysis failed for {img_file.name}: {e}")
                             # Fallback to basic file info
                             visual_elements.append({
                                 "type": "image",
-                                "description": f"Image from slide: {img_file.name}",
+                                "description": f"Full slide image: {img_file.name}",
                                 "file": img_file.name
                             })
-                            saved_images.append(str(img_file))
         
         logger.info(f"Processing complete: {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images")
         
@@ -371,28 +425,35 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             result["saved_images"] = saved_images
             result["slide_1_metadata"] = slide_1_metadata
             
-            # Create simplified copies of LLM-analyzed images 
+            # Create simplified copies prioritizing image-rich slides
             try:
                 simplified_copies = []
+                image_rich_count = 0
                 
                 for i, visual_element in enumerate(visual_elements, 1):
-                    if "file" in visual_element:
-                        # Find original image path
-                        original_filename = visual_element["file"]
-                        original_path = speaker_output_dir / "images" / original_filename
+                    if "file" in visual_element and visual_element.get("type") == "full_slide_analysis":
+                        # Copy full slide images (not fragments)
+                        original_filename = visual_element["file"] 
+                        original_path = speaker_output_dir / original_filename
                         
                         if original_path.exists():
-                            # Create simplified copy: {speaker}_{number}.png in speaker directory
-                            simplified_name = f"{speaker_name.replace(' ', '_')}_{i}.png"
+                            # Prioritize image-rich slides in naming
+                            if visual_element.get("is_image_rich", False):
+                                image_rich_count += 1
+                                simplified_name = f"{speaker_name.replace(' ', '_')}_rich_{image_rich_count}.png"
+                                logger.info(f"Created image-rich slide copy: {simplified_name}")
+                            else:
+                                simplified_name = f"{speaker_name.replace(' ', '_')}_slide_{i}.png"
+                            
                             simplified_path = speaker_output_dir / simplified_name
                             
                             import shutil
                             shutil.copy2(original_path, simplified_path)
                             simplified_copies.append(str(simplified_path))
-                            logger.info(f"Created simplified copy: {simplified_name}")
                 
                 result["simplified_image_copies"] = simplified_copies
-                logger.info(f"Created {len(simplified_copies)} simplified image copies")
+                result["image_rich_slides"] = image_rich_count
+                logger.info(f"Created {len(simplified_copies)} simplified copies ({image_rich_count} image-rich for social media)")
                 
             except Exception as e:
                 logger.warning(f"Failed to create simplified image copies: {e}")
