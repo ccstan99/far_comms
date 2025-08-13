@@ -113,7 +113,7 @@ Warning: This section contains unfiltered content that may be offensive to some 
 **CRITICAL:** You MUST return ONLY valid JSON in the exact structure below. Do NOT include any explanatory text, markdown formatting, or additional commentary. Your response should start with `{` and end with `}`.
 
 Return JSON with this exact structure:
-```json
+
 {
   "cleaned_slides": "Enhanced markdown content with proper structure, headers, and formatting. Include banner if major mismatch detected.",
   "slide_structure": {
@@ -141,4 +141,3 @@ Return JSON with this exact structure:
   "technical_terms": ["List of key technical terms and acronyms found"],
   "processing_notes": "Any issues encountered during processing, including speaker validation"
 }
-```
