@@ -98,13 +98,19 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
             }
         
         logger.info(f"Found matching PDF: {pdf_path}")
+        
+        # Extract markdown baseline using pymupdf4llm
+        import pymupdf4llm
+        slides_md_baseline = pymupdf4llm.to_markdown(pdf_path)
+        logger.info(f"Extracted markdown baseline: {len(slides_md_baseline)} chars")
+        
+        # Extract additional metadata (QR codes, visual elements) using existing method
         slides_data = extract_pdf(pdf_path, speaker_name)
-        slides_raw = slides_data["enhanced_content"]  # Enhanced content with visual descriptions
         qr_codes = slides_data["qr_codes"]
         visual_elements = slides_data["visual_elements"]
         saved_images = slides_data["saved_images"]
         
-        logger.info(f"Extracted slides: {len(slides_raw)} chars, {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images saved")
+        logger.info(f"Extracted metadata: {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images saved")
         
         # Load prompt from docs/clean_slides.md
         docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
@@ -117,7 +123,7 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         
         # Use string replacement to avoid conflicts with JSON braces in template
         slides_prompt = prompt_template.replace("{speaker}", speaker_name)
-        slides_prompt = slides_prompt.replace("{slides_raw}", slides_raw)
+        slides_prompt = slides_prompt.replace("{slides_md_baseline}", slides_md_baseline)
         slides_prompt = slides_prompt.replace("{qr_codes}", json.dumps(qr_codes, indent=2))
         slides_prompt = slides_prompt.replace("{visual_elements}", json.dumps(visual_elements, indent=2))
         slides_prompt = slides_prompt.replace("{pdf_path}", pdf_path)
@@ -149,12 +155,12 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
         fallback_result = {
             "success": False,
             "error": "JSON parsing failed",
-            "cleaned_slides": slides_raw[:2000],  # Truncated raw content as fallback
+            "cleaned_slides": slides_md_baseline[:2000],  # Truncated markdown baseline as fallback
             "slide_structure": {"title": "Processing failed", "main_sections": [], "slide_count": 0},
             "speaker_validation": {},
             "resources_found": [],
             "technical_terms": [],
-            "processing_notes": f"LLM processing failed, using raw content"
+            "processing_notes": f"LLM processing failed, using markdown baseline"
         }
         
         result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
@@ -181,7 +187,7 @@ def process_slides(speaker_name: str, coda_speaker: str = "", coda_affiliation: 
             result["success"] = True
             result["pdf_path"] = pdf_path
             result["processing_stats"] = {
-                "slides_chars": len(slides_raw),
+                "markdown_baseline_chars": len(slides_md_baseline),
                 "qr_codes_found": len(qr_codes),
                 "visual_elements": len(visual_elements),
                 "images_saved": len(saved_images)

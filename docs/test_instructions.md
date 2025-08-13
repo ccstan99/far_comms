@@ -3,7 +3,8 @@ run test command for Sravanti:
   'http://localhost:8000/coda_webhook/prepare_talk?this_row=grid-LcVoQIcUB2%2Fi-RljBr6dblp&doc_id=Jv4r8SGAJp' \
   -H 'accept: application/json'"
 
-Sample good output from before
+Sample good output from before based on
+'/Users/cheng2/Desktop/agents/far_comms/data/slides/3_35_Sravanti_Addepalli_Natural_Jailbreaks.pdf' 
 
 SLIDES:
 "Does Safety Training of LLMs Generalize to Semantically Related Natural Prompts?
