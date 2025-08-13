@@ -383,12 +383,18 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                 with open(debug_json_path, 'w', encoding='utf-8') as f:
                     json.dump(debug_data, f, indent=2, ensure_ascii=False)
                 
-                # Also save raw markdown for easy inspection
-                markdown_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_raw.md"
-                with open(markdown_path, 'w', encoding='utf-8') as f:
+                # Also save raw markdown files for easy inspection
+                raw_markdown_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_raw.md"
+                pymupdf4llm_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_pymupdf4llm.md"
+                
+                with open(raw_markdown_path, 'w', encoding='utf-8') as f:
                     f.write(slides_md_baseline)
                 
-                logger.info(f"Debug files saved: {debug_json_path.name}, {markdown_path.name}")
+                # For consistency, save the same content as pymupdf4llm.md 
+                with open(pymupdf4llm_path, 'w', encoding='utf-8') as f:
+                    f.write(slides_md_baseline)
+                
+                logger.info(f"Debug files saved: {debug_json_path.name}, {raw_markdown_path.name}, {pymupdf4llm_path.name}")
                 
             except Exception as e:
                 logger.warning(f"Failed to save debug JSON: {e}")
