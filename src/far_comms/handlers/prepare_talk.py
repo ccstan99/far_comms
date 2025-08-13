@@ -480,39 +480,140 @@ Format response as JSON:
             result["saved_images"] = saved_images
             result["slide_1_metadata"] = slide_1_metadata
             
-            # Create simplified copies prioritizing image-rich slides
+            # Identify the 4 most interesting image-rich slides for social media
             try:
-                simplified_copies = []
-                image_rich_count = 0
+                social_media_slides = []
                 
-                for i, visual_element in enumerate(visual_elements, 1):
-                    if "file" in visual_element and visual_element.get("type") == "full_slide_analysis":
-                        # Copy full slide images from images/ directory 
-                        original_filename = visual_element["file"] 
-                        original_path = images_dir / original_filename
+                # Get all image-rich slides with their analysis
+                image_rich_slides = [
+                    ve for ve in visual_elements 
+                    if ve.get("type") == "full_slide_analysis" and ve.get("is_image_rich", False)
+                ]
+                
+                if image_rich_slides and client:
+                    logger.info(f"Found {len(image_rich_slides)} image-rich slides, selecting top 4 for social media")
+                    
+                    # Ask Haiku to rank them for social media potential
+                    slide_summaries = []
+                    for slide in image_rich_slides:
+                        slide_summaries.append({
+                            "file": slide["file"],
+                            "slide_number": slide.get("slide_number", 0),
+                            "description": slide.get("social_media_potential", ""),
+                            "visual_elements": len(slide.get("visual_elements_detail", []))
+                        })
+                    
+                    # Create ranking prompt
+                    ranking_prompt = f"""You are selecting the TOP 4 slides for sharing on social media (X/Twitter) from this technical presentation.
+
+GOAL: Choose slides that give a VISUAL summary of methods or results - NOT text-heavy slides.
+
+CRITERIA FOR GOOD SOCIAL MEDIA SLIDES:
+✅ Data tables with quantitative results/metrics
+✅ Technical diagrams showing system architecture  
+✅ Charts/graphs with performance comparisons
+✅ Complex workflow diagrams with visual components
+✅ Mathematical formulations with visual elements
+
+❌ AVOID:
+❌ Bullet point lists (even with fancy formatting)
+❌ People/author photos or team pictures
+❌ Title slides or acknowledgments
+❌ Text-heavy slides with minimal visuals
+❌ Simple logos or basic layouts
+
+Here are the {len(slide_summaries)} image-rich candidates:
+
+{chr(10).join([f"Slide {s['slide_number']}: {s['description'][:100]}..." for s in slide_summaries])}
+
+Return JSON with the TOP 4 slides ranked by social media potential:
+{{
+  "top_4_slides": [
+    {{
+      "file": "slide_XX.png",
+      "slide_number": XX,
+      "rank": 1,
+      "reason": "why this is perfect for social media"
+    }}
+  ]
+}}"""
+
+                    try:
+                        ranking_response = client.messages.create(
+                            model="claude-3-haiku-20240307",
+                            max_tokens=1000,
+                            messages=[{
+                                "role": "user",
+                                "content": ranking_prompt
+                            }]
+                        )
                         
-                        if original_path.exists():
-                            # Prioritize image-rich slides in naming
-                            if visual_element.get("is_image_rich", False):
-                                image_rich_count += 1
-                                simplified_name = f"{speaker_name.replace(' ', '_')}_rich_{image_rich_count}.png"
-                                logger.info(f"Created image-rich slide copy: {simplified_name}")
-                            else:
-                                simplified_name = f"{speaker_name.replace(' ', '_')}_slide_{i}.png"
+                        ranking_text = ranking_response.content[0].text.strip()
+                        
+                        # Parse ranking JSON
+                        import json
+                        if "{" in ranking_text and "}" in ranking_text:
+                            json_start = ranking_text.find("{")
+                            json_end = ranking_text.rfind("}") + 1
+                            json_str = ranking_text[json_start:json_end]
+                            ranking_result = json.loads(json_str)
                             
-                            simplified_path = speaker_output_dir / simplified_name
-                            
+                            # Copy the top 4 slides to speaker directory
                             import shutil
-                            shutil.copy2(original_path, simplified_path)
-                            simplified_copies.append(str(simplified_path))
+                            for i, top_slide in enumerate(ranking_result.get("top_4_slides", [])[:4], 1):
+                                slide_file = top_slide["file"]
+                                source_path = images_dir / slide_file
+                                
+                                if source_path.exists():
+                                    dest_name = f"{speaker_name.replace(' ', '_')}_social_{i}.png"
+                                    dest_path = speaker_output_dir / dest_name
+                                    shutil.copy2(source_path, dest_path)
+                                    
+                                    social_media_slides.append({
+                                        "file": dest_name,
+                                        "source_slide": slide_file,
+                                        "rank": top_slide.get("rank", i),
+                                        "reason": top_slide.get("reason", ""),
+                                        "slide_number": top_slide.get("slide_number", 0)
+                                    })
+                                    logger.info(f"Created social media slide {i}: {dest_name} (from {slide_file})")
+                            
+                            logger.info(f"Selected {len(social_media_slides)} top slides for social media")
+                        else:
+                            logger.warning("Could not parse slide ranking JSON")
+                            
+                    except Exception as e:
+                        logger.warning(f"Slide ranking failed: {e}")
+                        
+                # Fallback: copy first 4 image-rich slides if ranking failed
+                if not social_media_slides and image_rich_slides:
+                    logger.info("Using fallback: copying first 4 image-rich slides")
+                    import shutil
+                    for i, slide in enumerate(image_rich_slides[:4], 1):
+                        slide_file = slide["file"]
+                        source_path = images_dir / slide_file
+                        
+                        if source_path.exists():
+                            dest_name = f"{speaker_name.replace(' ', '_')}_social_{i}.png"
+                            dest_path = speaker_output_dir / dest_name
+                            shutil.copy2(source_path, dest_path)
+                            
+                            social_media_slides.append({
+                                "file": dest_name,
+                                "source_slide": slide_file,
+                                "rank": i,
+                                "reason": "fallback selection",
+                                "slide_number": slide.get("slide_number", 0)
+                            })
                 
-                result["simplified_image_copies"] = simplified_copies
-                result["image_rich_slides"] = image_rich_count
-                logger.info(f"Created {len(simplified_copies)} simplified copies ({image_rich_count} image-rich for social media)")
+                result["social_media_slides"] = social_media_slides
+                result["total_image_rich_slides"] = len(image_rich_slides)
+                logger.info(f"Created {len(social_media_slides)} social media slides from {len(image_rich_slides)} image-rich candidates")
                 
             except Exception as e:
-                logger.warning(f"Failed to create simplified image copies: {e}")
-                result["simplified_image_copies"] = []
+                logger.warning(f"Failed to create social media slides: {e}")
+                result["social_media_slides"] = []
+                result["total_image_rich_slides"] = 0
             
             result["processing_stats"] = {
                 "markdown_baseline_chars": len(slides_md_baseline),
