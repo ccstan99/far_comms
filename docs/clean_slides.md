@@ -122,16 +122,5 @@ Return JSON with this exact structure:
     "validation_result": "exact_match|minor_differences|major_mismatch",
     "validation_notes": "Brief explanation of assessment reasoning"
   },
-  "resources_found": [
-    {
-      "type": "qr_code|url|paper|arxiv|doi|dataset|github|text_reference",
-      "title": "Resource title or description", 
-      "url": "Direct URL if available (especially for QR codes)",
-      "reference": "Original reference as found in slides or QR code",
-      "context": "Brief context where it was mentioned",
-      "source": "qr_code|slide_text"
-    }
-  ],
-  "technical_terms": ["List of key technical terms and acronyms found"],
   "processing_notes": "Any issues encountered during processing, including speaker validation"
 }
