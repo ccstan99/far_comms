@@ -83,7 +83,7 @@ def json_repair(result_text: str, max_attempts: int = 3, fallback_value: Optiona
         # Try parsing as-is
         try:
             parsed = json.loads(current_text)
-            logger.info(f"Successfully parsed JSON on attempt {attempt + 1}")
+            logger.debug(f"Successfully parsed JSON on attempt {attempt + 1}")
             return parsed
         except json.JSONDecodeError as e:
             logger.debug(f"Attempt {attempt + 1} failed: {e}")
@@ -93,7 +93,7 @@ def json_repair(result_text: str, max_attempts: int = 3, fallback_value: Optiona
                 import json_repair as repair_lib
                 repaired_text = repair_lib.repair_json(current_text)
                 parsed = json.loads(repaired_text)
-                logger.info(f"Successfully repaired JSON with json-repair on attempt {attempt + 1}")
+                logger.debug(f"Successfully repaired JSON with json-repair on attempt {attempt + 1}")
                 return parsed
             except (ImportError, Exception) as repair_error:
                 logger.debug(f"json-repair failed on attempt {attempt + 1}: {repair_error}")

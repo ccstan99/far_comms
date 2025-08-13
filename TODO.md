@@ -19,3 +19,4 @@
 
 - [ ] **Add promote_event support** - Complete implementation for event promotion function
 - [ ] **Add promote_job support** - Implement support for job posting promotion function
+- [ ] **Add publish_socials support** - Upload LinkedIn, X, Bsky to Buffer
