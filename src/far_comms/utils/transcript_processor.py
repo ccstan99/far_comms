@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any
 from far_comms.utils.json_repair import json_repair
+from far_comms.utils.project_paths import get_output_dir
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         import os
         
         # Get transcript using same logic as current implementation (with caching)
-        output_dir = Path(__file__).parent.parent.parent / "output"
+        output_dir = get_output_dir()
         output_dir.mkdir(exist_ok=True)
         cache_path = output_dir / f"{speaker_name}.srt"
         
