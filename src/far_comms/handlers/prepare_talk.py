@@ -531,9 +531,7 @@ Return JSON with the TOP 4 slides ranked by social media potential:
   "top_4_slides": [
     {{
       "file": "slide_XX.png",
-      "slide_number": XX,
-      "rank": 1,
-      "reason": "why this is perfect for social media"
+      "slide_number": XX
     }}
   ]
 }}"""
@@ -558,25 +556,17 @@ Return JSON with the TOP 4 slides ranked by social media potential:
                             json_str = ranking_text[json_start:json_end]
                             ranking_result = json.loads(json_str)
                             
-                            # Copy the top 4 slides to speaker directory
+                            # Copy the top 4 slides to speaker directory (keep original names)
                             import shutil
-                            for i, top_slide in enumerate(ranking_result.get("top_4_slides", [])[:4], 1):
+                            for top_slide in ranking_result.get("top_4_slides", [])[:4]:
                                 slide_file = top_slide["file"]
                                 source_path = images_dir / slide_file
+                                dest_path = speaker_output_dir / slide_file
                                 
                                 if source_path.exists():
-                                    dest_name = f"{speaker_name.replace(' ', '_')}_social_{i}.png"
-                                    dest_path = speaker_output_dir / dest_name
                                     shutil.copy2(source_path, dest_path)
-                                    
-                                    social_media_slides.append({
-                                        "file": dest_name,
-                                        "source_slide": slide_file,
-                                        "rank": top_slide.get("rank", i),
-                                        "reason": top_slide.get("reason", ""),
-                                        "slide_number": top_slide.get("slide_number", 0)
-                                    })
-                                    logger.info(f"Created social media slide {i}: {dest_name} (from {slide_file})")
+                                    social_media_slides.append(slide_file)
+                                    logger.info(f"Copied social media slide: {slide_file}")
                             
                             logger.info(f"Selected {len(social_media_slides)} top slides for social media")
                         else:
@@ -584,27 +574,7 @@ Return JSON with the TOP 4 slides ranked by social media potential:
                             
                     except Exception as e:
                         logger.warning(f"Slide ranking failed: {e}")
-                        
-                # Fallback: copy first 4 image-rich slides if ranking failed
-                if not social_media_slides and image_rich_slides:
-                    logger.info("Using fallback: copying first 4 image-rich slides")
-                    import shutil
-                    for i, slide in enumerate(image_rich_slides[:4], 1):
-                        slide_file = slide["file"]
-                        source_path = images_dir / slide_file
-                        
-                        if source_path.exists():
-                            dest_name = f"{speaker_name.replace(' ', '_')}_social_{i}.png"
-                            dest_path = speaker_output_dir / dest_name
-                            shutil.copy2(source_path, dest_path)
-                            
-                            social_media_slides.append({
-                                "file": dest_name,
-                                "source_slide": slide_file,
-                                "rank": i,
-                                "reason": "fallback selection",
-                                "slide_number": slide.get("slide_number", 0)
-                            })
+                        # No fallback - if ranking fails, copy nothing
                 
                 result["social_media_slides"] = social_media_slides
                 result["total_image_rich_slides"] = len(image_rich_slides)
