@@ -166,9 +166,9 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                 page = doc[page_num]
                 pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
                 slide_filename = f"slide_{page_num + 1:02d}.png"
-                slide_path = speaker_output_dir / slide_filename
+                slide_path = images_dir / slide_filename  # Save in images/ subdirectory
                 pix.save(str(slide_path))
-            logger.info(f"Generated {len(doc)} full slide images")
+            logger.info(f"Generated {len(doc)} full slide images in images/ directory")
         except Exception as e:
             logger.warning(f"Failed to generate full slide images: {e}")
         
@@ -233,15 +233,15 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         visual_elements = []
         saved_images = []
         
-        # Find full slide images we just generated
-        slide_files = list(speaker_output_dir.glob("slide_*.png"))
+        # Find full slide images we just generated (now in images/ directory)
+        slide_files = list(images_dir.glob("slide_*.png"))  
         if slide_files:
             logger.info(f"Found {len(slide_files)} full slide images for analysis")
             
             # Also keep pymupdf4llm fragments for fallback
-            image_files = list(images_dir.glob("*.png"))
-            if image_files:
-                logger.info(f"Found {len(image_files)} pymupdf4llm image fragments as fallback")
+            fragment_files = [f for f in images_dir.glob("*.png") if not f.name.startswith("slide_")]
+            if fragment_files:
+                logger.info(f"Found {len(fragment_files)} pymupdf4llm image fragments as fallback")
             
             # Analyze ALL slides with Haiku (cheap/fast, much better than fragments)
             if client:
@@ -487,9 +487,9 @@ Format response as JSON:
                 
                 for i, visual_element in enumerate(visual_elements, 1):
                     if "file" in visual_element and visual_element.get("type") == "full_slide_analysis":
-                        # Copy full slide images (not fragments)
+                        # Copy full slide images from images/ directory 
                         original_filename = visual_element["file"] 
-                        original_path = speaker_output_dir / original_filename
+                        original_path = images_dir / original_filename
                         
                         if original_path.exists():
                             # Prioritize image-rich slides in naming
