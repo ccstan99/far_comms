@@ -11,7 +11,12 @@ Clean, well-structured markdown with:
 - QR code integration (`[QR code to URL]`)
 - Clean formatting and organization
 
-## Example Output
+## Example 1: Technical Research Presentation
+
+**Speaker**: Sravanti Addepalli  
+**Topic**: AI Safety / LLM Jailbreaking Research  
+**Input**: Raw pymupdf4llm markdown extraction  
+**Output**: Clean, well-structured markdown
 
 ```markdown
 # Does Safety Training of LLMs Generalize to Semantically Related Natural Prompts?
