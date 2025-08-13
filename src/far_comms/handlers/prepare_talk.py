@@ -229,8 +229,6 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"Slide 1 metadata extraction failed: {e}")
         
-        doc.close()
-        
         # Generate basic image descriptions using Haiku on full slide images (better than fragments)
         visual_elements = []
         saved_images = []
