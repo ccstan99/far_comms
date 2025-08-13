@@ -112,5 +112,4 @@ If in doubt:
 - **Always** include attribution
 - **Always** explain why it matters
 - **Never** use hashtags
-- **Never** advocate positions
 - **Never** sacrifice accuracy for engagement
