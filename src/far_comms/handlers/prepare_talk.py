@@ -317,6 +317,10 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         if result != fallback_result:
             result["success"] = True
             result["pdf_path"] = pdf_path
+            result["qr_codes"] = qr_codes
+            result["visual_elements"] = visual_elements  
+            result["saved_images"] = saved_images
+            result["slide_1_metadata"] = slide_1_metadata
             result["processing_stats"] = {
                 "markdown_baseline_chars": len(slides_md_baseline),
                 "qr_codes_found": len(qr_codes),
@@ -664,10 +668,12 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         if not slides_exist:
             logger.info("Processing slides...")
             slides_result = process_slides(
-                speaker_name, 
-                row_values.get("Speaker", ""), 
-                row_values.get("Affiliation", ""), 
-                row_values.get("Title", "")
+                speaker_name,
+                affiliation=row_values.get("Affiliation", ""),
+                coda_speaker=row_values.get("Speaker", ""), 
+                coda_affiliation=row_values.get("Affiliation", ""), 
+                coda_title=row_values.get("Title", ""),
+                table_id=coda_ids.table_id
             )
             
             # Update Coda immediately after slides processing
