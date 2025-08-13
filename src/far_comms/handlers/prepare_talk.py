@@ -245,28 +245,37 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             if image_files:
                 logger.info(f"Found {len(image_files)} pymupdf4llm image fragments as fallback")
             
-            # Analyze key slides with Haiku for descriptions (prioritize full slides over fragments)
+            # Analyze ALL slides with Haiku (cheap/fast, much better than fragments)
             if client:
-                    # Analyze a few representative full slides (title, middle, end)
-                    key_slides = []
-                    if len(slide_files) >= 3:
-                        key_slides = [slide_files[0], slide_files[len(slide_files)//2], slide_files[-1]]
-                    else:
-                        key_slides = slide_files[:3]
-                    
-                    for img_file in key_slides:  # Analyze key full slides
+                    # Analyze every slide - with Haiku it's fast and cheap
+                    for slide_num, img_file in enumerate(slide_files, 1):
+                        is_first_slide = slide_num == 1
                         try:
                             with open(img_file, 'rb') as f:
                                 img_data = f.read()
                             img_base64 = base64.b64encode(img_data).decode()
                             
-                            response = client.messages.create(
-                                model="claude-3-haiku-20240307",  # 20x cheaper than Sonnet
-                                max_tokens=500,
-                                messages=[{
-                                    "role": "user", 
-                                    "content": [
-                                        {"type": "text", "text": """Analyze this full slide image and determine if it's "image-rich" for social media.
+                            # Different prompts for first slide vs others
+                            if is_first_slide:
+                                prompt_text = """Analyze this title slide and extract speaker information + look for QR codes.
+
+Extract the following information exactly as it appears:
+- Speaker name (full name as written)
+- Affiliation/Institution 
+- Talk title
+- QR codes (if any)
+
+Format response as JSON:
+{
+  "speaker_name": "exact name as written on slide",
+  "affiliation": "institution/affiliation as written", 
+  "talk_title": "presentation title as written",
+  "qr_codes": [{"url": "detected_url", "location": "description"}],
+  "is_image_rich": "false",
+  "slide_type": "title"
+}"""
+                            else:
+                                prompt_text = """Analyze this slide and determine if it's "image-rich" for social media + look for QR codes.
 
 STRICT CRITERIA FOR "is_image_rich": Only mark as "true" if slide contains:
 ✅ Complex workflow diagrams with arrows/boxes/connections (like process flows)
@@ -284,9 +293,19 @@ STRICT CRITERIA FOR "is_image_rich": Only mark as "true" if slide contains:
 Format response as JSON:
 {
   "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief description"}],
+  "qr_codes": [{"url": "detected_url", "location": "description"}],
   "is_image_rich": "true|false - ONLY true for slides with quantitative data, complex diagrams, or rich visual content",
-  "social_media_potential": "brief explanation of visual complexity and data value"
-}"""},
+  "social_media_potential": "brief explanation of visual complexity and data value",
+  "slide_type": "content"
+}"""
+
+                            response = client.messages.create(
+                                model="claude-3-haiku-20240307",  # 20x cheaper than Sonnet
+                                max_tokens=500,
+                                messages=[{
+                                    "role": "user", 
+                                    "content": [
+                                        {"type": "text", "text": prompt_text},
                                         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64}}
                                     ]
                                 }]
@@ -304,35 +323,73 @@ Format response as JSON:
                                     json_str = response_text[json_start:json_end]
                                     analysis = json.loads(json_str)
                                     
-                                    # Add slide analysis
-                                    slide_analysis = {
-                                        "type": "full_slide_analysis",
-                                        "description": f"Visual elements: {len(analysis.get('visual_elements', []))}, Image-rich: {analysis.get('is_image_rich', 'false')}",
-                                        "file": img_file.name,
-                                        "is_image_rich": analysis.get("is_image_rich", "false").lower() == "true",
-                                        "social_media_potential": analysis.get("social_media_potential", ""),
-                                        "visual_elements_detail": analysis.get("visual_elements", [])
-                                    }
+                                    # Handle title slide differently
+                                    if is_first_slide:
+                                        slide_analysis = {
+                                            "type": "title_slide_analysis",
+                                            "description": f"Title slide: {analysis.get('speaker_name', 'Unknown')} - {analysis.get('talk_title', 'Unknown')}",
+                                            "file": img_file.name,
+                                            "speaker_name": analysis.get("speaker_name", ""),
+                                            "affiliation": analysis.get("affiliation", ""),
+                                            "talk_title": analysis.get("talk_title", ""),
+                                            "slide_qr_codes": analysis.get("qr_codes", []),
+                                            "is_image_rich": False,  # Title slides never image-rich
+                                            "slide_type": "title"
+                                        }
+                                        
+                                        # Update slide_1_metadata if we found speaker info
+                                        if analysis.get("speaker_name"):
+                                            slide_1_metadata.update({
+                                                "slide_speaker": analysis.get("speaker_name", ""),
+                                                "slide_affiliation": analysis.get("affiliation", ""),
+                                                "slide_title": analysis.get("talk_title", ""),
+                                                "validation_method": "haiku_visual_analysis"
+                                            })
+                                            logger.info(f"Extracted from title slide - Speaker: {analysis.get('speaker_name')}, Affiliation: {analysis.get('affiliation')}")
+                                    else:
+                                        # Content slide analysis
+                                        slide_analysis = {
+                                            "type": "full_slide_analysis",
+                                            "description": f"Slide {slide_num}: Visual elements: {len(analysis.get('visual_elements', []))}, Image-rich: {analysis.get('is_image_rich', 'false')}",
+                                            "file": img_file.name,
+                                            "slide_number": slide_num,
+                                            "is_image_rich": analysis.get("is_image_rich", "false").lower() == "true",
+                                            "social_media_potential": analysis.get("social_media_potential", ""),
+                                            "visual_elements_detail": analysis.get("visual_elements", []),
+                                            "slide_qr_codes": analysis.get("qr_codes", []),
+                                            "slide_type": "content"
+                                        }
+                                        
+                                        # Save image-rich slides for social media use
+                                        if slide_analysis["is_image_rich"]:
+                                            saved_images.append(str(img_file))
+                                            logger.info(f"Identified image-rich slide {slide_num}: {img_file.name}")
+                                    
                                     visual_elements.append(slide_analysis)
                                     
-                                    # Save image-rich slides for social media use
-                                    if slide_analysis["is_image_rich"]:
-                                        saved_images.append(str(img_file))
-                                        logger.info(f"Identified image-rich slide: {img_file.name}")
+                                    # Collect QR codes from any slide
+                                    slide_qr_codes = analysis.get("qr_codes", [])
+                                    for qr in slide_qr_codes:
+                                        qr["page"] = slide_num
+                                        qr["source"] = "haiku_visual_analysis"
+                                        qr_codes.append(qr)
+                                        logger.info(f"Found QR code on slide {slide_num}: {qr.get('url', 'Unknown URL')}")
                                     
                                 else:
                                     # Fallback if no JSON
                                     visual_elements.append({
                                         "type": "image_analysis",
                                         "description": response_text,
-                                        "file": img_file.name
+                                        "file": img_file.name,
+                                        "slide_number": slide_num
                                     })
                             except json.JSONDecodeError as je:
-                                logger.warning(f"JSON parsing failed for {img_file.name}: {je}")
+                                logger.warning(f"JSON parsing failed for slide {slide_num} ({img_file.name}): {je}")
                                 visual_elements.append({
                                     "type": "image_analysis", 
                                     "description": response_text,
-                                    "file": img_file.name
+                                    "file": img_file.name,
+                                    "slide_number": slide_num
                                 })
                             
                         except Exception as e:
