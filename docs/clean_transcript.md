@@ -109,4 +109,3 @@ Return JSON with this exact structure:
   "cleaning_notes": "Details about spelling/terminology corrections made using slide context",
   "processing_status": "success|partial|failed - FAIL if word count below 95%"
 }
-```
