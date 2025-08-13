@@ -174,3 +174,4 @@ Style guides include high-performing content examples and technical formatting s
 - Social media post discovery (Twitter/X, LinkedIn) for amplification opportunities
 - QR code URL validation and metadata extraction
 - When error encountered, webhook status in coda should be "Error" not Failed. Valid options: Error, Done, Not started, In progress
+- don't overcomplicate or overengineer code

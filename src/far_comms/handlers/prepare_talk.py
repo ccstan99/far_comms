@@ -113,12 +113,11 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         images_dir = speaker_output_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
         
-        # Extract markdown with images using pymupdf4llm
+        # Extract markdown using pymupdf4llm (no image fragments needed)
         slides_md_baseline = pymupdf4llm.to_markdown(
             pdf_path,
-            write_images=True,
-            image_path=str(images_dir),
-            ignore_images=False
+            write_images=False,
+            ignore_images=True
         )
         logger.info(f"Extracted markdown baseline: {len(slides_md_baseline)} chars")
         
@@ -135,7 +134,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         # Extract QR codes from first and last slides using pyzbar
         qr_codes = []
         doc = pymupdf.open(pdf_path)
-        for page_num in [0, len(doc)-1]:  # First and last page
+        for page_num in range(len(doc)):  # All pages
             page = doc[page_num]
             pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
             img_data = pix.tobytes('png')
@@ -172,7 +171,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         except Exception as e:
             logger.warning(f"Failed to generate full slide images: {e}")
         
-        doc.close()  # Close document after using it
+        # Keep document open for potential slide 1 analysis
         
         # Quick string search for speaker name validation (faster than LLM analysis)
         slide_1_metadata = {}
@@ -255,45 +254,27 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                             
                             # Different prompts for first slide vs others
                             if is_first_slide:
-                                prompt_text = """Analyze this title slide and extract speaker information + look for QR codes.
+                                prompt_text = """Analyze this title slide and extract speaker information.
 
 Extract the following information exactly as it appears:
 - Speaker name (full name as written)
 - Affiliation/Institution 
 - Talk title
-- QR codes (if any)
 
 Format response as JSON:
 {
   "speaker_name": "exact name as written on slide",
   "affiliation": "institution/affiliation as written", 
   "talk_title": "presentation title as written",
-  "qr_codes": [{"url": "detected_url", "location": "description"}],
-  "is_image_rich": "false",
   "slide_type": "title"
 }"""
                             else:
-                                prompt_text = """Analyze this slide and determine if it's "image-rich" for social media + look for QR codes.
-
-STRICT CRITERIA FOR "is_image_rich": Only mark as "true" if slide contains:
-✅ Complex workflow diagrams with arrows/boxes/connections (like process flows)
-✅ Data tables with numbers/results/metrics (not just text lists)  
-✅ Charts/graphs with data visualization or performance comparisons
-✅ Technical system diagrams with visual components
-✅ Comparison tables showing quantitative results
-
-❌ DO NOT mark as image-rich:
-❌ Title slides with just names/affiliations/logos
-❌ Bullet point lists (even with fancy formatting)
-❌ Text-heavy slides with minimal visuals
-❌ Simple layouts that are mostly text
+                                prompt_text = """Analyze this slide and provide a brief description.
 
 Format response as JSON:
 {
   "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief description"}],
-  "qr_codes": [{"url": "detected_url", "location": "description"}],
-  "is_image_rich": "true|false - ONLY true for slides with quantitative data, complex diagrams, or rich visual content",
-  "social_media_potential": "brief explanation of visual complexity and data value",
+  "description": "brief description of slide content",
   "slide_type": "content"
 }"""
 
@@ -331,7 +312,7 @@ Format response as JSON:
                                             "affiliation": analysis.get("affiliation", ""),
                                             "talk_title": analysis.get("talk_title", ""),
                                             "slide_qr_codes": analysis.get("qr_codes", []),
-                                            "is_image_rich": False,  # Title slides never image-rich
+                                            "description": f"Title slide: {analysis.get('speaker_name', '')}",
                                             "slide_type": "title"
                                         }
                                         
@@ -347,31 +328,20 @@ Format response as JSON:
                                     else:
                                         # Content slide analysis
                                         slide_analysis = {
-                                            "type": "full_slide_analysis",
-                                            "description": f"Slide {slide_num}: Visual elements: {len(analysis.get('visual_elements', []))}, Image-rich: {analysis.get('is_image_rich', 'false')}",
+                                            "type": "full_slide_analysis", 
+                                            "description": analysis.get("description", f"Slide {slide_num}"),
                                             "file": img_file.name,
                                             "slide_number": slide_num,
-                                            "is_image_rich": analysis.get("is_image_rich", "false").lower() == "true",
-                                            "social_media_potential": analysis.get("social_media_potential", ""),
-                                            "visual_elements_detail": analysis.get("visual_elements", []),
-                                            "slide_qr_codes": analysis.get("qr_codes", []),
+                                            "visual_elements": analysis.get("visual_elements", []),
                                             "slide_type": "content"
                                         }
                                         
-                                        # Save image-rich slides for social media use
-                                        if slide_analysis["is_image_rich"]:
-                                            saved_images.append(str(img_file))
-                                            logger.info(f"Identified image-rich slide {slide_num}: {img_file.name}")
+                                        # Save all slides for potential social media use
+                                        saved_images.append(str(img_file))
                                     
                                     visual_elements.append(slide_analysis)
                                     
-                                    # Collect QR codes from any slide
-                                    slide_qr_codes = analysis.get("qr_codes", [])
-                                    for qr in slide_qr_codes:
-                                        qr["page"] = slide_num
-                                        qr["source"] = "haiku_visual_analysis"
-                                        qr_codes.append(qr)
-                                        logger.info(f"Found QR code on slide {slide_num}: {qr.get('url', 'Unknown URL')}")
+                                    # QR codes only detected via pyzbar (actual image analysis)
                                     
                                 else:
                                     # Fallback if no JSON
@@ -480,110 +450,35 @@ Format response as JSON:
             result["saved_images"] = saved_images
             result["slide_1_metadata"] = slide_1_metadata
             
-            # Identify the 4 most interesting image-rich slides for social media
+            # Copy all slides to social media directory for analysis step to evaluate
             try:
                 social_media_slides = []
                 
-                # Get all image-rich slides with their analysis
-                image_rich_slides = [
+                # Get all slides (analysis step will do better ranking)
+                all_slides = [
                     ve for ve in visual_elements 
-                    if ve.get("type") == "full_slide_analysis" and ve.get("is_image_rich", False)
+                    if ve.get("type") == "full_slide_analysis"
                 ]
                 
-                if image_rich_slides and client:
-                    logger.info(f"Found {len(image_rich_slides)} image-rich slides, selecting top 4 for social media")
+                if all_slides:
+                    logger.info(f"Found {len(all_slides)} total slides - all available for analysis step")
                     
-                    # Ask Haiku to rank them for social media potential
-                    slide_summaries = []
-                    for slide in image_rich_slides:
-                        slide_summaries.append({
+                    # Just record all slides as available for social media evaluation
+                    for slide in all_slides:
+                        social_media_slides.append({
                             "file": slide["file"],
                             "slide_number": slide.get("slide_number", 0),
-                            "description": slide.get("social_media_potential", ""),
-                            "visual_elements": len(slide.get("visual_elements_detail", []))
+                            "description": slide.get("description", "")
                         })
-                    
-                    # Create ranking prompt
-                    ranking_prompt = f"""You are selecting the TOP 4 slides for sharing on social media (X/Twitter) from this technical presentation.
-
-GOAL: Choose slides that give a VISUAL summary of methods or results - NOT text-heavy slides.
-
-CRITERIA FOR GOOD SOCIAL MEDIA SLIDES:
-✅ Data tables with quantitative results/metrics
-✅ Technical diagrams showing system architecture  
-✅ Charts/graphs with performance comparisons
-✅ Complex workflow diagrams with visual components
-✅ Mathematical formulations with visual elements
-
-❌ AVOID:
-❌ Bullet point lists (even with fancy formatting)
-❌ People/author photos or team pictures
-❌ Title slides or acknowledgments
-❌ Text-heavy slides with minimal visuals
-❌ Simple logos or basic layouts
-
-Here are the {len(slide_summaries)} image-rich candidates:
-
-{chr(10).join([f"Slide {s['slide_number']}: {s['description'][:100]}..." for s in slide_summaries])}
-
-Return JSON with the TOP 4 slides ranked by social media potential:
-{{
-  "top_4_slides": [
-    {{
-      "file": "slide_XX.png",
-      "slide_number": XX
-    }}
-  ]
-}}"""
-
-                    try:
-                        ranking_response = client.messages.create(
-                            model="claude-3-haiku-20240307",
-                            max_tokens=1000,
-                            messages=[{
-                                "role": "user",
-                                "content": ranking_prompt
-                            }]
-                        )
-                        
-                        ranking_text = ranking_response.content[0].text.strip()
-                        
-                        # Parse ranking JSON
-                        import json
-                        if "{" in ranking_text and "}" in ranking_text:
-                            json_start = ranking_text.find("{")
-                            json_end = ranking_text.rfind("}") + 1
-                            json_str = ranking_text[json_start:json_end]
-                            ranking_result = json.loads(json_str)
-                            
-                            # Copy the top 4 slides to speaker directory (keep original names)
-                            import shutil
-                            for top_slide in ranking_result.get("top_4_slides", [])[:4]:
-                                slide_file = top_slide["file"]
-                                source_path = images_dir / slide_file
-                                dest_path = speaker_output_dir / slide_file
-                                
-                                if source_path.exists():
-                                    shutil.copy2(source_path, dest_path)
-                                    social_media_slides.append(slide_file)
-                                    logger.info(f"Copied social media slide: {slide_file}")
-                            
-                            logger.info(f"Selected {len(social_media_slides)} top slides for social media")
-                        else:
-                            logger.warning("Could not parse slide ranking JSON")
-                            
-                    except Exception as e:
-                        logger.warning(f"Slide ranking failed: {e}")
-                        # No fallback - if ranking fails, copy nothing
                 
-                result["social_media_slides"] = social_media_slides
-                result["total_image_rich_slides"] = len(image_rich_slides)
-                logger.info(f"Created {len(social_media_slides)} social media slides from {len(image_rich_slides)} image-rich candidates")
+                result["social_media_slides"] = [s["file"] for s in social_media_slides]
+                result["total_slides"] = len(all_slides)
+                logger.info(f"All {len(all_slides)} slides available for analysis step ranking")
                 
             except Exception as e:
                 logger.warning(f"Failed to create social media slides: {e}")
                 result["social_media_slides"] = []
-                result["total_image_rich_slides"] = 0
+                result["total_slides"] = 0
             
             result["processing_stats"] = {
                 "markdown_baseline_chars": len(slides_md_baseline),
@@ -595,7 +490,7 @@ Return JSON with the TOP 4 slides ranked by social media potential:
             # Save debug JSON file for debugging purposes
             try:
                 from datetime import datetime
-                debug_json_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_debug.json"
+                debug_json_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides.json"
                 debug_data = {
                     "timestamp": datetime.now().isoformat(),
                     "input": {
@@ -642,10 +537,15 @@ Return JSON with the TOP 4 slides ranked by social media potential:
         else:
             logger.error(f"Failed to parse slide processing JSON after repair attempts")
         
+        doc.close()  # Close document at the very end
         return result
             
     except Exception as e:
         logger.error(f"Error processing slides for {speaker_name}: {e}", exc_info=True)
+        try:
+            doc.close()
+        except:
+            pass
         return {
             "success": False,
             "error": str(e),
