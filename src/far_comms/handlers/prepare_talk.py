@@ -703,10 +703,13 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                     if slide_title:
                         slide_title = smart_title_case(slide_title)
                     
-                    if validation_result == "major_mismatch":
+                    # Only show mismatch banner for actual conflicting data, not missing data
+                    if validation_result == "major_mismatch" and slide_speaker and slide_speaker.strip():
                         if "Slides" in slides_updates:
                             slides_updates["Slides"] = "[*** BEWARE: MISMATCH BETWEEN SPEAKER & SLIDES ***]\n" + slides_updates["Slides"]
                         logger.warning(f"Major speaker mismatch detected: slide='{slide_speaker}' vs coda='{speaker_name}'")
+                    elif validation_result == "major_mismatch":
+                        logger.info(f"Speaker info not found in slides (not a mismatch): slide='{slide_speaker}' vs coda='{speaker_name}'")
                     elif validation_result in ["exact_match", "minor_differences"]:
                         prefix = "" if validation_result == "exact_match" else "* "
                         # Only update if slide data is valid and different (never replace good data with placeholders)

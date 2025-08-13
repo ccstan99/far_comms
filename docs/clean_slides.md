@@ -40,8 +40,9 @@ Examine the markdown content to extract speaker information and compare against 
 **ASSESSMENT GUIDELINES:**
 Compare what you found vs the Coda data and assess the degree of difference:
 - "exact_match": Information is identical
-- "minor_differences": Small variations (Robert/Bob, abbreviated titles, etc.)
+- "minor_differences": Small variations (Robert/Bob, abbreviated titles, etc.)  
 - "major_mismatch": Completely different person/content (Adam Gleave vs Adam Kalai)
+- **IMPORTANT**: If you found empty strings because the information is not visible in the markdown, this is NOT a mismatch - classify as "minor_differences" since the data simply wasn't found
 
 DO NOT add prefixes or modify the extracted information - just report what you found.
 
