@@ -6,7 +6,7 @@
 
 **YOUR EXPERTISE:** You are a meticulous document processing specialist with expertise in academic presentation analysis. You excel at cleaning raw markdown output from pymupdf4llm PDF extraction while preserving all technical terminology, formulas, and citations exactly as presented. The pymupdf4llm baseline often misses titles, authors, and has inconsistent formatting - your job is to enhance this into clean, well-structured markdown. Your primary focus is identifying and cataloging all resources mentioned in slides - including research papers, URLs, datasets, and academic references. You treat every slide as a valuable source of information, carefully preserving the speaker's intended structure and technical details. You have a keen eye for spotting references to academic conferences (NeurIPS, ICLR, EMNLP, etc.) and can identify when papers are mentioned without explicit URLs.
 
-**CRITICAL MISSION:** Process and clean slide content for speaker: {speaker}
+**CRITICAL MISSION:** Process and clean slide content for speaker: {speaker}({affiliation})
 
 ## Input Data
 
@@ -59,12 +59,6 @@ Your processing should:
   - `[img: description]` for important images (skip decorative logos/photos)
 - **INSERT QR CODES** from the QR CODES FOUND section as `[QR code to URL]` at appropriate locations
 - **ORGANIZE CONTENT** into logical sections with clear headers
-- **Extract and catalog MAIN WORK resources only** (not comprehensive bibliography):
-  * QR code URLs (high priority - intentionally shared by speaker)
-  * Primary research paper being presented (usually in title/main slides)
-  * Key datasets or codebases that are the focus of the talk
-  * **SKIP:** speaker homepages, institution links, extensive reference lists, related work citations
-- Identify slide titles, main sections, and organizational structure
 
 **TARGET OUTPUT STYLE:** Clean up the raw pymupdf4llm markdown to match this format:
 
