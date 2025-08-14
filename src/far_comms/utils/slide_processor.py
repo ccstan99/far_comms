@@ -308,40 +308,46 @@ Format as JSON:
         result_text = response.content[0].text
         logger.info(f"LLM slide processing completed: {len(result_text)} characters")
         
-        # Parse JSON response using json_repair utility
-        fallback_result = {
-            "success": False,
-            "error": "JSON parsing failed",
-            "cleaned_slides": slides_md_baseline[:2000],  # Truncated markdown baseline as fallback
-            "speaker_validation": {}
+        # Process plain text response (markdown directly)
+        cleaned_slides = result_text.strip()
+        
+        # Basic validation - ensure we got reasonable content  
+        if len(cleaned_slides) < len(slides_md_baseline) * 0.3:
+            logger.warning(f"LLM response seems too short, using baseline")
+            cleaned_slides = slides_md_baseline[:2000]
+        
+        # Create result with plain text markdown
+        result = {
+            "success": True,
+            "cleaned_slides": cleaned_slides,
+            "speaker_validation": {}  # Will be populated from visual analysis
         }
         
-        result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
+        # Add metadata from visual analysis if available
+        if slide_1_metadata:
+            result["speaker_validation"] = {
+                "slide_speaker": slide_1_metadata.get("slide_speaker", ""),
+                "slide_affiliation": slide_1_metadata.get("slide_affiliation", ""),
+                "slide_title": slide_1_metadata.get("slide_title", ""),
+                "validation_result": slide_1_metadata.get("validation_result", ""),
+                "validation_notes": f"Extracted via {slide_1_metadata.get('validation_method', 'analysis')}"
+            }
         
-        # Debug: Check if result is the expected type
-        if not isinstance(result, dict):
-            logger.error(f"json_repair returned {type(result)} instead of dict. Content: {str(result)[:200]}")
-            # If it's a list with one dict, extract the dict
-            if isinstance(result, list):
-                logger.info(f"Result is list with {len(result)} items")
-                if len(result) == 1 and isinstance(result[0], dict):
-                    logger.info("Extracting dict from single-item list")
-                    result = result[0]
-                    logger.info(f"Successfully extracted dict with keys: {list(result.keys())}")
-                else:
-                    logger.error(f"List format not supported - length: {len(result)}, first item type: {type(result[0]) if result else 'empty'}")
-                    result = fallback_result
-            else:
-                logger.error(f"Unexpected result type: {type(result)}")
-                result = fallback_result
+        result["slide_1_metadata"] = slide_1_metadata
         
-        # Add success metadata if parsing succeeded
-        if result != fallback_result:
-            result["success"] = True
-            result["slide_1_metadata"] = slide_1_metadata
-            logger.info(f"Successfully processed slides for {speaker_name}")
-        else:
-            logger.error(f"Failed to parse slide processing JSON after repair attempts")
+        # Write cleaned slides to file for easy inspection
+        try:
+            output_base = Path(__file__).parent.parent.parent.parent / "output" 
+            speaker_output_dir = output_base / table_id / speaker_name.replace(" ", "_")
+            speaker_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            slides_file = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides_cleaned.md"
+            slides_file.write_text(cleaned_slides, encoding='utf-8')
+            logger.info(f"Cleaned slides saved to: {slides_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save slides file: {e}")
+            
+        logger.info(f"Successfully processed slides for {speaker_name}")
         
         doc.close()  # Close document at the very end
         return result

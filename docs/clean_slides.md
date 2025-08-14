@@ -100,17 +100,22 @@ Warning: This section contains unfiltered content that may be offensive to some 
 
 ## Expected Output Format
 
-**CRITICAL:** You MUST return ONLY valid JSON in the exact structure below. Do NOT include any explanatory text, markdown formatting, or additional commentary. Your response should start with `{` and end with `}`.
+**CRITICAL:** Return ONLY the cleaned slides content as plain markdown. Do NOT include any JSON formatting, code blocks, or additional commentary.
 
-Return JSON with this exact structure:
+Your response should be the complete cleaned slides directly as markdown - with proper headers, clean formatting, and alt text for visual elements.
 
-{
-  "cleaned_slides": "Enhanced markdown content with proper structure, headers, and formatting. Include banner if major mismatch detected.",
-  "speaker_validation": {
-    "slide_speaker": "Exact speaker name as found in slides (empty string if not found)",
-    "slide_affiliation": "Exact affiliation as found in slides (empty string if not found)", 
-    "slide_title": "Exact title as found in slides (empty string if not found)",
-    "validation_result": "exact_match|minor_differences|major_mismatch",
-    "validation_notes": "Brief explanation of assessment reasoning"
-  }
-}
+Start your response immediately with the markdown content, like this example:
+
+# Does Safety Training of LLMs Generalize to Semantically Related Natural Prompts?
+
+Authors: Varun Yerram, Sravanti Addepalli, Prateek Jain, Arun Suggala, Karthikeyan Shanmugam
+
+## Jailbreaks and Safety Evaluations
+
+- LLMs are trained to be harmless, but can be jailbroken to produce harmful responses
+- Existing Jailbreaks are Adversarial in either language or content
+- Exploit the long input context length + large vocabulary + superior instruction following of LLMs
+
+[diagram: Three connected boxes showing different jailbreak techniques]
+
+(Continue with complete slides content in markdown format...)

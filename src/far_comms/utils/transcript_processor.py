@@ -119,44 +119,35 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         result_text = response.content[0].text
         logger.info(f"LLM transcript processing completed: {len(result_text)} characters")
         
-        # Parse JSON response using json_repair utility
+        # Process plain text response (no JSON parsing needed)
         # Extract text from SRT for fallback formatting
         srt_text = re.sub(r'\d+\n[\d:,]+ --> [\d:,]+\n', '', transcript_raw)
         srt_text = re.sub(r'\n+', ' ', srt_text).strip()
         
-        fallback_result = {
-            "success": False,
-            "error": "JSON parsing failed",
-            "transcript_formatted": srt_text,
+        # Use the LLM response directly as formatted transcript
+        transcript_formatted = result_text.strip()
+        
+        # Basic validation - ensure we got reasonable content
+        if len(transcript_formatted) < len(srt_text) * 0.5:
+            logger.warning(f"LLM response seems too short, using fallback")
+            transcript_formatted = srt_text
+        
+        result = {
+            "success": True,
+            "transcript_formatted": transcript_formatted,
             "transcript_srt": transcript_raw
         }
         
-        result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
-        
-        # Debug: Check if result is the expected type
-        if not isinstance(result, dict):
-            logger.error(f"json_repair returned {type(result)} instead of dict. Content: {str(result)[:200]}")
-            # If it's a list with one dict, extract the dict
-            if isinstance(result, list):
-                logger.info(f"Result is list with {len(result)} items")
-                if len(result) == 1 and isinstance(result[0], dict):
-                    logger.info("Extracting dict from single-item list")
-                    result = result[0]
-                    logger.info(f"Successfully extracted dict with keys: {list(result.keys())}")
-                else:
-                    logger.error(f"List format not supported - length: {len(result)}, first item type: {type(result[0]) if result else 'empty'}")
-                    result = fallback_result
-            else:
-                logger.error(f"Unexpected result type: {type(result)}")
-                result = fallback_result
-        
-        # Add success metadata if parsing succeeded
-        if result != fallback_result:
-            result["transcript_srt"] = transcript_raw
-            result["success"] = True
-            logger.info(f"Successfully processed transcript for {speaker_name}")
-        else:
-            logger.error(f"Failed to parse transcript processing JSON after repair attempts")
+        # Write cleaned transcript to file for easy inspection
+        try:
+            output_dir = get_output_dir()
+            transcript_file = output_dir / f"{speaker_name.replace(' ', '_')}_transcript_cleaned.txt"
+            transcript_file.write_text(transcript_formatted, encoding='utf-8')
+            logger.info(f"Cleaned transcript saved to: {transcript_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save transcript file: {e}")
+            
+        logger.info(f"Successfully processed transcript for {speaker_name}")
         
         return result
             

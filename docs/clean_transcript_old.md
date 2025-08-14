@@ -95,12 +95,8 @@ Ensure correct spelling and formatting:
 
 **CRITICAL:** Return ONLY the cleaned transcript text as plain text. Do NOT include any JSON formatting, markdown code blocks, or additional commentary.
 
-Your response should be the complete cleaned transcript directly - formatted in readable paragraphs with corrected technical terms, preserving ALL original words. Word count must be nearly identical to the original (95-105%).
-
-Start your response immediately with the transcript content, like this example:
-
-The speaker begins by discussing large language models and their safety implications. They explain how constitutional AI works to align model behavior with human preferences through a process of critiquing and revision.
-
-Constitutional AI involves training models to critique their own outputs according to a set of principles or constitution. This approach helps create more helpful, harmless, and honest AI systems without requiring extensive human feedback for every response.
-
-(Continue with complete transcript in paragraph format...)
+Return JSON with this exact structure:
+```json
+{
+  "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT MUST BE NEARLY IDENTICAL TO ORIGINAL"
+}
