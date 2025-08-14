@@ -5,40 +5,50 @@ research_resources_task:
     
     TALK CONTEXT:
     - Speaker: {speaker}
-    - Affiliation: {affiliation}
+    - Affiliation: {affiliation}  
     - Talk Title: {talk_title}
     - Slides Content: {slides_content}
     
-    PROGRESSIVE SEARCH STRATEGY (minimize searches):
+    SMART PRIORITY ORDER (should never fail):
     
-    1. START: Look for QR codes and explicit URLs in slides first (no search needed)
+    1. QR CODES/URLs FIRST if slides available:
+       * If slides content is blank/empty: skip to step 2
+       * Look for any URLs/links in the slides content above
+       * If URLs found: these are the speaker's intended resources, verify and use them, STOP HERE
+       * If no URLs found in slides: proceed to step 2
     
-    2. SINGLE SEARCH: Try one broad search for speaker's main work:
-       * Query: "{speaker} {talk_title} paper arXiv"
-       * Look for primary academic paper
+    2. TITLE + SPEAKER SEARCH (most reliable):
+       * Query: "{talk_title} {speaker} paper" or "{speaker} {affiliation} {talk_title}"
+       * This usually finds the main paper being presented
+       * ONLY include if speaker is confirmed author/co-author
+       * If 1+ quality speaker-authored resource found: STOP HERE
+    
+    3. SOCIAL MEDIA SEARCH (posts by speaker or co-authors about their work):
+       * Single query: "{talk_title}" (site:x.com OR site:linkedin.com OR site:bsky.app)
+       * Look for posts/threads by speaker OR co-authors about this work
+       * ONLY include if: speaker is confirmed author AND post is by one of the authors
+       * If 1+ quality social media resource found: STOP HERE
+    
+    4. SLIDES-INFORMED SEARCH (if slides available):
+       * If slides content is blank/empty: STOP HERE 
+       * Extract key terms/concepts from slides content above
+       * Search with speaker name + key terms from slides
        * If 1+ good resource found: STOP HERE
-    
-    3. EXPAND IF NEEDED: Only if step 2 finds nothing, try:
-       * "{speaker} {affiliation} research publications"
-       * Look for recent papers, project websites
-       * If 1+ good resource found: STOP HERE
-    
-    4. LAST RESORT: Only if steps 2-3 fail:
-       * GitHub repositories or project websites
-       * But prioritize papers/academic content over code
+       * If still nothing found: return blank/empty result
     
     EFFICIENCY RULES:
-    - MAX 3 searches total
-    - Stop immediately when 2-3 quality resources found
-    - Academic papers > Project websites > GitHub repos
-    - Quality over quantity - better to have 1 perfect resource than 5 mediocre ones
+    - MAX 5 searches total 
+    - Stop immediately when at least 1 quality resource found  
+    - QR codes/URLs from slides HIGHEST priority (speaker's intended resources)
+    - Title+Speaker search most reliable fallback
+    - Academic conference publications > arxiv papers > speaker's social media posts > project websites > GitHub repos
+    - OK to return empty if no speaker-authored resources found - quality over quantity
+    - Better empty than generic resources that aren't directly related to the talk
     
     CRITICAL VALIDATION RULES:
     - MANDATORY: Speaker "{speaker}" MUST be listed as author/co-author on ALL papers
-    - MANDATORY: For code repositories, "{speaker}" MUST be the owner or primary contributor  
     - MANDATORY: Verify URLs actually work before including them
     - MANDATORY: If you cannot confirm speaker authorship, DO NOT include the resource
-    - PRIORITY: Speaker's own work ONLY - no related work by other authors
     - Do NOT include resources just because they match the topic - they must be speaker's work
     
     STRICT EXCLUSIONS:
@@ -53,9 +63,8 @@ research_resources_task:
     Simple format for Coda Resources column:
     "Paper Title - https://arxiv.org/abs/123\nProject Website - https://speaker.org/project"
     
-    Maximum 3 lines. Focus on main academic/research resources only.
+    Maximum 1-4 lines. Focus on main academic/research resources only.
     Skip GitHub unless no papers/websites found.
-    Stop searching once you find 1-2 quality resources.
   agent: resource_researcher_agent
 
 analyze_transcript_task:

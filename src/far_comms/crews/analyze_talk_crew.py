@@ -16,6 +16,7 @@ class AnalyzeTalkCrew():
             model="anthropic/claude-sonnet-4-20250514",
             max_retries=3
         )
+        
 
     # Analysis Agents
     @agent

@@ -41,56 +41,28 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         speaker = function_data.get("speaker", "")
         logger.info(f"Starting AnalyzeTalk crew for {speaker}")
         
-        # Check if slides and transcript are available - both required for analysis
-        slides_content = function_data.get("slides_content", "")
-        transcript_content = function_data.get("transcript_content", "")
+        # Get all available data - let the agent decide what to do with missing content
+        slides_content = function_data.get("slides_content", "").strip()
+        transcript_content = function_data.get("transcript_content", "").strip()
         
-        if not slides_content or not slides_content.strip():
-            error_msg = f"Cannot analyze without slides content. Please run 'prepare_talk' first to extract slides."
-            logger.error(error_msg)
-            
-            # Update Coda with error status
-            if coda_ids:
-                try:
-                    coda_client = CodaClient()
-                    error_updates = {
-                        "Webhook status": "Failed", 
-                        "Webhook progress": error_msg
-                    }
-                    coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
-                except Exception as update_error:
-                    logger.error(f"Failed to update Coda with error status: {update_error}")
-            
-            return  # Exit early - cannot proceed without slides
-
-        if not transcript_content or not transcript_content.strip():
-            error_msg = f"Cannot analyze without transcript content. Please run 'prepare_talk' first to extract transcript."
-            logger.error(error_msg)
-            
-            # Update Coda with error status
-            if coda_ids:
-                try:
-                    coda_client = CodaClient()
-                    error_updates = {
-                        "Webhook status": "Failed", 
-                        "Webhook progress": error_msg
-                    }
-                    coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
-                except Exception as update_error:
-                    logger.error(f"Failed to update Coda with error status: {update_error}")
-            
-            return  # Exit early - cannot proceed without transcript
+        # Log what data is available for the agent
+        available_data = []
+        if slides_content: available_data.append("slides")
+        if transcript_content: available_data.append("transcript")
+        if not available_data: available_data.append("speaker+title only")
         
-        logger.info(f"Slides content available ({len(slides_content)} characters) and transcript content available ({len(transcript_content)} characters) - proceeding with analysis")
+        logger.info(f"Resource research will use: {', '.join(available_data)}")
         
-        # Prepare crew input with all required context
+        # Always proceed - let the agent handle missing data gracefully
+        
+        # Prepare crew input with slides content (most likely needed for resource research)
         crew_data = {
             "speaker": speaker,
             "affiliation": function_data.get("affiliation", ""),
             "talk_title": function_data.get("talk_title", ""),
-            "slides_content": slides_content,
-            "transcript_content": transcript_content
+            "slides_content": slides_content  # Will be blank if no slides available
         }
+        
         
         # Add Coda IDs if provided (for error reporting)
         if coda_ids:
@@ -98,10 +70,11 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
             logger.debug(f"Added Coda IDs for error reporting: {coda_ids}")
         
         logger.debug(f"Final crew data keys: {list(crew_data.keys())}")
-        logger.debug(f"Slides length: {len(crew_data.get('slides_content', ''))}, Transcript length: {len(crew_data.get('transcript_content', ''))}")
+        logger.debug(f"Slides available: {len(crew_data['slides_content'])} chars")
         
-        # Run the crew and capture results
-        result = AnalyzeTalkCrew().crew().kickoff(inputs=crew_data)
+        # Run the crew and capture results (no CodaRowTool needed)
+        crew_instance = AnalyzeTalkCrew()
+        result = crew_instance.crew().kickoff(inputs=crew_data)
         logger.info("AnalyzeTalk crew completed successfully!")
         
         # Update Coda with final results if Coda IDs provided
