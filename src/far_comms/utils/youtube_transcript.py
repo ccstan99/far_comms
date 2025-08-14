@@ -6,6 +6,7 @@ import glob
 import tempfile
 from urllib.parse import urlparse, parse_qs
 import re
+from typing import Optional
 
 try:
     import assemblyai as aai
@@ -22,7 +23,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def extract_youtube_video_id(url: str) -> str | None:
+def extract_youtube_video_id(url: str) -> Optional[str]:
     """
     Extract YouTube video ID from various YouTube URL formats
     
@@ -49,7 +50,7 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
-def download_youtube_audio(youtube_url: str, temp_dir: str = None) -> str | None:
+def download_youtube_audio(youtube_url: str, temp_dir: str = None) -> Optional[str]:
     """
     Download audio from YouTube video using yt-dlp
     
@@ -113,7 +114,7 @@ def download_youtube_audio(youtube_url: str, temp_dir: str = None) -> str | None
         return None
 
 
-def find_matching_video_file(speaker_name: str) -> str | None:
+def find_matching_video_file(speaker_name: str) -> Optional[str]:
     """
     Find local video file that matches speaker name using shared matching logic
     

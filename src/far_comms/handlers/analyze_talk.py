@@ -17,6 +17,7 @@ def get_analyze_talk_input(raw_data: dict) -> dict:
     return {
         "speaker": raw_data.get("Speaker", ""),
         "affiliation": raw_data.get("Affiliation", ""),
+        "talk_title": raw_data.get("Title", ""),
         "slides_content": raw_data.get("Slides", ""),
         "transcript_content": raw_data.get("Transcript", "")
     }
@@ -82,10 +83,11 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         
         logger.info(f"Slides content available ({len(slides_content)} characters) and transcript content available ({len(transcript_content)} characters) - proceeding with analysis")
         
-        # Prepare crew input
+        # Prepare crew input with all required context
         crew_data = {
             "speaker": speaker,
             "affiliation": function_data.get("affiliation", ""),
+            "talk_title": function_data.get("talk_title", ""),
             "slides_content": slides_content,
             "transcript_content": transcript_content
         }
@@ -106,23 +108,18 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         if coda_ids and result:
             coda_client = CodaClient()
             
-            # Parse crew output
+            # Handle simple string output (new simplified format)
             try:
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
+                logger.info(f"Crew output: {crew_output[:200]}...")
                 
-                # Parse the output using json_repair for robust handling
-                parsed_output = json_repair(crew_output, fallback_value={"content": crew_output})
-                
-                logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
-                
-                # Extract Coda updates from crew output
-                coda_updates = parsed_output.get("coda_updates", {})
-                
-                # Ensure we have required status fields
-                if "Webhook progress" not in coda_updates:
-                    coda_updates["Webhook progress"] = f"Analyzed {speaker}: crew completed"
-                if "Webhook status" not in coda_updates:
-                    coda_updates["Webhook status"] = "Done"
+                # Direct string output format - no JSON parsing needed
+                resource_count = len(crew_output.strip().split('\n'))
+                coda_updates = {
+                    "Resources": crew_output.strip(),
+                    "Webhook progress": f"Resource research completed: {resource_count} resources found",
+                    "Webhook status": "Done"
+                }
                 
                 # Log content lengths for debugging
                 for key, value in coda_updates.items():

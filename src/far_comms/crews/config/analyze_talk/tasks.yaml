@@ -1,54 +1,61 @@
 research_resources_task:
   description: >
-    Research and find actual URLs for the PRIMARY resources identified in slides (not comprehensive bibliography).
+    Research and find actual URLs for the speaker's PRIMARY resources - the main work they are presenting.
+    This is for social media sharing (1 tweet), so focus on 1-4 most important resources only.
     
-    SLIDES CONTENT (from Coda):
-    {slides_content}
+    TALK CONTEXT:
+    - Speaker: {speaker}
+    - Affiliation: {affiliation}
+    - Talk Title: {talk_title}
+    - Slides Content: {slides_content}
     
-    Use only the MAIN WORK resources from the slides - typically 1-2 resources max.
+    PROGRESSIVE SEARCH STRATEGY (minimize searches):
     
-    Your research should focus on:
-    - QR code URLs (high priority):
-      * Look for "[QR code to URL]" markers in the slides content
-      * These URLs are already verified - do NOT search for them
-      * Visit the URL to get the page title and determine resource type (paper, codebase, website, dataset)
-      * Extract basic info: type, title, url (keep original QR URL from the marker)
-    - Primary research paper being presented:
-      * Search using queries like "[paper title] [conference] [year]", "[paper title] arXiv"  
-      * Look for arXiv preprints, official conference proceedings, ACM Digital Library, IEEE Xplore
-      * Try variations with author names + key terms from talk title
-    - Key datasets/codebases that are the main focus:
-      * Only if they are central to the work being presented
+    1. START: Look for QR codes and explicit URLs in slides first (no search needed)
+    
+    2. SINGLE SEARCH: Try one broad search for speaker's main work:
+       * Query: "{speaker} {talk_title} paper arXiv"
+       * Look for primary academic paper
+       * If 1+ good resource found: STOP HERE
+    
+    3. EXPAND IF NEEDED: Only if step 2 finds nothing, try:
+       * "{speaker} {affiliation} research publications"
+       * Look for recent papers, project websites
+       * If 1+ good resource found: STOP HERE
+    
+    4. LAST RESORT: Only if steps 2-3 fail:
+       * GitHub repositories or project websites
+       * But prioritize papers/academic content over code
+    
+    EFFICIENCY RULES:
+    - MAX 3 searches total
+    - Stop immediately when 2-3 quality resources found
+    - Academic papers > Project websites > GitHub repos
+    - Quality over quantity - better to have 1 perfect resource than 5 mediocre ones
+    
+    CRITICAL VALIDATION RULES:
+    - MANDATORY: Speaker "{speaker}" MUST be listed as author/co-author on ALL papers
+    - MANDATORY: For code repositories, "{speaker}" MUST be the owner or primary contributor  
+    - MANDATORY: Verify URLs actually work before including them
+    - MANDATORY: If you cannot confirm speaker authorship, DO NOT include the resource
+    - PRIORITY: Speaker's own work ONLY - no related work by other authors
+    - Do NOT include resources just because they match the topic - they must be speaker's work
     
     STRICT EXCLUSIONS:
-    - Do NOT search for social media posts
-    - Do NOT include speaker homepages or institutional links
-    - Do NOT include related work or comprehensive reference lists
-    - Do NOT include background/citation papers
+    - Do NOT include general speaker homepages or CV
+    - Do NOT include institutional/company websites  
+    - Do NOT include cited papers by other authors
+    - Do NOT include comprehensive reference lists
     
-    Expected result: 0-2 resources typically, max 4 for multi-paper presentations
-    Format: simple text format, NO emojis, one resource per line
+    Expected result: 1-4 resources max, focus on speaker's main contributions
     
   expected_output: >
-    {
-      "researched_resources": [
-        {
-          "original_reference": "Reference as found in slides",
-          "title": "Full paper/resource title",
-          "url": "Actual URL if found, or 'NOT_FOUND'",
-          "citation": "Complete citation information",
-          "source": "Where URL was found (arXiv, ACM, IEEE, etc.)",
-          "status": "found|partial|not_found",
-          "notes": "Additional information or search attempts"
-        }
-      ],
-      "resources_formatted": "Formatted string ready for Coda Resources column",
-      "research_summary": {
-        "total_resources": "Number of resources processed",
-        "urls_found": "Number of actual URLs found",
-        "citations_only": "Number with citation info but no URL"
-      }
-    }
+    Simple format for Coda Resources column:
+    "Paper Title - https://arxiv.org/abs/123\nProject Website - https://speaker.org/project"
+    
+    Maximum 3 lines. Focus on main academic/research resources only.
+    Skip GitHub unless no papers/websites found.
+    Stop searching once you find 1-2 quality resources.
   agent: resource_researcher_agent
 
 analyze_transcript_task:
@@ -91,40 +98,28 @@ analyze_transcript_task:
 
 final_assembly_task:
   description: >
-    Assemble research and analysis results and prepare final outputs for Coda database update.
+    Assemble resource research results and prepare final outputs for Coda database update.
     
-    Extract the ACTUAL content from previous tasks:
-    - Resources: Use "resources_formatted" string from resource research task  
-    - Analysis: Convert transcript analysis JSON to markdown format for Coda storage
-    - Generate processing summary for "Webhook progress" column
+    Extract the ACTUAL content from the resource research task:
+    - Resources: Use "resources_formatted" string from resource research task
+    - Generate processing summary for "Webhook progress" column  
     - Set "Webhook status" to "Done"
     
-    TRANSCRIPT ANALYSIS FORMATTING:
-    Convert the transcript analysis JSON output to readable markdown format for Coda display:
-    - Use single newlines (\n) between sections, NOT double newlines (\n\n)
-    - Core Thesis: Display as "## Core Thesis" section
-    - Key Findings: Display as "## Key Findings" with bullet list
-    - Talk Outline: Display as "## Talk Structure" with structured format
-    - Technical Details: Display as "## Technical Details" (if applicable)
-    - Surprising Claims: Display as "## Key Insights" with bullet list
-    - Impactful Quotes: Display as "## Notable Quotes" with quote formatting
-    - IMPORTANT: Separate sections with single \n, not \n\n for proper Coda formatting
+    IMPORTANT: Only process resource research results - transcript analysis is currently disabled.
     
   expected_output: >
     {
       "coda_updates": {
-        "Resources": "Formatted resource list ready for Coda",
-        "Analysis": "Transcript analysis in markdown format",
-        "Webhook progress": "Analysis completed successfully: X resources found, analysis generated",
+        "Resources": "Formatted resource list ready for Coda (from resources_formatted)",
+        "Webhook progress": "Resource research completed successfully: X resources found",
         "Webhook status": "Done"
       },
       "processing_summary": {
         "resources_found": "Number of resources found",
-        "analysis_completed": "true",
+        "search_methods_used": "QR codes, paper search, etc",
         "total_processing_time": "Processing time"
       }
     }
   agent: resource_researcher_agent
   context:
     - research_resources_task
-    - analyze_transcript_task

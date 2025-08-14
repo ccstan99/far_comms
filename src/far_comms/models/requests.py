@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, HttpUrl, Field
 from enum import Enum
+from typing import Union, Optional
 
 # ============================================================================
 # SHARED TYPES
@@ -18,7 +19,7 @@ class FunctionName(str, Enum):
 class CodaWebhookRequest(BaseModel):
     thisRow: str
     docId: str
-    speaker: str | None = None
+    speaker: Optional[str] = None
 
 # ============================================================================
 # PROMOTE_TALK FUNCTION MODELS
@@ -30,8 +31,8 @@ class TalkRequest(BaseModel):
     title: str
     event: str
     affiliation: str
-    yt_full_link: str | HttpUrl
-    resource_url: str | HttpUrl | None = None
+    yt_full_link: Union[str, HttpUrl]
+    resource_url: Optional[Union[str, HttpUrl]] = None
     transcript: str
 
 class TalkPromotionOutput(BaseModel):
@@ -146,11 +147,11 @@ class ResearchAnalysisResponse(BaseModel):
     """Response from analyze_research endpoint"""
     status: str = Field(description="Status of the analysis: 'success' or 'failed'")
     message: str = Field(description="Status message or error details")
-    analysis: ResearchAnalysisOutput | None = Field(
+    analysis: Optional[ResearchAnalysisOutput] = Field(
         None,
         description="Structured research analysis (null if analysis failed)"
     )
-    files_saved: dict | None = Field(
+    files_saved: Optional[dict] = Field(
         None,
         description="Information about saved Markdown file (primary format for human review)",
         example={
