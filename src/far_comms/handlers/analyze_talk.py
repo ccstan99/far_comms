@@ -55,12 +55,13 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         
         # Always proceed - let the agent handle missing data gracefully
         
-        # Prepare crew input with slides content (most likely needed for resource research)
+        # Prepare crew input with slides and transcript content
         crew_data = {
             "speaker": speaker,
             "affiliation": function_data.get("affiliation", ""),
             "talk_title": function_data.get("talk_title", ""),
-            "slides_content": slides_content  # Will be blank if no slides available
+            "slides_content": slides_content,  # Will be blank if no slides available
+            "transcript_content": transcript_content  # Will be blank if no transcript available
         }
         
         
@@ -81,18 +82,27 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         if coda_ids and result:
             coda_client = CodaClient()
             
-            # Handle simple string output (new simplified format)
+            # Handle JSON output from final_assembly_task
             try:
+                from far_comms.utils.json_repair import json_repair
+                
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
                 logger.info(f"Crew output: {crew_output[:200]}...")
                 
-                # Direct string output format - no JSON parsing needed
-                resource_count = len(crew_output.strip().split('\n'))
-                coda_updates = {
-                    "Resources": crew_output.strip(),
-                    "Webhook progress": f"Resource research completed: {resource_count} resources found",
-                    "Webhook status": "Done"
-                }
+                # Parse JSON output from final_assembly_task
+                parsed_result = json_repair(crew_output, fallback_value={})
+                
+                if parsed_result and "coda_updates" in parsed_result:
+                    coda_updates = parsed_result["coda_updates"]
+                    logger.info(f"Parsed coda_updates: {list(coda_updates.keys())}")
+                else:
+                    # Fallback: treat as resource-only output (backwards compatibility)
+                    resource_count = len(crew_output.strip().split('\n')) if crew_output.strip() else 0
+                    coda_updates = {
+                        "Resources": crew_output.strip(),
+                        "Webhook progress": f"Resource research completed: {resource_count} resources found",
+                        "Webhook status": "Done"
+                    }
                 
                 # Log content lengths for debugging
                 for key, value in coda_updates.items():

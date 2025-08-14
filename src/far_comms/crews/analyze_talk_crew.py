@@ -156,9 +156,12 @@ class AnalyzeTalkCrew():
         return Crew(
             agents=[
                 self.resource_researcher_agent(),
+                self.transcript_analyzer_agent(),
             ],
             tasks=[
                 self.research_resources_task(),
+                self.analyze_transcript_task(),
+                self.final_assembly_task(),
             ],
             process=Process.sequential,
             verbose=True

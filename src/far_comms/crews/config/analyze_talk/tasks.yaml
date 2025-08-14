@@ -69,66 +69,82 @@ research_resources_task:
 
 analyze_transcript_task:
   description: >
-    Analyze the cleaned transcript to extract core findings, technical details, key insights, and organizational structure.
+    Analyze the transcript to extract the speaker's key ideas and points using their actual words and phrases.
+    This analysis will be the foundation for downstream summarization and social media content generation.
     
     TRANSCRIPT CONTENT (from Coda):
     {transcript_content}
+    
+    SLIDES CONTEXT (for reference):
+    {slides_content}
     
     SPEAKER INFO:
     - Speaker: {speaker}
     - Affiliation: {affiliation}
     
+    CRITICAL: Use the speaker's exact words, phrases, and terminology wherever possible.
+    
     Your analysis should:
-    - Identify the main thesis and supporting arguments
-    - Extract the speaker's organizational pattern and talk structure
-    - Capture the speaker's section titles, main points, and flow
-    - Extract specific technical details, numbers, and metrics
-    - Find surprising or counterintuitive claims
-    - Collect impactful direct quotes from the speaker
-    - Highlight key findings for both technical and non-technical audiences
+    - Extract the speaker's main thesis using their own language
+    - Capture key points in the speaker's voice and phrasing
+    - Preserve the speaker's organizational structure and flow
+    - Extract specific numbers, technical terms, and metrics exactly as stated
+    - Find the most quotable/impactful statements in the speaker's words
+    - Highlight surprising or counterintuitive claims using their exact phrasing
+    - Maintain technical accuracy while preserving authentic voice
     
   expected_output: >
-    {
-      "speaker": "{speaker} ({affiliation})",
-      "core_thesis": "Main argument in 1 sentence",
-      "key_findings": ["Finding 1", "Finding 2", "Finding 3"],
-      "talk_outline": {
-        "structure_type": "Describe the speaker's organizational pattern",
-        "main_points": [
-          {"point": "First main point/section title", "details": "Key content and supporting details"},
-          {"point": "Second main point/section title", "details": "Key content and supporting details"}
-        ]
-      },
-      "technical_details": {"metrics": ["...", "..."], "methods": ["...", "..."], "numbers": ["..."] OR "Not applicable - policy/strategic talk"},
-      "surprising_claims": ["Counterintuitive insight 1", "Counterintuitive insight 2"],
-      "impactful_quotes": ["Direct quote 1", "Direct quote 2"]
-    }
+    # {speaker} - {talk_title}
+    
+    ## Core Thesis
+    {Main argument in speaker's exact words - 1-2 sentences from transcript}
+    
+    ## Key Points
+    - {Key point 1 using speaker's phrases and terminology}
+    - {Key point 2 using speaker's phrases and terminology}  
+    - {Key point 3 using speaker's phrases and terminology}
+    
+    ## Technical Details
+    {Specific numbers, methods, metrics exactly as speaker stated them}
+    
+    ## Notable Quotes
+    > "{Most impactful quote from speaker}"
+    > "{Surprising or counterintuitive claim in speaker's words}"
+    > "{Technical insight worth preserving}"
+    
+    ## Talk Structure
+    {Brief description of how speaker organized their presentation}
+    
+    IMPORTANT: Return ONLY the markdown content above. No additional commentary or JSON formatting.
   agent: transcript_analyzer_agent
 
 final_assembly_task:
   description: >
-    Assemble resource research results and prepare final outputs for Coda database update.
+    Assemble resource research and transcript analysis results for Coda database update.
     
-    Extract the ACTUAL content from the resource research task:
-    - Resources: Use "resources_formatted" string from resource research task
-    - Generate processing summary for "Webhook progress" column  
+    Extract the ACTUAL content from both completed tasks:
+    - Resources: Use the resource research results for "Resources" column
+    - Analysis: Use the markdown transcript analysis for "Analysis" column  
+    - Generate processing summary for "Webhook progress" column
     - Set "Webhook status" to "Done"
     
-    IMPORTANT: Only process resource research results - transcript analysis is currently disabled.
+    Handle cases where either task might have empty results (return blank strings, not error messages).
     
   expected_output: >
     {
       "coda_updates": {
-        "Resources": "Formatted resource list ready for Coda (from resources_formatted)",
-        "Webhook progress": "Resource research completed successfully: X resources found",
+        "Resources": "Formatted resource list from research task (or blank if none found)",
+        "Analysis": "Markdown transcript analysis from transcript task (or blank if no transcript)",
+        "Webhook progress": "Analysis completed: X resources found, transcript analysis completed",
         "Webhook status": "Done"
       },
       "processing_summary": {
         "resources_found": "Number of resources found",
-        "search_methods_used": "QR codes, paper search, etc",
+        "transcript_analyzed": "true/false",
         "total_processing_time": "Processing time"
       }
     }
   agent: resource_researcher_agent
   context:
     - research_resources_task
+    - analyze_transcript_task
