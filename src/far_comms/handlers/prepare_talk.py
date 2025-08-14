@@ -16,8 +16,6 @@ from far_comms.utils.transcript_processor import process_transcript, _reconstruc
 logger = logging.getLogger(__name__)
 
 
-
-
 def get_input(raw_data: dict) -> dict:
     """Parse raw Coda data for prepare_talk - needs speaker name and YouTube URL"""
     return {
@@ -29,12 +27,6 @@ def get_input(raw_data: dict) -> dict:
 def display_input(function_data: dict) -> dict:
     """Format function input for webhook display - no long fields to truncate"""
     return function_data
-
-
-
-
-
-
 
 
 async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
