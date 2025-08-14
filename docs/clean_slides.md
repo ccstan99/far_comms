@@ -49,19 +49,21 @@ DO NOT add prefixes or modify the extracted information - just report what you f
 ## Processing Requirements
 
 Your processing should:
-- **CLEAN UP THE RAW MARKDOWN** from pymupdf4llm - fix formatting and improve structure
-- **STANDARDIZE BULLET POINTS** - use `-` bullets consistently for clean markdown formatting  
-- **IMPROVE SECTION HEADERS** - use proper `#` and `##` markdown headers
-- **PRESERVE ALL ORIGINAL TEXT** - keep exact wording from the raw markdown, just enhance formatting
-- **ADD BRIEF ALT TEXT** for important visual elements: `[diagram: brief description]`, `[table: brief description]`, `[chart: brief description]` 
-- **ORGANIZE CONTENT** into logical sections with clear headers
+- Clean up the raw markdown from pymupdf4llm - fix formatting and improve structure
+- Standardize bullet points - use `-` bullets consistently for clean markdown formatting  
+- Improve section headers - use proper `#` and `##` markdown headers
+- Preserve all original text - keep exact wording from the raw markdown, just enhance formatting
+- Add brief alt text for important visual elements: `[diagram: brief description]`, `[table: brief description]`, `[chart: brief description]` 
+- Organize content into logical sections with clear headers
+- IMPORTANT: Avoid ** bold ** and * italic * formatting - use only clean text with `#` and `##` headings
+- Do NOT use **bold** or *italic* for emphasis - plain text is preferred
 
-**TARGET OUTPUT STYLE:** Clean up the raw pymupdf4llm markdown to match this format:
+TARGET OUTPUT STYLE: Clean up the raw pymupdf4llm markdown to match this format:
 
 ```markdown
 # Does Safety Training of LLMs Generalize to Semantically Related Natural Prompts?
 
-**Authors:** Varun Yerram, Sravanti Addepalli, Prateek Jain, Arun Suggala, Karthikeyan Shanmugam  
+Authors: Varun Yerram, Sravanti Addepalli, Prateek Jain, Arun Suggala, Karthikeyan Shanmugam  
 
 ## Jailbreaks and Safety Evaluations
 
@@ -75,7 +77,7 @@ Your processing should:
 
 [diagram: Workflow diagram showing ReG-QA process]
 
-**ReG-QAs are natural in both language and content**
+ReG-QAs are natural in both language and content
 
 Warning: This section contains unfiltered content that may be offensive to some readers.
 
