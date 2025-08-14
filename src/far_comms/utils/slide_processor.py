@@ -170,7 +170,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                         messages=[{
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": f"Analyze this title slide and extract speaker information.\n\nExpected speaker from database: {coda_speaker}\n\nTasks:\n1. Extract speaker name and compare with expected name (handle variations like 'Dr. John Smith' vs 'John Smith')\n2. Extract talk title and convert to proper title case (lowercase articles like 'and', 'for', 'the', 'in', 'of', 'with', but preserve technical acronyms like AI, LLM, GPU, DNN, etc.)\n3. Extract affiliation/institution\n\nReturn JSON format: {{\"speaker_name\": \"exact name as written\", \"speaker_match\": \"exact|close|different|not_found\", \"affiliation\": \"institution\", \"talk_title\": \"Title In Proper Title Case With Preserved Acronyms\"}}"},
+                                {"type": "text", "text": f"Analyze this title slide and extract speaker information.\n\nExpected speaker from database: {coda_speaker}\n\nTasks:\n1. Extract speaker name and compare with expected name using these rules:\n   - \"exact\": Same person (ignore titles, punctuation, \"and others\")\n   - \"variation\": Same person, different format (Robert vs Bob, missing middle name)\n   - \"different\": Clearly different people\n   - \"not_found\": No speaker name visible\n2. Extract talk title and convert to proper title case (lowercase articles, preserve technical acronyms like AI, LLM, GPU)\n3. Extract affiliation/institution\n\nReturn JSON format: {{\"speaker_name\": \"exact name as written\", \"speaker_match\": \"exact|variation|different|not_found\", \"affiliation\": \"institution\", \"talk_title\": \"Title In Proper Title Case With Preserved Acronyms\"}}"},
                                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64_1}}
                             ]
                         }]
@@ -182,7 +182,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                     if analysis and analysis.get("speaker_name"):
                         speaker_match = analysis.get("speaker_match", "not_found")
                         validation_result = "exact_match" if speaker_match == "exact" else \
-                                          "minor_differences" if speaker_match == "close" else \
+                                          "minor_differences" if speaker_match == "variation" else \
                                           "major_mismatch" if speaker_match == "different" else "major_mismatch"
                         
                         slide_1_metadata = {
@@ -230,14 +230,18 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
 Expected speaker from database: {coda_speaker}
 
 Tasks:
-1. Extract speaker name and compare with expected name (handle variations like "Robert Smith" vs "Bob Smith")
+1. Extract speaker name and compare with expected name using these rules:
+   - "exact": Same person (ignore titles, punctuation, "and others") - Dr. John Smith vs John Smith, Daniel Kang vs Daniel Kang and others
+   - "variation": Same person, different format - Robert vs Bob Smith, Edgar Hoover vs Edgar J Hoover  
+   - "different": Clearly different people - Adam Smith vs Adam Gleave
+   - "not_found": No speaker name visible on slide
 2. Extract talk title and convert to proper title case (lowercase articles like 'and', 'for', 'the', 'in', 'of', 'with', but preserve technical acronyms like AI, LLM, GPU, etc.)
 3. Extract affiliation/institution
 
 Format response as JSON:
 {{
   "speaker_name": "exact name as written on slide",
-  "speaker_match": "exact|close|different|not_found",
+  "speaker_match": "exact|variation|different|not_found",
   "affiliation": "institution/affiliation as written", 
   "talk_title": "Title in Proper Title Case with Preserved Acronyms",
   "slide_type": "title"
@@ -290,7 +294,7 @@ Format response as JSON:
                                         if analysis.get("speaker_name"):
                                             speaker_match = analysis.get("speaker_match", "not_found")
                                             validation_result = "exact_match" if speaker_match == "exact" else \
-                                                              "minor_differences" if speaker_match == "close" else \
+                                                              "minor_differences" if speaker_match == "variation" else \
                                                               "major_mismatch" if speaker_match == "different" else "major_mismatch"
                                             
                                             slide_1_metadata.update({
