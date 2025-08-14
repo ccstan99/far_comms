@@ -98,14 +98,5 @@ Ensure correct spelling and formatting:
 Return JSON with this exact structure:
 ```json
 {
-  "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT MUST BE NEARLY IDENTICAL TO ORIGINAL",
-  "transcript_stats": {
-    "original_word_count": "REQUIRED: Word count from original SRT text",
-    "output_word_count": "REQUIRED: Word count in transcript_formatted",
-    "word_count_percentage": "REQUIRED: (output/original)*100 - MUST be 95-105%",
-    "paragraph_count": "Number of paragraphs created",
-    "duration_minutes": "Video duration if available"
-  },
-  "cleaning_notes": "Details about spelling/terminology corrections made using slide context",
-  "processing_status": "success|partial|failed - FAIL if word count below 95%"
+  "transcript_formatted": "COMPLETE verbatim transcript text with ALL original words preserved, only corrected technical terms, organized into readable paragraphs, no headers or topic titles - WORD COUNT MUST BE NEARLY IDENTICAL TO ORIGINAL"
 }

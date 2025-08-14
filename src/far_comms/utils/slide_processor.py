@@ -53,10 +53,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                 "success": False,
                 "error": f"No PDF found for {speaker_name}",
                 "cleaned_slides": "",
-                "slide_structure": {"title": "", "main_sections": [], "slide_count": 0},
-                "speaker_validation": {},
-                "resources_found": [],
-                "technical_terms": []
+                "speaker_validation": {}
             }
         
         logger.info(f"Found matching PDF: {pdf_path}")
@@ -90,47 +87,8 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"Anthropic client setup failed: {e}")
         
-        # Extract QR codes from first and last slides using pyzbar
-        qr_codes = []
+        # Open document for slide 1 analysis only
         doc = pymupdf.open(pdf_path)
-        for page_num in range(len(doc)):  # All pages
-            page = doc[page_num]
-            pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
-            img_data = pix.tobytes('png')
-            
-            # Convert to PIL Image for pyzbar
-            from PIL import Image
-            from io import BytesIO
-            try:
-                from pyzbar import pyzbar
-                img = Image.open(BytesIO(img_data))
-                detected_qrs = pyzbar.decode(img)
-                for qr in detected_qrs:
-                    qr_url = qr.data.decode('utf-8')
-                    qr_codes.append({
-                        "url": qr_url,
-                        "page": page_num + 1,
-                        "location": f"Page {page_num + 1} ({'first' if page_num == 0 else 'last'} slide)"
-                    })
-                    logger.info(f"Found QR code: {qr_url} on page {page_num + 1}")
-            except ImportError:
-                logger.warning("pyzbar not available for QR code detection")
-            except Exception as e:
-                logger.warning(f"QR code detection failed on page {page_num + 1}: {e}")
-        
-        # Generate full slide images (much more useful than pymupdf4llm fragments)
-        try:
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
-                slide_filename = f"slide_{page_num + 1:02d}.png"
-                slide_path = images_dir / slide_filename  # Save in images/ subdirectory
-                pix.save(str(slide_path))
-            logger.info(f"Generated {len(doc)} full slide images in images/ directory")
-        except Exception as e:
-            logger.warning(f"Failed to generate full slide images: {e}")
-        
-        # Keep document open for potential slide 1 analysis
         
         # Quick string search for speaker name validation (faster than LLM analysis)
         slide_1_metadata = {}
@@ -199,158 +157,94 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"Slide 1 metadata extraction failed: {e}")
         
-        # Generate basic image descriptions using Haiku on full slide images (better than fragments)
-        visual_elements = []
-        saved_images = []
-        
-        # Find full slide images we just generated (now in images/ directory)
-        slide_files = list(images_dir.glob("slide_*.png"))  
-        if slide_files:
-            logger.info(f"Found {len(slide_files)} full slide images for analysis")
-            
-            # Also keep pymupdf4llm fragments for fallback
-            fragment_files = [f for f in images_dir.glob("*.png") if not f.name.startswith("slide_")]
-            if fragment_files:
-                logger.info(f"Found {len(fragment_files)} pymupdf4llm image fragments as fallback")
-            
-            # Analyze ALL slides with Haiku (cheap/fast, much better than fragments)
-            if client:
-                    # Analyze every slide - with Haiku it's fast and cheap
-                    for slide_num, img_file in enumerate(slide_files, 1):
-                        is_first_slide = slide_num == 1
-                        try:
-                            with open(img_file, 'rb') as f:
-                                img_data = f.read()
-                            img_base64 = base64.b64encode(img_data).decode()
-                            
-                            # Different prompts for first slide vs others
-                            if is_first_slide:
-                                prompt_text = f"""Analyze this title slide and extract speaker information.
+        # Generate lightweight visual context for key slides (just first few slides for efficiency)
+        visual_context = ""
+        if client and len(doc) > 0:
+            logger.info("Analyzing key slides for visual context")
+            try:
+                # Analyze first slide for speaker info + first 2-3 slides for visual elements
+                slides_to_analyze = min(3, len(doc))
+                
+                for page_num in range(slides_to_analyze):
+                    page = doc[page_num]
+                    pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+                    img_data = pix.tobytes('png')
+                    img_base64 = base64.b64encode(img_data).decode()
+                    
+                    if page_num == 0:
+                        # First slide: extract speaker info + visual description
+                        prompt_text = f"""Analyze this slide (slide {page_num + 1}).
 
-Expected speaker from database: {coda_speaker}
+If this is a title slide, extract speaker information:
+Expected speaker: {coda_speaker}
+- Extract speaker name, compare using rules: "exact"|"variation"|"different"|"not_found"
+- Extract affiliation and talk title
 
-Tasks:
-1. Extract speaker name and compare with expected name using these rules:
-   - "exact": Same person (ignore titles, punctuation, "and others") - Dr. John Smith vs John Smith, Daniel Kang vs Daniel Kang and others
-   - "variation": Same person, different format - Robert vs Bob Smith, Edgar Hoover vs Edgar J Hoover  
-   - "different": Clearly different people - Adam Smith vs Adam Gleave
-   - "not_found": No speaker name visible on slide
-2. Extract talk title and convert to proper title case (lowercase articles like 'and', 'for', 'the', 'in', 'of', 'with', but preserve technical acronyms like AI, LLM, GPU, etc.)
-3. Extract affiliation/institution
+Also describe any visual elements briefly for accessibility:
+- Diagrams, charts, tables, important images
 
-Format response as JSON:
+Format as JSON:
 {{
-  "speaker_name": "exact name as written on slide",
-  "speaker_match": "exact|variation|different|not_found",
-  "affiliation": "institution/affiliation as written", 
-  "talk_title": "Title in Proper Title Case with Preserved Acronyms",
-  "slide_type": "title"
+  "slide_type": "title|content",
+  "speaker_name": "name if title slide, empty otherwise",  
+  "speaker_match": "exact|variation|different|not_found if title slide",
+  "affiliation": "institution if title slide", 
+  "talk_title": "title if title slide",
+  "visual_elements": "brief description of key visual elements for alt text"
 }}"""
-                            else:
-                                prompt_text = """Analyze this slide and provide a brief description.
+                    else:
+                        # Content slides: just visual description
+                        prompt_text = f"""Analyze slide {page_num + 1} and describe visual elements briefly for accessibility.
+                        
+Focus on: diagrams, charts, tables, important images that would need alt text.
 
-Format response as JSON:
-{
-  "visual_elements": [{"type": "chart|diagram|table|image", "description": "brief description"}],
-  "description": "brief description of slide content",
-  "slide_type": "content"
-}"""
-
-                            response = client.messages.create(
-                                model="claude-3-haiku-20240307",  # 20x cheaper than Sonnet
-                                max_tokens=500,
-                                messages=[{
-                                    "role": "user", 
-                                    "content": [
-                                        {"type": "text", "text": prompt_text},
-                                        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64}}
-                                    ]
-                                }]
-                            )
+Format as JSON:
+{{
+  "slide_type": "content",
+  "visual_elements": "brief description of key visual elements for alt text"  
+}}"""
+                    
+                    response = client.messages.create(
+                        model="claude-3-haiku-20240307",
+                        max_tokens=300,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt_text},
+                                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64}}
+                            ]
+                        }]
+                    )
+                    
+                    response_text = response.content[0].text.strip()
+                    analysis = json_repair(response_text, fallback_value={})
+                    
+                    if analysis:
+                        # Handle title slide speaker extraction
+                        if page_num == 0 and analysis.get("speaker_name") and not speaker_name_found:
+                            speaker_match = analysis.get("speaker_match", "not_found")
+                            validation_result = "exact_match" if speaker_match == "exact" else \
+                                              "minor_differences" if speaker_match == "variation" else \
+                                              "major_mismatch" if speaker_match == "different" else "major_mismatch"
                             
-                            response_text = response.content[0].text.strip()
-                            
-                            # Parse JSON response with better error handling
-                            try:
-                                # Extract JSON from response using json_repair for robustness
-                                analysis = json_repair(response_text, max_attempts=2, fallback_value={})
-                                
-                                if analysis and isinstance(analysis, dict):
-                                    # Handle title slide differently
-                                    if is_first_slide:
-                                        slide_analysis = {
-                                            "type": "title_slide_analysis",
-                                            "description": f"Title slide: {analysis.get('speaker_name', 'Unknown')} - {analysis.get('talk_title', 'Unknown')}",
-                                            "file": img_file.name,
-                                            "speaker_name": analysis.get("speaker_name", ""),
-                                            "affiliation": analysis.get("affiliation", ""),
-                                            "talk_title": analysis.get("talk_title", ""),
-                                            "slide_qr_codes": analysis.get("qr_codes", []),
-                                            "description": f"Title slide: {analysis.get('speaker_name', '')}",
-                                            "slide_type": "title"
-                                        }
-                                        
-                                        # Update slide_1_metadata if we found speaker info
-                                        if analysis.get("speaker_name"):
-                                            speaker_match = analysis.get("speaker_match", "not_found")
-                                            validation_result = "exact_match" if speaker_match == "exact" else \
-                                                              "minor_differences" if speaker_match == "variation" else \
-                                                              "major_mismatch" if speaker_match == "different" else "major_mismatch"
-                                            
-                                            slide_1_metadata.update({
-                                                "slide_speaker": analysis.get("speaker_name", ""),
-                                                "slide_affiliation": analysis.get("affiliation", ""),
-                                                "slide_title": analysis.get("talk_title", ""),  # Already in proper title case
-                                                "validation_result": validation_result,
-                                                "validation_method": "haiku_visual_analysis"
-                                            })
-                                            logger.info(f"Extracted from title slide - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Affiliation: {analysis.get('affiliation')}, Title: {analysis.get('talk_title')}")
-                                    else:
-                                        # Content slide analysis
-                                        slide_analysis = {
-                                            "type": "full_slide_analysis", 
-                                            "description": analysis.get("description", f"Slide {slide_num}"),
-                                            "file": img_file.name,
-                                            "slide_number": slide_num,
-                                            "visual_elements": analysis.get("visual_elements", []),
-                                            "slide_type": "content"
-                                        }
-                                        
-                                        # Save all slides for potential social media use
-                                        saved_images.append(str(img_file))
-                                    
-                                    visual_elements.append(slide_analysis)
-                                    
-                                    # QR codes only detected via pyzbar (actual image analysis)
-                                    
-                                else:
-                                    # Empty or invalid analysis result
-                                    logger.warning(f"No valid analysis for slide {slide_num} ({img_file.name})")
-                                    visual_elements.append({
-                                        "type": "image_analysis",
-                                        "description": response_text[:200] + ("..." if len(response_text) > 200 else ""),
-                                        "file": img_file.name,
-                                        "slide_number": slide_num
-                                    })
-                            except Exception as parse_error:
-                                logger.warning(f"JSON parsing failed for slide {slide_num} ({img_file.name}): {parse_error}")
-                                visual_elements.append({
-                                    "type": "image_analysis", 
-                                    "description": response_text[:200] + ("..." if len(response_text) > 200 else ""),
-                                    "file": img_file.name,
-                                    "slide_number": slide_num
-                                })
-                            
-                        except Exception as e:
-                            logger.warning(f"Haiku analysis failed for {img_file.name}: {e}")
-                            # Fallback to basic file info
-                            visual_elements.append({
-                                "type": "image",
-                                "description": f"Full slide image: {img_file.name}",
-                                "file": img_file.name
+                            slide_1_metadata.update({
+                                "slide_speaker": analysis.get("speaker_name", ""),
+                                "slide_affiliation": analysis.get("affiliation", ""),
+                                "slide_title": analysis.get("talk_title", ""),
+                                "validation_result": validation_result,
+                                "validation_method": "haiku_visual_analysis"
                             })
+                            logger.info(f"Title slide - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Title: {analysis.get('talk_title')}")
+                        
+                        # Collect visual context for all slides
+                        visual_desc = analysis.get("visual_elements", "")
+                        if visual_desc:
+                            visual_context += f"Slide {page_num + 1}: {visual_desc}\n"
+                
+            except Exception as e:
+                logger.warning(f"Visual analysis failed: {e}")
         
-        logger.info(f"Processing complete: {len(qr_codes)} QR codes, {len(visual_elements)} visual elements, {len(saved_images)} images")
+        logger.info(f"Processing complete: analyzed {slides_to_analyze if 'slides_to_analyze' in locals() else 0} slides")
         
         # Load prompt from docs/clean_slides.md
         docs_dir = Path(__file__).parent.parent.parent.parent / "docs"
@@ -364,8 +258,8 @@ Format response as JSON:
         # Use string replacement to avoid conflicts with JSON braces in template  
         slides_prompt = prompt_template.replace("{speaker}", f"{speaker_name} ({affiliation})")
         slides_prompt = slides_prompt.replace("{slides_md_baseline}", slides_md_baseline)
-        slides_prompt = slides_prompt.replace("{qr_codes}", json.dumps(qr_codes, indent=2) if qr_codes else "None found")
-        slides_prompt = slides_prompt.replace("{visual_elements}", json.dumps(visual_elements, indent=2) if visual_elements else "None processed")
+        slides_prompt = slides_prompt.replace("{qr_codes}", "None detected")
+        slides_prompt = slides_prompt.replace("{visual_elements}", visual_context if visual_context else "None processed")
         slides_prompt = slides_prompt.replace("{pdf_path}", pdf_path)
         slides_prompt = slides_prompt.replace("{coda_speaker}", coda_speaker)
         slides_prompt = slides_prompt.replace("{coda_affiliation}", coda_affiliation)
@@ -419,11 +313,7 @@ Format response as JSON:
             "success": False,
             "error": "JSON parsing failed",
             "cleaned_slides": slides_md_baseline[:2000],  # Truncated markdown baseline as fallback
-            "slide_structure": {"title": "Processing failed", "main_sections": [], "slide_count": 0},
-            "speaker_validation": {},
-            "resources_found": [],
-            "technical_terms": [],
-            "processing_notes": f"LLM processing failed, using markdown baseline"
+            "speaker_validation": {}
         }
         
         result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
@@ -448,95 +338,7 @@ Format response as JSON:
         # Add success metadata if parsing succeeded
         if result != fallback_result:
             result["success"] = True
-            result["pdf_path"] = pdf_path
-            result["qr_codes"] = qr_codes
-            result["visual_elements"] = visual_elements  
-            result["saved_images"] = saved_images
             result["slide_1_metadata"] = slide_1_metadata
-            
-            # Copy all slides to social media directory for analysis step to evaluate
-            try:
-                social_media_slides = []
-                
-                # Get all slides (analysis step will do better ranking)
-                all_slides = [
-                    ve for ve in visual_elements 
-                    if ve.get("type") == "full_slide_analysis"
-                ]
-                
-                if all_slides:
-                    logger.info(f"Found {len(all_slides)} total slides - all available for analysis step")
-                    
-                    # Just record all slides as available for social media evaluation
-                    for slide in all_slides:
-                        social_media_slides.append({
-                            "file": slide["file"],
-                            "slide_number": slide.get("slide_number", 0),
-                            "description": slide.get("description", "")
-                        })
-                
-                result["social_media_slides"] = [s["file"] for s in social_media_slides]
-                result["total_slides"] = len(all_slides)
-                logger.info(f"All {len(all_slides)} slides available for analysis step ranking")
-                
-            except Exception as e:
-                logger.warning(f"Failed to create social media slides: {e}")
-                result["social_media_slides"] = []
-                result["total_slides"] = 0
-            
-            result["processing_stats"] = {
-                "markdown_baseline_chars": len(slides_md_baseline),
-                "qr_codes_found": len(qr_codes),
-                "visual_elements": len(visual_elements),
-                "images_saved": len(saved_images)
-            }
-            
-            # Save debug JSON file for debugging purposes
-            try:
-                from datetime import datetime
-                debug_json_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides.json"
-                debug_data = {
-                    "timestamp": datetime.now().isoformat(),
-                    "input": {
-                        "speaker_name": speaker_name,
-                        "pdf_path": pdf_path,
-                        "table_id": table_id,
-                        "coda_speaker": coda_speaker,
-                        "coda_affiliation": coda_affiliation,
-                        "coda_title": coda_title
-                    },
-                    "extraction_results": {
-                        "markdown_baseline_length": len(slides_md_baseline),
-                        "qr_codes": qr_codes,
-                        "visual_elements": visual_elements,
-                        "slide_1_metadata": slide_1_metadata,
-                        "saved_images": saved_images
-                    },
-                    "llm_processing": {
-                        "raw_response": result_text,
-                        "parsed_result": result,
-                        "processing_stats": result["processing_stats"]
-                    }
-                }
-                
-                with open(debug_json_path, 'w', encoding='utf-8') as f:
-                    json.dump(debug_data, f, indent=2, ensure_ascii=False)
-                
-                # Save pymupdf4llm raw output for reference
-                pymupdf4llm_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_pymupdf4llm.md"
-                with open(pymupdf4llm_path, 'w', encoding='utf-8') as f:
-                    f.write(slides_md_baseline)
-                
-                # Save cleaned slides markdown (what goes to Coda)
-                cleaned_slides_path = speaker_output_dir / f"{speaker_name.replace(' ', '_')}_slides.md"
-                with open(cleaned_slides_path, 'w', encoding='utf-8') as f:
-                    f.write(result.get("cleaned_slides", ""))
-                
-                logger.info(f"Debug files saved: {debug_json_path.name}, {pymupdf4llm_path.name}, {cleaned_slides_path.name}")
-                
-            except Exception as e:
-                logger.warning(f"Failed to save debug JSON: {e}")
-                
             logger.info(f"Successfully processed slides for {speaker_name}")
         else:
             logger.error(f"Failed to parse slide processing JSON after repair attempts")
@@ -554,9 +356,5 @@ Format response as JSON:
             "success": False,
             "error": str(e),
             "cleaned_slides": "",
-            "slide_structure": {"title": "", "main_sections": [], "slide_count": 0},
-            "speaker_validation": {},
-            "resources_found": [],
-            "technical_terms": [],
-            "processing_notes": f"Slide processing failed: {e}"
+            "speaker_validation": {}
         }

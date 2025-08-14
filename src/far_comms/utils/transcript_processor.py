@@ -79,10 +79,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
                 "success": False,
                 "error": f"No transcript found for {speaker_name}",
                 "transcript_formatted": "",
-                "transcript_srt": "",
-                "transcript_stats": {},
-                "cleaning_notes": "No transcript to process",
-                "processing_status": "failed"
+                "transcript_srt": ""
             }
         
         # Load docs directory path
@@ -131,16 +128,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
             "success": False,
             "error": "JSON parsing failed",
             "transcript_formatted": srt_text,
-            "transcript_srt": transcript_raw,
-            "transcript_stats": {
-                "original_word_count": len(srt_text.split()),
-                "output_word_count": len(srt_text.split()),
-                "word_count_percentage": 100.0,
-                "paragraph_count": 1
-            },
-            "cleaning_notes": "LLM processing failed, using raw SRT text",
-            "processing_status": "failed",
-            "transcript_source": transcript_source
+            "transcript_srt": transcript_raw
         }
         
         result = json_repair(result_text, max_attempts=3, fallback_value=fallback_result)
@@ -166,20 +154,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         if result != fallback_result:
             result["transcript_srt"] = transcript_raw
             result["success"] = True
-            result["transcript_source"] = transcript_source
-            
-            # Validate word count retention
-            word_count_raw = result.get("transcript_stats", {}).get("word_count_percentage", 0)
-            # Handle both float and string formats (e.g., "100.0%" or 100.0)
-            if isinstance(word_count_raw, str):
-                word_count_pct = float(word_count_raw.rstrip('%'))
-            else:
-                word_count_pct = float(word_count_raw)
-            if word_count_pct < 95:
-                logger.error(f"TRANSCRIPT TRUNCATION DETECTED: Only {word_count_pct:.1f}% of words retained!")
-                result["processing_status"] = "failed"
-            
-            logger.info(f"Successfully processed transcript for {speaker_name}, word retention: {word_count_pct:.1f}%")
+            logger.info(f"Successfully processed transcript for {speaker_name}")
         else:
             logger.error(f"Failed to parse transcript processing JSON after repair attempts")
         
@@ -191,11 +166,7 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
             "success": False,
             "error": str(e),
             "transcript_formatted": "",
-            "transcript_srt": "",
-            "transcript_stats": {},
-            "cleaning_notes": f"Transcript processing failed: {e}",
-            "processing_status": "failed",
-            "transcript_source": ""
+            "transcript_srt": ""
         }
 
 
