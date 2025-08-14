@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import CodaIds
-from far_comms.utils.slide_processor import process_slides, smart_title_case, titles_equivalent, is_placeholder_text
+from far_comms.utils.slide_processor import process_slides, titles_equivalent, is_placeholder_text
 from far_comms.utils.transcript_processor import process_transcript, _reconstruct_srt
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def get_input(raw_data: dict) -> dict:
     """Parse raw Coda data for prepare_talk - needs speaker name and YouTube URL"""
     return {
         "speaker": raw_data.get("Speaker", ""),
-        "yt_url": raw_data.get("YT url", "")
+        "yt_full_link": raw_data.get("YT full link", "")
     }
 
 
@@ -50,7 +50,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         
         # Get speaker name and YouTube URL from function_data
         speaker_name = function_data.get("speaker", "")
-        yt_url = function_data.get("yt_url", "")
+        yt_url = function_data.get("yt_full_link", "")
         
         if not speaker_name:
             logger.error("No speaker name found in function_data")
@@ -145,9 +145,8 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                     coda_title_val = row_values.get("Title", "")
                     logger.info(f"Coda data: speaker='{speaker_name}', affiliation='{coda_affiliation_val}', title='{coda_title_val}'")
                     
-                    # Smart title case that preserves acronyms
-                    if slide_title:
-                        slide_title = smart_title_case(slide_title)
+                    # Title is already in proper case from Haiku analysis
+                    # No additional processing needed
                     
                     # Only show mismatch banner for actual conflicting data, not missing data
                     if validation_result == "major_mismatch" and slide_speaker and slide_speaker.strip():

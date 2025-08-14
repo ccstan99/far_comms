@@ -98,12 +98,9 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-@app.get("/prepare_event")
-async def prepare_event(table_id: str, doc_id: str):
-    """Prepare event endpoint - calls prepare_talk for each speaker in the table"""
+async def execute_prepare_event(table_id: str, doc_id: str):
+    """Background function that processes all speakers in the table"""
     try:
-        logger.info(f"Prepare event called - doc_id: {doc_id}, table_id: {table_id}")
-        
         import json
         
         # Initialize Coda client
@@ -114,13 +111,11 @@ async def prepare_event(table_id: str, doc_id: str):
         table_data = json.loads(table_data_str)
         rows = table_data.get("rows", [])
         
-        logger.info(f"Found {len(rows)} rows in table")
+        logger.info(f"Found {len(rows)} rows in table for background processing")
         
         if not rows:
-            return {
-                "status": "no_rows",
-                "message": "No rows found in table"
-            }
+            logger.warning("No rows found in table")
+            return
         
         # Process each row and track results
         successful_speakers = []
@@ -137,13 +132,13 @@ async def prepare_event(table_id: str, doc_id: str):
                 failed_speakers.append(f"{row_id or 'unknown'} (missing data)")
                 continue
                 
-            logger.info(f"Processing speaker: {speaker_name}")
+            logger.info(f"Background processing speaker: {speaker_name}")
             
-            # Create function_data for prepare_talk (needs speaker name and YouTube URL)
-            yt_url = row_data.get("YT url", "")
+            # Create function_data for prepare_talk  
+            yt_full_link = row_data.get("YT full link", "")
             function_data = {
                 "speaker": speaker_name,
-                "yt_full_link": yt_url
+                "yt_full_link": yt_full_link
             }
             
             # Create CodaIds for this row
@@ -153,7 +148,7 @@ async def prepare_event(table_id: str, doc_id: str):
                 row_id=row_id
             )
             
-            # Call prepare_talk for this speaker and handle structured results
+            # Call prepare_talk for this speaker
             try:
                 result = await prepare_talk(function_data, coda_ids)
                 
@@ -165,15 +160,11 @@ async def prepare_event(table_id: str, doc_id: str):
                 else:  # "failed" or any other status
                     failed_speakers.append(f"{speaker_name}: {result.get('message', 'Failed')}")
                 
-                # Add delay between speakers to avoid rate limits
-                # import asyncio
-                # await asyncio.sleep(2)  # Wait 2 seconds between speakers
-                
             except Exception as e:
                 logger.error(f"Failed to prepare {speaker_name}: {e}")
                 failed_speakers.append(f"{speaker_name} (exception: {str(e)[:50]}...)")
         
-        # Create detailed summary message
+        # Create final summary message
         summary_parts = []
         if successful_speakers:
             summary_parts.append(f"succeeded: {len(successful_speakers)}")
@@ -183,19 +174,51 @@ async def prepare_event(table_id: str, doc_id: str):
             summary_parts.append(f"failed: {len(failed_speakers)}")
         
         summary = f"Prepare event completed - {', '.join(summary_parts)}"
+        logger.info(f"Background prepare_event finished: {summary}")
         
+    except Exception as e:
+        logger.error(f"Background prepare_event error: {e}", exc_info=True)
+
+
+@app.get("/prepare_event")
+async def prepare_event(table_id: str, doc_id: str, background_tasks: BackgroundTasks):
+    """Prepare event endpoint - launches background processing for all speakers"""
+    try:
+        logger.info(f"Prepare event called - doc_id: {doc_id}, table_id: {table_id}")
+        
+        import json
+        
+        # Initialize Coda client for quick validation
+        coda_client = CodaClient()
+        
+        # Get table info quickly to validate and get row count
+        table_data_str = coda_client.get_table(doc_id, table_id)
+        table_data = json.loads(table_data_str)
+        rows = table_data.get("rows", [])
+        
+        logger.info(f"Found {len(rows)} rows in table")
+        
+        if not rows:
+            return {
+                "status": "no_rows",
+                "message": "No rows found in table"
+            }
+        
+        # Launch background processing
+        background_tasks.add_task(execute_prepare_event, table_id, doc_id)
+        
+        # Return immediately with status
         return {
-            "status": "success",
-            "message": summary,
-            "successful_speakers": successful_speakers,
-            "skipped_speakers": skipped_speakers,
-            "failed_speakers": failed_speakers,
-            "total_rows": len(rows)
+            "status": "in_progress",
+            "message": f"Prepare event started for {len(rows)} speakers. Processing in background.",
+            "total_rows": len(rows),
+            "doc_id": doc_id,
+            "table_id": table_id
         }
         
     except Exception as e:
         logger.error(f"Prepare event error: {e}", exc_info=True)
-        return {"error": f"Failed to prepare event: {e}"}
+        return {"error": f"Failed to start prepare event: {e}"}
 
 # Handler functions imported from far_comms.handlers
 

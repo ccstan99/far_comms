@@ -5,36 +5,11 @@ import base64
 import json 
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from far_comms.utils.json_repair import json_repair
 
 logger = logging.getLogger(__name__)
-
-
-def smart_title_case(title: str) -> str:
-    """Convert to title case while preserving acronyms like LLMs, AI, ML, etc."""
-    if not title:
-        return title
-    
-    # Common acronyms that should stay uppercase
-    acronyms = {'AI', 'ML', 'LLM', 'LLMS', 'NLP', 'GPT', 'API', 'URL', 'HTTP', 'HTTPS', 'PDF', 'JSON', 'XML', 'SQL', 'GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'USB', 'WiFi', 'IoT', 'VR', 'AR', 'UI', 'UX', 'CEO', 'CTO', 'PhD', 'MSc', 'BSc'}
-    
-    # First apply standard title case
-    title_cased = title.title()
-    
-    # Then fix known acronyms back to uppercase
-    for acronym in acronyms:
-        # Replace title-cased version with uppercase version
-        title_cased = re.sub(r'\b' + re.escape(acronym.capitalize()) + r'\b', acronym, title_cased)
-        # Also handle plural forms
-        if acronym.endswith('S'):
-            singular = acronym[:-1]
-            title_cased = re.sub(r'\b' + re.escape(singular.capitalize()) + r's\b', acronym, title_cased)
-    
-    return title_cased
-
 
 def titles_equivalent(title1: str, title2: str) -> bool:
     """Check if two titles are equivalent (ignoring case differences)."""
@@ -195,7 +170,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                         messages=[{
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": f"Analyze this title slide. Extract: 1) Presentation title 2) Speaker name(s) 3) Affiliation(s). Return JSON format: {{\"speaker_name\": \"exact name as written\", \"affiliation\": \"institution\", \"talk_title\": \"presentation title\"}}. Expected speaker: {speaker_name}"},
+                                {"type": "text", "text": f"Analyze this title slide and extract speaker information.\n\nExpected speaker from database: {coda_speaker}\n\nTasks:\n1. Extract speaker name and compare with expected name (handle variations like 'Dr. John Smith' vs 'John Smith')\n2. Extract talk title and convert to proper title case (lowercase articles like 'and', 'for', 'the', 'in', 'of', 'with', but preserve technical acronyms like AI, LLM, GPU, DNN, etc.)\n3. Extract affiliation/institution\n\nReturn JSON format: {{\"speaker_name\": \"exact name as written\", \"speaker_match\": \"exact|close|different|not_found\", \"affiliation\": \"institution\", \"talk_title\": \"Title In Proper Title Case With Preserved Acronyms\"}}"},
                                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_base64_1}}
                             ]
                         }]
@@ -203,9 +178,21 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                     
                     metadata_text = response.content[0].text.strip()
                     # Try to parse JSON response
-                    slide_1_metadata = json_repair(metadata_text, fallback_value={})
-                    if slide_1_metadata:
-                        logger.info(f"Extracted slide 1 metadata: {slide_1_metadata}")
+                    analysis = json_repair(metadata_text, fallback_value={})
+                    if analysis and analysis.get("speaker_name"):
+                        speaker_match = analysis.get("speaker_match", "not_found")
+                        validation_result = "exact_match" if speaker_match == "exact" else \
+                                          "minor_differences" if speaker_match == "close" else \
+                                          "major_mismatch" if speaker_match == "different" else "major_mismatch"
+                        
+                        slide_1_metadata = {
+                            "slide_speaker": analysis.get("speaker_name", ""),
+                            "slide_affiliation": analysis.get("affiliation", ""),
+                            "slide_title": analysis.get("talk_title", ""),  # Already in proper title case
+                            "validation_result": validation_result,
+                            "validation_method": "haiku_visual_analysis"
+                        }
+                        logger.info(f"Extracted slide 1 metadata - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Title: {analysis.get('talk_title')}")
                     else:
                         logger.warning(f"Could not parse slide 1 metadata JSON: {metadata_text}")
                         
@@ -238,20 +225,23 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
                             
                             # Different prompts for first slide vs others
                             if is_first_slide:
-                                prompt_text = """Analyze this title slide and extract speaker information.
+                                prompt_text = f"""Analyze this title slide and extract speaker information.
 
-Extract the following information exactly as it appears:
-- Speaker name (full name as written)
-- Affiliation/Institution 
-- Talk title
+Expected speaker from database: {coda_speaker}
+
+Tasks:
+1. Extract speaker name and compare with expected name (handle variations like "Robert Smith" vs "Bob Smith")
+2. Extract talk title and convert to proper title case (lowercase articles like 'and', 'for', 'the', 'in', 'of', 'with', but preserve technical acronyms like AI, LLM, GPU, etc.)
+3. Extract affiliation/institution
 
 Format response as JSON:
-{
+{{
   "speaker_name": "exact name as written on slide",
+  "speaker_match": "exact|close|different|not_found",
   "affiliation": "institution/affiliation as written", 
-  "talk_title": "presentation title as written",
+  "talk_title": "Title in Proper Title Case with Preserved Acronyms",
   "slide_type": "title"
-}"""
+}}"""
                             else:
                                 prompt_text = """Analyze this slide and provide a brief description.
 
@@ -298,13 +288,19 @@ Format response as JSON:
                                         
                                         # Update slide_1_metadata if we found speaker info
                                         if analysis.get("speaker_name"):
+                                            speaker_match = analysis.get("speaker_match", "not_found")
+                                            validation_result = "exact_match" if speaker_match == "exact" else \
+                                                              "minor_differences" if speaker_match == "close" else \
+                                                              "major_mismatch" if speaker_match == "different" else "major_mismatch"
+                                            
                                             slide_1_metadata.update({
                                                 "slide_speaker": analysis.get("speaker_name", ""),
                                                 "slide_affiliation": analysis.get("affiliation", ""),
-                                                "slide_title": analysis.get("talk_title", ""),
+                                                "slide_title": analysis.get("talk_title", ""),  # Already in proper title case
+                                                "validation_result": validation_result,
                                                 "validation_method": "haiku_visual_analysis"
                                             })
-                                            logger.info(f"Extracted from title slide - Speaker: {analysis.get('speaker_name')}, Affiliation: {analysis.get('affiliation')}")
+                                            logger.info(f"Extracted from title slide - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Affiliation: {analysis.get('affiliation')}, Title: {analysis.get('talk_title')}")
                                     else:
                                         # Content slide analysis
                                         slide_analysis = {
