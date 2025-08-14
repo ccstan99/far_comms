@@ -5,6 +5,17 @@
 - [ ] **Image-rich slide detection** - Check how image-rich slides are identified and handled
 - [ ] **Human-in-the-loop social media** - Allow for iterating on drafted social media content to incorporate human feedback or additional LLM refinement
 - [ ] **Merge analyze_talk** - Integrate analyze_talk functionality into prepare_talk when preprocessing logic is stable
+- [ ] **Social media research agent** - Optional second agent for analyze_talk crew to find social media posts about discovered resources (Option A implementation)
+
+### Social Media Research Agent Details (Future)
+
+**Role**: Social Media Post Detective - finds verified posts by speaker/co-authors about specific resources  
+**Dependencies**: Must run AFTER resource_researcher_agent finds core resources  
+**Tools**: SerperSearchResults + SocialMediaLookupTool (read-only Coda contacts for X/Twitter/LinkedIn/Bluesky)  
+**Validation**: Posts must reference specific resource titles/URLs found in step 1, no generic posts  
+**Search Strategy**: Get speaker+co-author handles → search for posts mentioning exact resources → cross-validate content  
+**Benefits**: Separation of concerns, better validation, optional (can disable without affecting core)  
+**When**: After core resource research is stable, if social media discovery becomes important
 
 ## Promote Research
 
