@@ -98,7 +98,7 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-async def execute_prepare_event(table_id: str, doc_id: str):
+def execute_prepare_event(table_id: str, doc_id: str):
     """Background function that processes all speakers in the table"""
     try:
         import json
@@ -148,9 +148,10 @@ async def execute_prepare_event(table_id: str, doc_id: str):
                 row_id=row_id
             )
             
-            # Call prepare_talk for this speaker
+            # Call prepare_talk for this speaker (now runs synchronously)
             try:
-                result = await prepare_talk(function_data, coda_ids)
+                import asyncio
+                result = asyncio.run(prepare_talk(function_data, coda_ids))
                 
                 # Categorize based on prepare_talk's return status
                 if result.get("status") == "success":
@@ -186,32 +187,13 @@ async def prepare_event(table_id: str, doc_id: str, background_tasks: Background
     try:
         logger.info(f"Prepare event called - doc_id: {doc_id}, table_id: {table_id}")
         
-        import json
-        
-        # Initialize Coda client for quick validation
-        coda_client = CodaClient()
-        
-        # Get table info quickly to validate and get row count
-        table_data_str = coda_client.get_table(doc_id, table_id)
-        table_data = json.loads(table_data_str)
-        rows = table_data.get("rows", [])
-        
-        logger.info(f"Found {len(rows)} rows in table")
-        
-        if not rows:
-            return {
-                "status": "no_rows",
-                "message": "No rows found in table"
-            }
-        
-        # Launch background processing
+        # Launch background processing using FastAPI BackgroundTasks
         background_tasks.add_task(execute_prepare_event, table_id, doc_id)
         
-        # Return immediately with status
+        # Return immediately with status (row count will be determined in background)
         return {
-            "status": "in_progress",
-            "message": f"Prepare event started for {len(rows)} speakers. Processing in background.",
-            "total_rows": len(rows),
+            "status": "in_progress", 
+            "message": f"Prepare event started. Processing all speakers in background.",
             "doc_id": doc_id,
             "table_id": table_id
         }

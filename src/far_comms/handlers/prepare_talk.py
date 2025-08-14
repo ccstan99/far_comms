@@ -89,7 +89,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             slides_exist = False
             transcript_exists = False
         
-        # Call functions conditionally based on what's missing
+        # Process slides and transcript synchronously (we're already in background thread)
         slides_result = {"success": True, "cleaned_slides": "", "speaker_validation": {}}  # Default empty result
         transcript_result = {"success": True, "transcript_formatted": "", "transcript_srt": ""}  # Default empty result
         
@@ -224,7 +224,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             
             return {"status": "failed", "message": error_msg, "speaker": speaker_name}
         
-        # Set final status since immediate updates were done
+        # Set final status since processing is complete
         status_parts = []
         
         if not slides_exist:
