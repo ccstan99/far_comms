@@ -174,7 +174,7 @@ create_li_content_task:
     {style_li}
     </LINKEDIN STYLE>
 
-    Requirements:
+    REQUIREMENTS:
     - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
     - Select strongest hook that grabs attention from policymakers/industry leaders
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
@@ -184,13 +184,11 @@ create_li_content_task:
     - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
   expected_output: >
-    ## LinkedIn Hook
     [Selected hook that will grab attention from policymakers/industry leaders]
     
-    ## LinkedIn Paragraph
-    [2-3 sentence summary starting with "@{speaker} ({affiliation}) [verb]" format, explaining technical concepts in plain language]
+    [2-3 sentence summary starting with "@{speaker} ({affiliation}) [verb]" format, explaining talk concepts in plain language]
     
-    ## LinkedIn Bullets
+    Hightlights:
     ▸ [≤8 word bullet 1]
     ▸ [≤8 word bullet 2] 
     ▸ [≤8 word bullet 3]
@@ -219,7 +217,7 @@ create_x_content_task:
     {style_x}
     </TWITTER STYLE>
 
-    Requirements:
+    REQUIREMENTS:
     - Use "Notable Quotes" and "Social Media Ready Content" from transcript analysis for technical precision
     - Select strongest hook that grabs attention from ML researchers
     - Use "Technical Details" and "Core Thesis" from analysis as content foundation
@@ -255,18 +253,12 @@ fact_check_content_task:
     - 2: Multiple accuracy issues requiring significant corrections
     - 1: Major factual errors, misrepresentations, or unsupported claims
   expected_output: >
-    ## Accuracy Assessment
-    Score: [1-5 scale based on factual correctness]
-    Corrections Made: [Description of any corrections applied to fix accuracy issues]
-    
     ## Fact-Checked LinkedIn Content
-    ### Hook
     [Final accurate LinkedIn hook]
     
-    ### Paragraph  
     [Final accurate paragraph summary]
     
-    ### Bullets
+    Highlights:
     ▸ [Accurate bullet 1]
     ▸ [Accurate bullet 2]  
     ▸ [Accurate bullet 3]
@@ -275,6 +267,8 @@ fact_check_content_task:
     [Final accurate Twitter/X content]
     
     ## Approval Status
+    Score: [1-5 scale based on factual correctness]
+    Corrections Made: [Description of any corrections applied to fix accuracy issues]
     [APPROVED/NEEDS_REVISION - based on accuracy score ≥4/5]
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
@@ -286,7 +280,7 @@ fact_check_content_task:
   agent: fact_checker_agent
 
 
-voice_authenticity_check_task:
+brand_voice_check_task:
   description: >
     Apply FAR.AI brand voice and maximum conciseness to fact-checked content 
     for social media posts for {speaker} ({affiliation}) talk from {event_name}.
@@ -313,19 +307,12 @@ voice_authenticity_check_task:
     - 2: Moderate wordiness, clear cuts possible
     - 1: Wordy and inefficient, significant trimming needed
   expected_output: >
-    ## Voice & Conciseness Assessment
-    Brand Voice Score: [1-5 scale based on FAR.AI voice quality]
-    Conciseness Score: [1-5 scale based on word efficiency]
-    Improvements Made: [Description of brand voice and conciseness improvements applied]
-    
     ## Final LinkedIn Content
-    ### Hook
     [FAR.AI-voiced LinkedIn hook]
     
-    ### Paragraph
     [FAR.AI-voiced paragraph summary]
     
-    ### Bullets  
+    Highlights:
     ▸ [FAR.AI-voiced bullet 1]
     ▸ [FAR.AI-voiced bullet 2]
     ▸ [FAR.AI-voiced bullet 3]
@@ -333,7 +320,10 @@ voice_authenticity_check_task:
     ## Final Twitter/X Content
     [FAR.AI-voiced Twitter/X content]
     
-    ## Final Approval Status
+    ## Approval Status
+    Brand Voice Score: [1-5 scale based on FAR.AI voice quality]
+    Conciseness Score: [1-5 scale based on word efficiency]
+    Improvements Made: [Description of brand voice and conciseness improvements applied]
     [APPROVED/NEEDS_REVISION - based on voice score ≥4/5 and conciseness score ≥4/5]
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
@@ -343,7 +333,7 @@ voice_authenticity_check_task:
     - Content sounds like FAR.AI, not speaker mimicry
     - LinkedIn <150 words, bullets ≤8 words each
     - 0 unnecessary words remain
-  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task"]
+  context: ["fact_check_content_task"]
   agent: voice_checker_agent
 
 
@@ -440,6 +430,6 @@ qa_orchestration_task:
     
     Issues: [List any blocking issues if not approved]
     Revision Notes: [Specific feedback if revision needed]
-  context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
+  context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_qa_orchestration.json"
   agent: qa_orchestrator_agent

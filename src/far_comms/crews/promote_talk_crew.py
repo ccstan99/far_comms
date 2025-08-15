@@ -239,9 +239,9 @@ class PromoteTalkCrew():
     )
 
   @task
-  def voice_authenticity_check_task(self) -> Task:
+  def brand_voice_check_task(self) -> Task:
     return Task(
-      config=self.tasks_config['voice_authenticity_check_task'],
+      config=self.tasks_config['brand_voice_check_task'],
       agent=self.voice_checker_agent()
     )
 
@@ -277,7 +277,7 @@ class PromoteTalkCrew():
         self.create_li_content_task(),
         self.create_x_content_task(),
         self.fact_check_content_task(),
-        self.voice_authenticity_check_task(),
+        self.brand_voice_check_task(),
         self.qa_orchestration_task()
       ],
       process=Process.sequential,
