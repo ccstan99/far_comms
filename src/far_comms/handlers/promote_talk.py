@@ -91,6 +91,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         style_x = (docs_dir / "style_x.md").read_text() if (docs_dir / "style_x.md").exists() else ""
         
         # Add style guides to crew data
+        crew_data = function_data.copy()
         crew_data.update({
             "style_shared": style_shared,
             "style_li": style_li, 

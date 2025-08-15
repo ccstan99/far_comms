@@ -13,8 +13,8 @@ promote_talk_crew:
 ├── dispatcher_agent (checks what's needed)
 ├── resource_researcher_agent (if Resources empty)  
 ├── transcript_analyzer_agent (if Analysis empty)
-├── content_creator_agent
 ├── fact_checker_agent
+├── content_creator_agent
 └── final_assembly_agent
 ```
 

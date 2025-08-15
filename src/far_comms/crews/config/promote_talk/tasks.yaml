@@ -3,41 +3,39 @@
 
 research_resources_task:
   description: >
-    Research and find actual URLs for the speaker's PRIMARY resources - the main work they are presenting.
+    Research and find actual URLs for the {speaker}'s PRIMARY resources - the main work they are presenting.
     This is for social media sharing (1 tweet), so focus on 1-4 most important resources only.
     
-    TALK CONTEXT:
-    - Speaker: {speaker}
-    - Affiliation: {affiliation}  
-    - Talk Title: {talk_title}
-    - Slides Content: {slides_content}
-    
+    <SLIDES>
+    {slides_content}
+    </SLIDES>
+
     SMART PRIORITY ORDER (should never fail):
     
     1. QR CODES/URLs FIRST if slides available:
-       * If slides content is blank/empty: skip to step 2
-       * Look for any URLs/links in the slides content above
-       * If URLs found: these are the speaker's intended resources, verify and use them, STOP HERE
-       * If no URLs found in slides: proceed to step 2
+       - If slides content is blank/empty: skip to step 2
+       - Look for any URLs/links in the slides content above
+       - If URLs found: these are the speaker's intended resources, verify and use them, STOP HERE
+       - If no URLs found in slides: proceed to step 2
     
     2. TITLE + SPEAKER SEARCH (most reliable):
-       * Query: "{talk_title} {speaker} paper" or "{speaker} {affiliation} {talk_title}"
-       * This usually finds the main paper being presented
-       * ONLY include if speaker is confirmed author/co-author
-       * If 1+ quality speaker-authored resource found: STOP HERE
+       - Query: "{talk_title} {speaker} paper" or "{speaker} {affiliation} {talk_title}"
+       - This usually finds the main paper being presented
+       - ONLY include if speaker is confirmed author/co-author
+       - If 1+ quality speaker-authored resource found: STOP HERE
     
     3. SOCIAL MEDIA SEARCH (posts by speaker or co-authors about their work):
-       * Single query: "{talk_title}" (site:x.com OR site:linkedin.com OR site:bsky.app)
-       * Look for posts/threads by speaker OR co-authors about this work
-       * ONLY include if: speaker is confirmed author AND post is by one of the authors
-       * If 1+ quality social media resource found: STOP HERE
+       - Single query: "{talk_title}" (site:x.com OR site:linkedin.com OR site:bsky.app)
+       - Look for posts/threads by speaker OR co-authors about this work
+       - ONLY include if: speaker is confirmed author AND post is by one of the authors
+       - If 1+ quality social media resource found: STOP HERE
     
     4. SLIDES-INFORMED SEARCH (if slides available):
-       * If slides content is blank/empty: STOP HERE 
-       * Extract key terms/concepts from slides content above
-       * Search with speaker name + key terms from slides
-       * If 1+ good resource found: STOP HERE
-       * If still nothing found: return blank/empty result
+       - If slides content is blank/empty: STOP HERE 
+       - Extract key terms/concepts from slides content above
+       - Search with speaker name + key terms from slides
+       - If 1+ good resource found: STOP HERE
+       - If still nothing found: return blank/empty result
     
     EFFICIENCY RULES:
     - MAX 5 searches total 
@@ -56,18 +54,16 @@ research_resources_task:
     
     STRICT EXCLUSIONS:
     - Do NOT include general speaker homepages or CV
-    - Do NOT include institutional/company websites  
+    - Do NOT include organization websites  
     - Do NOT include cited papers by other authors
     - Do NOT include comprehensive reference lists
     
-    Expected result: 1-4 resources max, focus on speaker's main contributions
-    
   expected_output: >
     Simple format for Coda Resources column:
-    "Paper Title - https://arxiv.org/abs/123\nProject Website - https://speaker.org/project"
+    "[Paper Title] - https://arxiv.org/abs/123"
     
     Maximum 1-4 lines. Focus on main academic/research resources only.
-    Skip GitHub unless no papers/websites found.
+    Skip GitHub unless no papers or project websites found.
   agent: resource_researcher_agent
 
 analyze_transcript_task:
@@ -75,11 +71,13 @@ analyze_transcript_task:
     Analyze the transcript to extract the {speaker}'s ({affiliation}) key ideas and points using their actual words and phrases.
     This analysis will be the foundation for downstream summarization and social media content generation.
     
-    TRANSCRIPT CONTENT (from Coda):
+    <TRANSCRIPT>
     {transcript_content}
+    </TRANSCRIPT>
     
-    SLIDES CONTEXT (for reference):
+    <SLIDES>
     {slides_content}
+    </SLIDES>
     
     CRITICAL: Use the speaker's exact words, phrases, and terminology wherever possible.
     
@@ -120,11 +118,11 @@ analyze_transcript_task:
     ## Social Media Ready Content
     [Most tweetable quotes, key takeaways, summary statements in speaker's voice]
     
-    ## Summary/Takeaway Slides
-    [If speaker has summary slides, capture them verbatim - these are perfect for social media]
-    
     ## Talk Structure
     [Brief description of how speaker organized their presentation]
+    
+    ## Summary/Takeaway Slides
+    [If speaker has summary slides, capture them verbatim - these are perfect for social media]
     
     IMPORTANT: Return ONLY the markdown content above. No additional commentary or JSON formatting.
   agent: transcript_analyzer_agent
@@ -150,25 +148,31 @@ generate_summaries_task:
       "paragraph_summary": "Comprehensive 1-paragraph summary in ~100 words covering core findings and implications",
       "sentence_summary": "Ultra-concise 1-sentence summary in ~25 words capturing the essence"
     }
+  context: ["analyze_transcript_task"]
   agent: summarizer_agent
 
 create_li_content_task:
   description: >
-    Create LinkedIn content for policymakers and tech professionals, must be accessible to general, non-ML audience.
-    Use the transcript analysis from prepare-talk and raw transcript for quotes.
-    ===
-    RAW TRANSCRIPT (for authentic hooks and quotes):
+    Create LinkedIn post for {speaker}'s ({affiliation}) presentation.
+    Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
+    Use the transcript analysis and summaries for key details.
+    
+    <SUMMARIES>
     {transcript}
-    ---
-    STRUCTURED ANALYSIS (from prepare-talk Analysis column):
+    </SUMMARIES>
+    
+    <ANALYSIS>
     {analysis}
-    ---    
-    STYLE SHARED: 
+    </ANALYSIS>
+    
+    <GENERAL STYLE>
     {style_shared}
-    ---
-    STYLE LI: 
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
     {style_li}
-    ===
+    </LINKEDIN STYLE>
+
     Requirements:
     - Generate 5 potential LinkedIn hooks using raw transcript for authentic voice and direct quotes
     - Select the strongest hook that will grab attention from policymakers/industry leaders
@@ -190,24 +194,26 @@ create_li_content_task:
 
 create_x_content_task:
   description: >
-    Create Twitter/X content for ML researchers.
-    Use the transcript analysis from prepare-talk and raw transcript for technical precision.
-    ===
-    RAW TRANSCRIPT (for authentic hooks and technical precision):
+    Create Twitter/X for {speaker}'s ({speaker_x_handle}) presentation.
+    Audience is primarily ML researchers and AI/tech journalists.
+    Use the transcript analysis and summaries for key details.
+    
+    <SUMMARIES>
     {transcript}
-    ---
-    STRUCTURED ANALYSIS (from prepare-talk Analysis column):
+    </SUMMARIES>
+    
+    <ANALYSIS>
     {analysis}
-    ---
-    SPEAKER INFO:
-    - Speaker X handle: {speaker_x_handle}
-    ---    
-    STYLE SHARED: 
+    </ANALYSIS>
+    
+    <GENERAL STYLE>
     {style_shared}
-    ---
-    STYLE X: 
+    </GENERAL STYLE>
+    
+    <TWITTER STYLE>
     {style_x}
-    ===
+    </TWITTER STYLE>
+
     Requirements:
     - Generate 5 potential Twitter/X hooks using raw transcript for technical precision and authentic quotes
     - Select the strongest hook that will grab attention from ML researchers
