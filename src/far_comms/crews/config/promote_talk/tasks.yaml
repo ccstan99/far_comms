@@ -144,10 +144,11 @@ generate_summaries_task:
     - Use clear, engaging language that makes complex topics accessible
     
   expected_output: >
-    {
-      "paragraph_summary": "Comprehensive 1-paragraph summary in ~100 words covering core findings and implications",
-      "sentence_summary": "Ultra-concise 1-sentence summary in ~25 words capturing the essence"
-    }
+    ## Paragraph Summary
+    [Comprehensive 1-paragraph summary in ~100 words covering core findings and implications]
+    
+    ## Sentence Summary
+    [Ultra-concise 1-sentence summary in ~25 words capturing the essence]
   context: ["analyze_transcript_task"]
   agent: summarizer_agent
 
@@ -183,13 +184,16 @@ create_li_content_task:
     - Create 3-4 bullets ≤8 words each using technical_details (complement, don't repeat content)
     - Focus on implications, applications, broader significance from key_findings
   expected_output: >
-    {
-      "generated_hooks": ["Hook option 1", "Hook option 2", "Hook option 3", "Hook option 4", "Hook option 5"],
-      "selected_hook": "Chosen hook text",
-      "selection_reasoning": "Why this hook was selected over the others",
-      "paragraph_summary": "2-3 sentence summary", 
-      "bullets": ["≤8 word bullet 1", "≤8 word bullet 2", "≤8 word bullet 3"]
-    }
+    ## LinkedIn Hook
+    [Selected hook that will grab attention from policymakers/industry leaders]
+    
+    ## LinkedIn Paragraph
+    [2-3 sentence summary starting with "@{speaker} ({affiliation}) [verb]" format, explaining technical concepts in plain language]
+    
+    ## LinkedIn Bullets
+    ▸ [≤8 word bullet 1]
+    ▸ [≤8 word bullet 2] 
+    ▸ [≤8 word bullet 3]
   agent: li_content_writer_agent
 
 create_x_content_task:
@@ -224,10 +228,8 @@ create_x_content_task:
     - MUST include speaker attribution: if {speaker_x_handle} contains @ symbol, use it directly; otherwise use speaker name
     - Target ML researchers who appreciate precision and authenticity
   expected_output: >
-    {
-      "generated_hooks": ["Hook option 1", "Hook option 2", "Hook option 3", "Hook option 4", "Hook option 5"],
-      "x_content": "Tweet1 content (including selected hook)"
-    }
+    ## Twitter/X Content
+    [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
   agent: x_content_writer_agent
 
 fact_check_content_task:
@@ -251,15 +253,27 @@ fact_check_content_task:
     - 2: Multiple accuracy issues requiring significant corrections
     - 1: Major factual errors, misrepresentations, or unsupported claims
   expected_output: >
-    {
-      "accuracy_score": "1-5 scale based on factual correctness",
-      "corrections_made": "Description of any corrections applied to fix accuracy issues",
-      "corrected_li_hook": "Final accurate LinkedIn hook",
-      "corrected_li_paragraph": "Final accurate paragraph summary", 
-      "corrected_li_bullets": ["Accurate bullet 1", "Accurate bullet 2", "Accurate bullet 3"],
-      "corrected_x_content": "Final accurate Twitter/X hook + content",
-      "approved_for_next_step": "true/false based on accuracy threshold"
-    }
+    ## Accuracy Assessment
+    Score: [1-5 scale based on factual correctness]
+    Corrections Made: [Description of any corrections applied to fix accuracy issues]
+    
+    ## Fact-Checked LinkedIn Content
+    ### Hook
+    [Final accurate LinkedIn hook]
+    
+    ### Paragraph  
+    [Final accurate paragraph summary]
+    
+    ### Bullets
+    ▸ [Accurate bullet 1]
+    ▸ [Accurate bullet 2]  
+    ▸ [Accurate bullet 3]
+    
+    ## Fact-Checked Twitter/X Content
+    [Final accurate Twitter/X content]
+    
+    ## Approval Status
+    [APPROVED/NEEDS_REVISION - based on accuracy score ≥4/5]
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
     - Accuracy score is 4/5 or higher (5/5 if perfect, 4/5 with minor simplifications acceptable)
@@ -297,16 +311,28 @@ voice_authenticity_check_task:
     - 2: Moderate wordiness, clear cuts possible
     - 1: Wordy and inefficient, significant trimming needed
   expected_output: >
-    {
-      "brand_voice_score": "1-5 scale based on FAR.AI voice quality",
-      "conciseness_score": "1-5 scale based on word efficiency",
-      "voice_corrections_made": "Description of brand voice and conciseness improvements applied",
-      "final_li_hook": "FAR.AI-voiced LinkedIn hook",
-      "final_li_paragraph": "FAR.AI-voiced paragraph summary", 
-      "final_li_bullets": ["FAR.AI-voiced bullet 1", "FAR.AI-voiced bullet 2", "FAR.AI-voiced bullet 3"],
-      "final_x_content": "FAR.AI-voiced Twitter/X core hook + content",
-      "approved_for_next_step": true or false
-    }
+    ## Voice & Conciseness Assessment
+    Brand Voice Score: [1-5 scale based on FAR.AI voice quality]
+    Conciseness Score: [1-5 scale based on word efficiency]
+    Improvements Made: [Description of brand voice and conciseness improvements applied]
+    
+    ## Final LinkedIn Content
+    ### Hook
+    [FAR.AI-voiced LinkedIn hook]
+    
+    ### Paragraph
+    [FAR.AI-voiced paragraph summary]
+    
+    ### Bullets  
+    ▸ [FAR.AI-voiced bullet 1]
+    ▸ [FAR.AI-voiced bullet 2]
+    ▸ [FAR.AI-voiced bullet 3]
+    
+    ## Final Twitter/X Content
+    [FAR.AI-voiced Twitter/X content]
+    
+    ## Final Approval Status
+    [APPROVED/NEEDS_REVISION - based on voice score ≥4/5 and conciseness score ≥4/5]
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
     - Brand voice score is 4/5 or higher (natural, engaging FAR.AI voice)
@@ -380,28 +406,38 @@ qa_orchestration_task:
     - All claims must match original transcript exactly
     
   expected_output: >
-    {
-      "preprocessing_completed": {
-        "resources": "Resources found/status",
-        "analysis": "Analysis generated/status", 
-        "summaries": "Summaries created/status"
-      },
-      "content_generated": {
-        "li_content": "Final approved complete LinkedIn post",
-        "x_content": "Final approved complete Twitter/X content",
-        "paragraph_summary": "Final approved paragraph summary"
-      },
-      "quality_assurance": {
-        "accuracy_score": "1-10 based on transcript accuracy",
-        "compliance_score": "X/14 based on style guide compliance",
-        "refinement_rounds": "Number of delegation rounds performed"
-      },
-      "final_decision": {
-        "publication_decision": "APPROVED/NEEDS_REVISION/REJECTED",
-        "blocking_issues": [],
-        "revision_notes": "Specific feedback if revision needed"
-      }
-    }
+    ## Orchestration Summary
+    
+    ### Preprocessing Status
+    - Resources: [Found/Generated/Skipped]
+    - Analysis: [Generated/Existing/Skipped]
+    - Summaries: [Created/Existing/Skipped]
+    
+    ### Content Generation Status
+    - LinkedIn Content: [Generated and approved]
+    - Twitter/X Content: [Generated and approved]
+    - Quality Rounds: [Number of refinement iterations performed]
+    
+    ### Final Outputs for Coda
+    
+    #### LinkedIn Post
+    [Complete assembled LinkedIn post ready for Coda]
+    
+    #### Twitter/X Post  
+    [Complete assembled Twitter/X content ready for Coda]
+    
+    #### Paragraph Summary
+    [Final paragraph summary for Coda]
+    
+    ### Quality Metrics
+    - Accuracy Score: [1-10 based on transcript accuracy]
+    - Compliance Score: [X/14 based on style guide compliance]
+    
+    ### Final Decision
+    **Status: [APPROVED/NEEDS_REVISION/REJECTED]**
+    
+    Issues: [List any blocking issues if not approved]
+    Revision Notes: [Specific feedback if revision needed]
   context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
   output_file: "output/{speaker}_qa_orchestration.json"
   agent: qa_orchestrator_agent
