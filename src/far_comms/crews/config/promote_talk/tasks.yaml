@@ -158,13 +158,13 @@ create_li_content_task:
     Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
     Use the transcript analysis and summaries for key details.
     
-    <SUMMARIES>
-    {transcript}
-    </SUMMARIES>
+    <TRANSCRIPT ANALYSIS>
+    {analyze_transcript_task}
+    </TRANSCRIPT ANALYSIS>
     
-    <ANALYSIS>
-    {analysis}
-    </ANALYSIS>
+    <SUMMARIES>
+    {generate_summaries_task}
+    </SUMMARIES>
     
     <GENERAL STYLE>
     {style_shared}
@@ -175,14 +175,14 @@ create_li_content_task:
     </LINKEDIN STYLE>
 
     Requirements:
-    - Generate 5 potential LinkedIn hooks using raw transcript for authentic voice and direct quotes
-    - Select the strongest hook that will grab attention from policymakers/industry leaders
-    - Use structured analysis (key_findings, surprising_claims) for paragraph content foundation
-    - Incorporate direct quotes from raw transcript where impactful
+    - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
+    - Select strongest hook that grabs attention from policymakers/industry leaders
+    - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
+    - Incorporate "Core Thesis" and "Key Points" from transcript analysis
     - Ensure hook/paragraph cohesion (no repetitive phrases)
-    - Write 2-3 sentence paragraph starting with "@{speaker} ({affiliation}) [verb]" format, then key_findings and surprising_claims - explain technical concepts in plain language accessible to general business audience
-    - Create 3-4 bullets ≤8 words each using technical_details (complement, don't repeat content)
-    - Focus on implications, applications, broader significance from key_findings
+    - Write 2-3 sentence paragraph starting with "@{speaker} ({affiliation}) [verb]" format
+    - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
+    - Focus on implications and broader significance for business audience
   expected_output: >
     ## LinkedIn Hook
     [Selected hook that will grab attention from policymakers/industry leaders]
@@ -194,6 +194,7 @@ create_li_content_task:
     ▸ [≤8 word bullet 1]
     ▸ [≤8 word bullet 2] 
     ▸ [≤8 word bullet 3]
+  context: ["analyze_transcript_task", "generate_summaries_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
@@ -202,13 +203,13 @@ create_x_content_task:
     Audience is primarily ML researchers and AI/tech journalists.
     Use the transcript analysis and summaries for key details.
     
-    <SUMMARIES>
-    {transcript}
-    </SUMMARIES>
+    <TRANSCRIPT ANALYSIS>
+    {analyze_transcript_task}
+    </TRANSCRIPT ANALYSIS>
     
-    <ANALYSIS>
-    {analysis}
-    </ANALYSIS>
+    <SUMMARIES>
+    {generate_summaries_task}
+    </SUMMARIES>
     
     <GENERAL STYLE>
     {style_shared}
@@ -219,17 +220,18 @@ create_x_content_task:
     </TWITTER STYLE>
 
     Requirements:
-    - Generate 5 potential Twitter/X hooks using raw transcript for technical precision and authentic quotes
-    - Select the strongest hook that will grab attention from ML researchers
-    - Use structured analysis (technical_details, surprising_claims) for content foundation
-    - Extract specific numbers, methods, and results directly from raw transcript
+    - Use "Notable Quotes" and "Social Media Ready Content" from transcript analysis for technical precision
+    - Select strongest hook that grabs attention from ML researchers
+    - Use "Technical Details" and "Core Thesis" from analysis as content foundation
+    - Include specific numbers, methods, results from "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
     - Use abbreviations: w/, &, numbers not words
-    - MUST include speaker attribution: if {speaker_x_handle} contains @ symbol, use it directly; otherwise use speaker name
+    - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
   expected_output: >
     ## Twitter/X Content
     [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
+  context: ["analyze_transcript_task", "generate_summaries_task"]
   agent: x_content_writer_agent
 
 fact_check_content_task:
