@@ -156,15 +156,7 @@ create_li_content_task:
   description: >
     Create LinkedIn post for {speaker}'s ({affiliation}) presentation.
     Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
-    Use the transcript analysis and summaries for key details.
-    
-    <TRANSCRIPT ANALYSIS>
-    {analyze_transcript_task}
-    </TRANSCRIPT ANALYSIS>
-    
-    <SUMMARIES>
-    {generate_summaries_task}
-    </SUMMARIES>
+    You will receive transcript analysis and summaries from previous tasks through context.
     
     <GENERAL STYLE>
     {style_shared}
@@ -199,15 +191,7 @@ create_x_content_task:
   description: >
     Create Twitter/X for {speaker}'s ({speaker_x_handle}) presentation.
     Audience is primarily ML researchers and AI/tech journalists.
-    Use the transcript analysis and summaries for key details.
-    
-    <TRANSCRIPT ANALYSIS>
-    {analyze_transcript_task}
-    </TRANSCRIPT ANALYSIS>
-    
-    <SUMMARIES>
-    {generate_summaries_task}
-    </SUMMARIES>
+    You will receive transcript analysis and summaries from previous tasks through context.
     
     <GENERAL STYLE>
     {style_shared}
@@ -235,18 +219,11 @@ create_x_content_task:
 fact_check_content_task:
   description: >
     Verify all content claims against original transcript and provide corrected versions.
+    You will receive the LinkedIn and Twitter/X content from previous tasks through context.
     
     <ORIGINAL TRANSCRIPT>
     {transcript}
     </ORIGINAL TRANSCRIPT>
-    
-    <LINKEDIN CONTENT>
-    {create_li_content_task}
-    </LINKEDIN CONTENT>
-    
-    <TWITTER/X CONTENT>
-    {create_x_content_task}
-    </TWITTER/X CONTENT>
     
     PROCESS:
     1. Check every claim against transcript for accuracy
@@ -293,10 +270,7 @@ brand_voice_check_task:
   description: >
     Apply FAR.AI brand voice and maximum conciseness to fact-checked content 
     for social media posts for {speaker} ({affiliation}) talk from {event_name}.
-    
-    <FACT-CHECKED CONTENT>
-    {fact_check_content_task}
-    </FACT-CHECKED CONTENT>
+    You will receive the fact-checked content from the previous task through context.
     
     <GENERAL STYLE>
     {style_shared}
