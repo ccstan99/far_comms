@@ -152,16 +152,13 @@ class AnalyzeTalkCrew():
 
     @crew
     def crew(self) -> Crew:
-        """Creates the AnalyzeTalk crew - currently testing transcript analysis in isolation"""
+        """Creates the AnalyzeTalk crew - transcript analysis for Coda Analysis column"""
         return Crew(
             agents=[
-                # self.resource_researcher_agent(),  # Commented out for transcript testing
                 self.transcript_analyzer_agent(),
             ],
             tasks=[
-                # self.research_resources_task(),  # Commented out for transcript testing
                 self.analyze_transcript_task(),
-                # self.final_assembly_task(),  # Removed - unnecessary for single agent testing
             ],
             process=Process.sequential,
             verbose=True
