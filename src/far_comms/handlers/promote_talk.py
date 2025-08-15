@@ -12,40 +12,52 @@ from far_comms.utils.json_repair import json_repair
 logger = logging.getLogger(__name__)
 
 
-def get_promote_talk_input(raw_data: dict) -> TalkRequest:
-    """Parse raw Coda data into TalkRequest structure"""
-    talk_request_data = {
+def get_promote_talk_input(raw_data: dict) -> dict:
+    """Parse raw Coda data for integrated promote_talk crew with preprocessing capabilities"""
+    return {
         "speaker": raw_data.get("Speaker", ""),
         "title": raw_data.get("Title", ""),
+        "talk_title": raw_data.get("Title", ""),  # Alias for YAML compatibility
         "event": raw_data.get("Event", ""),
+        "event_name": raw_data.get("Event", ""),  # Alias for YAML compatibility
         "affiliation": raw_data.get("Affiliation", ""),
         "yt_full_link": raw_data.get("YT full link", ""),
         "transcript": raw_data.get("Transcript", ""),
+        "transcript_content": raw_data.get("Transcript", ""),  # Alias for YAML compatibility
+        "slides_content": raw_data.get("Slides", ""),
         "resource_url": raw_data.get("Resource URL", ""),
+        # Existing Coda data for conditional processing
+        "resources_existing": raw_data.get("Resources", ""),
+        "analysis_existing": raw_data.get("Analysis", ""),
+        "summaries_existing": raw_data.get("Summaries", ""),
+        "li_content_existing": raw_data.get("LI content", ""),
+        "x_content_existing": raw_data.get("X content", ""),
+        "speaker_x_handle": raw_data.get("X handle", ""),
     }
-    return TalkRequest(**talk_request_data)
 
 
-def display_promote_talk_input(function_data: TalkRequest) -> dict:
+def display_promote_talk_input(function_data: dict) -> dict:
     """Format function input for webhook display - truncates long fields"""
-    display_data = function_data.model_dump()
+    display_data = function_data.copy()
     
     # Truncate long fields for display
-    if len(display_data.get("transcript", "")) > 100:
-        display_data["transcript"] = display_data["transcript"][:100] + "..."
+    for field in ["transcript", "transcript_content", "slides_content", "analysis_existing"]:
+        if len(display_data.get(field, "")) > 100:
+            display_data[field] = display_data[field][:100] + "..."
     
     return display_data
 
 
-async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
-    """Run crew in background - accepts TalkRequest directly"""
+async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
+    """Run integrated promote_talk crew with preprocessing capabilities"""
     try:
-        logger.info(f"Starting PromoteTalk crew for {talk_request.speaker}: {talk_request.title}")
-        logger.debug(f"Input transcript length: {len(talk_request.transcript or '')}")
+        speaker = function_data.get("speaker", "")
+        title = function_data.get("title", "")
+        logger.info(f"Starting integrated PromoteTalk crew for {speaker}: {title}")
         
-        # Check if transcript and analysis are available - both required for content generation
-        if not talk_request.transcript or not talk_request.transcript.strip():
-            error_msg = f"Cannot generate social media content without transcript. Please run 'prepare_talk' first to extract transcript from slides/video."
+        # Check minimum requirements - only transcript is essential
+        if not function_data.get("transcript") or not function_data.get("transcript").strip():
+            error_msg = f"Cannot generate social media content without transcript. Please run 'prepare_talk' first."
             logger.error(error_msg)
             
             # Update Coda with error status
@@ -62,71 +74,30 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
             
             return  # Exit early - cannot proceed without transcript
         
-        # Get Analysis from Coda (from prepare-talk processing) - required for content generation
-        coda_client = CodaClient()
-        analysis_data = ""
-        if coda_ids:
-            try:
-                row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
-                row_data = json.loads(row_data_str)
-                analysis_data = row_data["data"].get("Analysis", "")
-                if analysis_data:
-                    logger.info(f"Retrieved transcript analysis from prepare-talk: {len(analysis_data)} chars")
-                else:
-                    logger.warning("No analysis data found - prepare_talk may not have been run yet")
-            except Exception as e:
-                logger.warning(f"Failed to retrieve analysis data: {e}")
+        # Log data availability - QA orchestrator will handle conditional processing
+        available_data = []
+        if function_data.get("resources_existing"): available_data.append("Resources")
+        if function_data.get("analysis_existing"): available_data.append("Analysis") 
+        if function_data.get("summaries_existing"): available_data.append("Summaries")
+        if function_data.get("li_content_existing"): available_data.append("LI content")
+        if function_data.get("x_content_existing"): available_data.append("X content")
         
-        # Check if analysis is available - now required since we moved transcript analysis to prepare-talk
-        if not analysis_data or not analysis_data.strip():
-            error_msg = f"Cannot generate social media content without transcript analysis. Please run 'prepare_talk' first to generate analysis data."
-            logger.error(error_msg)
-            
-            # Update Coda with error status
-            if coda_ids:
-                try:
-                    error_updates = {
-                        "Webhook status": "Failed", 
-                        "Webhook progress": error_msg
-                    }
-                    coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
-                except Exception as update_error:
-                    logger.error(f"Failed to update Coda with error status: {update_error}")
-            
-            return  # Exit early - cannot proceed without analysis
+        logger.info(f"Available Coda data: {', '.join(available_data) if available_data else 'None - will generate all'}")
         
-        logger.info(f"Transcript available ({len(talk_request.transcript)} characters) and analysis available ({len(analysis_data)} characters) - proceeding with content generation")
-        
-        # Load style guides
+        # Load style guides and add to crew data
         docs_dir = get_docs_dir()
         style_shared = (docs_dir / "style_shared.md").read_text() if (docs_dir / "style_shared.md").exists() else ""
         style_li = (docs_dir / "style_li.md").read_text() if (docs_dir / "style_li.md").exists() else ""
         style_x = (docs_dir / "style_x.md").read_text() if (docs_dir / "style_x.md").exists() else ""
         
-        # Lookup speaker's X handle for Twitter/X content attribution
-        speaker_x_handle = ""
-        try:
-            speaker_x_handle = coda_client.get_x_handle(talk_request.speaker)
-            logger.info(f"Retrieved X handle for {talk_request.speaker}: {speaker_x_handle}")
-        except Exception as e:
-            logger.warning(f"X handle lookup failed for {talk_request.speaker}: {e}")
-            speaker_x_handle = talk_request.speaker  # Fallback to speaker name
-        
-        # Convert TalkRequest to crew data format
-        crew_data = {
-            "transcript": talk_request.transcript or "",
-            "analysis": analysis_data,
-            "speaker": talk_request.speaker or "",
-            "speaker_x_handle": speaker_x_handle,
-            "yt_full_link": str(talk_request.yt_full_link) if talk_request.yt_full_link else "",
-            "resource_url": str(talk_request.resource_url) if talk_request.resource_url else "",
-            "event_name": talk_request.event or "",
-            "affiliation": talk_request.affiliation or "",
-            # Style guide content
+        # Add style guides to crew data
+        crew_data.update({
             "style_shared": style_shared,
-            "style_li": style_li,
+            "style_li": style_li, 
             "style_x": style_x
-        }
+        })
+        
+        logger.info(f"Prepared crew data with {len(crew_data.get('transcript', ''))} char transcript")
         
         # Add Coda IDs if provided (for error reporting)
         if coda_ids:
@@ -144,8 +115,7 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
         if coda_ids and result:
             coda_client = CodaClient()
             
-            # Parse crew output - assuming result has the content we need
-            # You may need to adjust these field names based on actual crew output structure
+            # Parse QA orchestrator output
             try:
                 # Extract structured data from crew result
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
@@ -153,45 +123,62 @@ async def run_promote_talk(talk_request: TalkRequest, coda_ids: CodaIds = None):
                 # Parse the output using json_repair for robust handling
                 parsed_output = json_repair(crew_output, fallback_value={"content": crew_output})
                 
-                logger.info(f"Parsed crew output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
+                logger.info(f"QA Orchestrator output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 
-                # Extract from new clean structure - Coda fields at top level
-                paragraph_summary = parsed_output.get("paragraph_ai", "")
-                # Skip hooks_ai - raw JSON is unreadable in Coda interface
-                li_content = parsed_output.get("li_content", "")
-                x_content = parsed_output.get("x_content", "")
+                # Extract from QA orchestrator structure
+                preprocessing_completed = parsed_output.get("preprocessing_completed", {})
+                content_generated = parsed_output.get("content_generated", {})
+                quality_assurance = parsed_output.get("quality_assurance", {})
+                final_decision = parsed_output.get("final_decision", {})
                 
-                # X handle attribution is now handled by the X writer agent during content creation
+                # Extract content for Coda
+                li_content = content_generated.get("li_content", "")
+                x_content = content_generated.get("x_content", "")
+                paragraph_summary = content_generated.get("paragraph_summary", "")
                 
-                # Notes section contains all intermediate work
-                notes = parsed_output.get("notes", {})
-                publication_decision = notes.get("publication_decision", "NEEDS_REVISION")
+                # Extract preprocessing results
+                resources_result = preprocessing_completed.get("resources", "")
+                analysis_result = preprocessing_completed.get("analysis", "")
+                summaries_result = preprocessing_completed.get("summaries", "")
+                
+                # Extract final decision
+                publication_decision = final_decision.get("publication_decision", "NEEDS_REVISION")
                 
                 logger.info(f"Publication decision: {publication_decision}")
+                logger.info(f"QA scores - Accuracy: {quality_assurance.get('accuracy_score')}, Compliance: {quality_assurance.get('compliance_score')}")
                 
                 # Map publication decision to Coda status
                 status_mapping = {
                     "APPROVED": "Done",
                     "NEEDS_REVISION": "Needs review", 
-                    "REJECTED": "Error",
-                    "NEEDS_MANUAL_REVIEW": "Needs review"
+                    "REJECTED": "Error"
                 }
                 coda_status = status_mapping.get(publication_decision, "Needs review")
                 logger.info(f"Setting Coda status: {coda_status}")
                 
-                # Prepare final updates for Coda columns
+                # Prepare comprehensive Coda updates
+                coda_updates = {
+                    "Webhook status": coda_status,
+                    "Webhook progress": f"QA Orchestration completed - {quality_assurance.get('refinement_rounds', 0)} refinement rounds",
+                    # Content outputs
+                    "LI content": li_content,
+                    "X content": x_content, 
+                    "Paragraph (AI)": paragraph_summary,
+                    # Preprocessing results (only update if generated)
+                    "Eval notes": f"Accuracy: {quality_assurance.get('accuracy_score', 'N/A')}, Compliance: {quality_assurance.get('compliance_score', 'N/A')}"
+                }
+                
+                # Only update preprocessing columns if they were generated (not existing)
+                if resources_result and not function_data.get("resources_existing"):
+                    coda_updates["Resources"] = resources_result
+                if analysis_result and not function_data.get("analysis_existing"):
+                    coda_updates["Analysis"] = analysis_result
+                if summaries_result and not function_data.get("summaries_existing"):
+                    coda_updates["Summaries"] = summaries_result
+                
                 updates = [{
                     "row_id": coda_ids.row_id,
-                    "updates": {
-                        "Webhook status": coda_status,
-                        "Webhook progress": json.dumps(parsed_output, indent=2),
-                        # Map assembled content to Coda columns:
-                        "Paragraph (AI)": paragraph_summary,
-                        # Skip "Hooks (AI)" - raw JSON is unreadable in Coda
-                        "LI content": li_content,
-                        "X content": x_content,
-                        "Eval notes": notes.get("eval_notes", "")
-                    }
+                    "updates": coda_updates
                 }]
                 
                 logger.info(f"Updating Coda columns: {list(updates[0]['updates'].keys())}")

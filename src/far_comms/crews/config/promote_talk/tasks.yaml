@@ -1,5 +1,156 @@
 # All tasks follow style_shared.md, style_li.md, and style_x.md requirements
-# Analysis now comes from prepare-talk via Analysis column - no need to re-analyze transcript
+# QA Orchestrator manages conditional execution of preprocessing tasks
+
+research_resources_task:
+  description: >
+    Research and find actual URLs for the speaker's PRIMARY resources - the main work they are presenting.
+    This is for social media sharing (1 tweet), so focus on 1-4 most important resources only.
+    
+    TALK CONTEXT:
+    - Speaker: {speaker}
+    - Affiliation: {affiliation}  
+    - Talk Title: {talk_title}
+    - Slides Content: {slides_content}
+    
+    SMART PRIORITY ORDER (should never fail):
+    
+    1. QR CODES/URLs FIRST if slides available:
+       * If slides content is blank/empty: skip to step 2
+       * Look for any URLs/links in the slides content above
+       * If URLs found: these are the speaker's intended resources, verify and use them, STOP HERE
+       * If no URLs found in slides: proceed to step 2
+    
+    2. TITLE + SPEAKER SEARCH (most reliable):
+       * Query: "{talk_title} {speaker} paper" or "{speaker} {affiliation} {talk_title}"
+       * This usually finds the main paper being presented
+       * ONLY include if speaker is confirmed author/co-author
+       * If 1+ quality speaker-authored resource found: STOP HERE
+    
+    3. SOCIAL MEDIA SEARCH (posts by speaker or co-authors about their work):
+       * Single query: "{talk_title}" (site:x.com OR site:linkedin.com OR site:bsky.app)
+       * Look for posts/threads by speaker OR co-authors about this work
+       * ONLY include if: speaker is confirmed author AND post is by one of the authors
+       * If 1+ quality social media resource found: STOP HERE
+    
+    4. SLIDES-INFORMED SEARCH (if slides available):
+       * If slides content is blank/empty: STOP HERE 
+       * Extract key terms/concepts from slides content above
+       * Search with speaker name + key terms from slides
+       * If 1+ good resource found: STOP HERE
+       * If still nothing found: return blank/empty result
+    
+    EFFICIENCY RULES:
+    - MAX 5 searches total 
+    - Stop immediately when at least 1 quality resource found  
+    - QR codes/URLs from slides HIGHEST priority (speaker's intended resources)
+    - Title+Speaker search most reliable fallback
+    - Academic conference publications > arxiv papers > speaker's social media posts > project websites > GitHub repos
+    - OK to return empty if no speaker-authored resources found - quality over quantity
+    - Better empty than generic resources that aren't directly related to the talk
+    
+    CRITICAL VALIDATION RULES:
+    - MANDATORY: Speaker "{speaker}" MUST be listed as author/co-author on ALL papers
+    - MANDATORY: Verify URLs actually work before including them
+    - MANDATORY: If you cannot confirm speaker authorship, DO NOT include the resource
+    - Do NOT include resources just because they match the topic - they must be speaker's work
+    
+    STRICT EXCLUSIONS:
+    - Do NOT include general speaker homepages or CV
+    - Do NOT include institutional/company websites  
+    - Do NOT include cited papers by other authors
+    - Do NOT include comprehensive reference lists
+    
+    Expected result: 1-4 resources max, focus on speaker's main contributions
+    
+  expected_output: >
+    Simple format for Coda Resources column:
+    "Paper Title - https://arxiv.org/abs/123\nProject Website - https://speaker.org/project"
+    
+    Maximum 1-4 lines. Focus on main academic/research resources only.
+    Skip GitHub unless no papers/websites found.
+  agent: resource_researcher_agent
+
+analyze_transcript_task:
+  description: >
+    Analyze the transcript to extract the {speaker}'s ({affiliation}) key ideas and points using their actual words and phrases.
+    This analysis will be the foundation for downstream summarization and social media content generation.
+    
+    TRANSCRIPT CONTENT (from Coda):
+    {transcript_content}
+    
+    SLIDES CONTEXT (for reference):
+    {slides_content}
+    
+    CRITICAL: Use the speaker's exact words, phrases, and terminology wherever possible.
+    
+    Your analysis should:
+    - Extract the speaker's main thesis using their own language
+    - Capture key points in the speaker's voice and phrasing
+    - Preserve the speaker's organizational structure and flow
+    - Extract specific numbers, technical terms, and metrics exactly as stated
+    - Find the most quotable/impactful statements in the speaker's words
+    - Highlight surprising or counterintuitive claims using their exact phrasing
+    - Capture any explicit CTAs, resource mentions, or directives from speaker
+    - Extract summary/takeaway slides verbatim (perfect for social media)
+    - Identify most tweetable content and social media ready quotes
+    - Maintain technical accuracy while preserving authentic voice
+    
+  expected_output: >
+    # {speaker} - {talk_title}
+    
+    ## Core Thesis
+    [Main argument using speaker's exact words - 1-2 sentences from transcript]
+    
+    ## Key Points
+    - [Key point 1 using speaker's phrases and terminology]
+    - [Key point 2 using speaker's phrases and terminology]  
+    - [Key point 3 using speaker's phrases and terminology]
+    
+    ## Technical Details
+    [Specific numbers, methods, metrics exactly as speaker stated them]
+    
+    ## Notable Quotes
+    > "[Most impactful quote from speaker]"
+    > "[Surprising or counterintuitive claim in speaker's words]"
+    > "[Technical insight worth preserving]"
+    
+    ## Speaker's Call-to-Action
+    [Any explicit CTAs, resource mentions, or directives from speaker - use exact words]
+    
+    ## Social Media Ready Content
+    [Most tweetable quotes, key takeaways, summary statements in speaker's voice]
+    
+    ## Summary/Takeaway Slides
+    [If speaker has summary slides, capture them verbatim - these are perfect for social media]
+    
+    ## Talk Structure
+    [Brief description of how speaker organized their presentation]
+    
+    IMPORTANT: Return ONLY the markdown content above. No additional commentary or JSON formatting.
+  agent: transcript_analyzer_agent
+
+generate_summaries_task:
+  description: >
+    Generate executive summaries from the transcript analysis for {speaker} ({affiliation}).
+    Create both paragraph and sentence summaries that capture the essence for different audiences.
+    
+    ANALYSIS INPUT (from analyze_transcript_task):
+    {analysis}
+    
+    Requirements:
+    - Paragraph summary: ~100 words, comprehensive yet concise, suitable for busy professionals
+    - Sentence summary: ~25 words, ultra-concise essence for executives 
+    - Focus on findings, implications, and business relevance
+    - Eliminate technical jargon while preserving accuracy
+    - Both summaries should complement each other and standalone
+    - Use clear, engaging language that makes complex topics accessible
+    
+  expected_output: >
+    {
+      "paragraph_summary": "Comprehensive 1-paragraph summary in ~100 words covering core findings and implications",
+      "sentence_summary": "Ultra-concise 1-sentence summary in ~25 words capturing the essence"
+    }
+  agent: summarizer_agent
 
 create_li_content_task:
   description: >
@@ -162,84 +313,89 @@ voice_authenticity_check_task:
   agent: voice_checker_agent
 
 
-final_review_task:
+qa_orchestration_task:
   description: >
-    Audit compliance, assemble final posts, and make publication decisions.
-    ===
-    ORIGINAL TRANSCRIPT (FOR FINAL ACCURACY CHECK): 
-    {transcript}
-    ===
-    STYLE GUIDES (FOR COMPLIANCE AUDIT):
+    Orchestrate the complete content generation pipeline by checking Coda data availability and conditionally delegating to agents for preprocessing, content generation, and quality assurance.
+    
+    AVAILABLE CODA DATA:
+    - Resources: {resources_existing}
+    - Analysis: {analysis_existing} 
+    - Summaries: {summaries_existing}
+    - LI content: {li_content_existing}
+    - X content: {x_content_existing}
+    
+    INPUT DATA FOR DELEGATION:
+    - Speaker: {speaker} ({affiliation})
+    - Talk Title: {talk_title}
+    - Event: {event_name}
+    - Transcript: {transcript}
+    - Slides: {slides_content}
+    - YouTube Link: {yt_full_link}
+    
+    STYLE GUIDES FOR COMPLIANCE:
     {style_shared}
-    
     {style_li}
-    
     {style_x}
-    ===
-    ASSEMBLY VARIABLES:
-    yt_full_link: {yt_full_link}
-    resource_url: {resource_url}
-    event_name: {event_name}
-    speaker: {speaker}
-    affiliation: {affiliation}
-    ===
-    PROCESS:
-    1. COMPLIANCE AUDIT & FIX: Systematically check content against 14-point rubric
-       - CRITICAL: Scan for em dashes (—) and hyphens (-) except in names, replace with appropriate punctuation
-       - Fix emoji usage, character limits, structural requirements, and formatting violations
-       - Score each of 14 rubric points: pass/fail for each specific requirement
-       - Make multiple improvement passes to maximize compliance score
     
-    2. ASSEMBLY: Create complete LinkedIn and Twitter/X posts using templates
-       - Replace [video_url] with {yt_full_link}
-       - Replace [resource_url] with {resource_url}
-       - Replace {event_name} in CTA text
-       - For Twitter/X: Include speaker attribution using {speaker_x_handle}
+    ORCHESTRATION WORKFLOW:
     
-    3. CRITICAL FINAL CHECKS:
-       - **Accuracy Check**: Compare every claim against original transcript - do ALL statements match what speaker actually said?
-       - **Speaker Approval Check**: Would the speaker confidently reshare this content as accurate representation of their work?
+    1. CONDITIONAL PREPROCESSING (delegate only if data missing):
+       - If Resources empty/missing → delegate to resource_researcher_agent
+       - If Analysis empty/missing → delegate to transcript_analyzer_agent  
+       - If Summaries empty/missing → delegate to summarizer_agent using Analysis
     
-    4. ADDITIONAL VALIDATION:
-       - Verify all claims, numbers, and technical details are supported by transcript
-       - Ensure no hallucinations or interpretations were introduced during processing
-       - Continue improving content until no further improvements possible without introducing errors
+    2. CONTENT GENERATION & REFINEMENT:
+       - If LI content missing/poor → delegate to li_content_writer_agent
+       - If X content missing/poor → delegate to x_content_writer_agent
+       - Always delegate to fact_checker_agent for accuracy verification
+       - Always delegate to voice_checker_agent for brand voice compliance
     
-    PUBLICATION STANDARDS:
-    - Both critical checks must be ✓ for APPROVED decision
-    - Any ✗ requires NEEDS_REVISION with specific explanation
-    - Make final corrections if minor issues found
-    - Focus on binary go/no-go decision, not detailed scoring
+    3. ITERATIVE QUALITY ASSURANCE:
+       - Review all content for accuracy, compliance, and quality
+       - Delegate back to specific agents for refinements if needed
+       - Continue refinement loops until perfect quality achieved
+       - Perform final compliance audit against 14-point rubric
     
-    CRITICAL PROHIBITIONS (IMMEDIATE REJECTION):
-    - NEVER suggest hashtags (absolutely prohibited in style guide) - ANY hashtag suggestions = AUTOMATIC REJECTION
-    - NEVER advocate for positions or suggest CTAs asking for opinions
-    - Content must remain neutral and factual
-    - Scan all content for # symbols and reject immediately if found
+    4. FINAL ASSEMBLY & APPROVAL:
+       - Assemble complete LinkedIn and Twitter/X posts with templates
+       - Replace [video_url] with {yt_full_link}, [resource_url] with resources
+       - Perform final accuracy check against transcript
+       - Make go/no-go publication decision
     
-    DECISION LOGIC:
-    - Accuracy Check ✓ AND Speaker Approval Check ✓ = "APPROVED"
-    - Either check ✗ = "NEEDS_REVISION" with specific feedback
-    - Hashtags or position advocacy = "REJECTED" (immediate disqualification)
+    DELEGATION AUTHORITY:
+    - You can delegate to ANY agent multiple times for iterative improvement
+    - Be specific about what needs refinement when delegating
+    - Continue until no further improvements possible
+    - Only approve when accuracy AND compliance both perfect
     
-    Reject content that doesn't meet these strict criteria. FAR.AI's reputation depends on exceptional quality.
+    CRITICAL PROHIBITIONS:
+    - NEVER approve content with hashtags (immediate rejection)
+    - NEVER approve content that advocates positions
+    - All claims must match original transcript exactly
+    
   expected_output: >
     {
-      "paragraph_ai": "Final approved summary paragraph",
-      "li_content": "Final approved complete LinkedIn post",
-      "x_content": "Final approved complete Twitter/X content",
-      "notes": {
-        "publication_decision": "APPROVED/NEEDS_REVISION/REJECTED/NEEDS_MANUAL_REVIEW",
-        "accuracy_check": "✓/✗ with explanation - confirm all claims match transcript",
-        "speaker_approval_check": "✓/✗ with explanation - would speaker consider accurate and reshare?",
-        "compliance_score_review": "X/14 based on actual style guide compliance assessment",
+      "preprocessing_completed": {
+        "resources": "Resources found/status",
+        "analysis": "Analysis generated/status", 
+        "summaries": "Summaries created/status"
+      },
+      "content_generated": {
+        "li_content": "Final approved complete LinkedIn post",
+        "x_content": "Final approved complete Twitter/X content",
+        "paragraph_summary": "Final approved paragraph summary"
+      },
+      "quality_assurance": {
+        "accuracy_score": "1-10 based on transcript accuracy",
+        "compliance_score": "X/14 based on style guide compliance",
+        "refinement_rounds": "Number of delegation rounds performed"
+      },
+      "final_decision": {
+        "publication_decision": "APPROVED/NEEDS_REVISION/REJECTED",
         "blocking_issues": [],
-        "revision_notes": "Specific feedback if revision needed",
-        "cohesion_assessment": "Final assessment of content cohesion and flow",
-        "transcript_analysis": "Transcript analysis from prepare-talk Analysis column"
-      }
+        "revision_notes": "Specific feedback if revision needed"
       }
     }
-  context: ["create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
-  output_file: "output/{speaker}_final.json"
-  agent: final_reviewer_agent
+  context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "voice_authenticity_check_task"]
+  output_file: "output/{speaker}_qa_orchestration.json"
+  agent: qa_orchestrator_agent
