@@ -82,27 +82,20 @@ async def run_analyze_talk(function_data: dict, coda_ids: CodaIds = None):
         if coda_ids and result:
             coda_client = CodaClient()
             
-            # Handle JSON output from final_assembly_task
+            # Handle direct markdown output from transcript analysis task
             try:
-                from far_comms.utils.json_repair import json_repair
-                
                 crew_output = result.raw if hasattr(result, 'raw') else str(result)
                 logger.info(f"Crew output: {crew_output[:200]}...")
                 
-                # Parse JSON output from final_assembly_task
-                parsed_result = json_repair(crew_output, fallback_value={})
+                # Direct markdown output from analyze_transcript_task
+                analysis_content = crew_output.strip()
                 
-                if parsed_result and "coda_updates" in parsed_result:
-                    coda_updates = parsed_result["coda_updates"]
-                    logger.info(f"Parsed coda_updates: {list(coda_updates.keys())}")
-                else:
-                    # Fallback: treat as resource-only output (backwards compatibility)
-                    resource_count = len(crew_output.strip().split('\n')) if crew_output.strip() else 0
-                    coda_updates = {
-                        "Resources": crew_output.strip(),
-                        "Webhook progress": f"Resource research completed: {resource_count} resources found",
-                        "Webhook status": "Done"
-                    }
+                # Prepare Coda updates for transcript analysis
+                coda_updates = {
+                    "Analysis": analysis_content,
+                    "Webhook progress": f"Transcript analysis completed: {len(analysis_content)} chars",
+                    "Webhook status": "Done"
+                }
                 
                 # Log content lengths for debugging
                 for key, value in coda_updates.items():

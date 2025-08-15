@@ -152,16 +152,16 @@ class AnalyzeTalkCrew():
 
     @crew
     def crew(self) -> Crew:
-        """Creates the AnalyzeTalk crew"""
+        """Creates the AnalyzeTalk crew - currently testing transcript analysis in isolation"""
         return Crew(
             agents=[
-                self.resource_researcher_agent(),
+                # self.resource_researcher_agent(),  # Commented out for transcript testing
                 self.transcript_analyzer_agent(),
             ],
             tasks=[
-                self.research_resources_task(),
+                # self.research_resources_task(),  # Commented out for transcript testing
                 self.analyze_transcript_task(),
-                self.final_assembly_task(),
+                # self.final_assembly_task(),  # Removed - unnecessary for single agent testing
             ],
             process=Process.sequential,
             verbose=True

@@ -69,7 +69,7 @@ research_resources_task:
 
 analyze_transcript_task:
   description: >
-    Analyze the transcript to extract the speaker's key ideas and points using their actual words and phrases.
+    Analyze the transcript to extract the {speaker}'s ({affiliation}) key ideas and points using their actual words and phrases.
     This analysis will be the foundation for downstream summarization and social media content generation.
     
     TRANSCRIPT CONTENT (from Coda):
@@ -77,10 +77,6 @@ analyze_transcript_task:
     
     SLIDES CONTEXT (for reference):
     {slides_content}
-    
-    SPEAKER INFO:
-    - Speaker: {speaker}
-    - Affiliation: {affiliation}
     
     CRITICAL: Use the speaker's exact words, phrases, and terminology wherever possible.
     
@@ -91,29 +87,41 @@ analyze_transcript_task:
     - Extract specific numbers, technical terms, and metrics exactly as stated
     - Find the most quotable/impactful statements in the speaker's words
     - Highlight surprising or counterintuitive claims using their exact phrasing
+    - Capture any explicit CTAs, resource mentions, or directives from speaker
+    - Extract summary/takeaway slides verbatim (perfect for social media)
+    - Identify most tweetable content and social media ready quotes
     - Maintain technical accuracy while preserving authentic voice
     
   expected_output: >
     # {speaker} - {talk_title}
     
     ## Core Thesis
-    {Main argument in speaker's exact words - 1-2 sentences from transcript}
+    [Main argument using speaker's exact words - 1-2 sentences from transcript]
     
     ## Key Points
-    - {Key point 1 using speaker's phrases and terminology}
-    - {Key point 2 using speaker's phrases and terminology}  
-    - {Key point 3 using speaker's phrases and terminology}
+    - [Key point 1 using speaker's phrases and terminology]
+    - [Key point 2 using speaker's phrases and terminology]  
+    - [Key point 3 using speaker's phrases and terminology]
     
     ## Technical Details
-    {Specific numbers, methods, metrics exactly as speaker stated them}
+    [Specific numbers, methods, metrics exactly as speaker stated them]
     
     ## Notable Quotes
-    > "{Most impactful quote from speaker}"
-    > "{Surprising or counterintuitive claim in speaker's words}"
-    > "{Technical insight worth preserving}"
+    > "[Most impactful quote from speaker]"
+    > "[Surprising or counterintuitive claim in speaker's words]"
+    > "[Technical insight worth preserving]"
+    
+    ## Speaker's Call-to-Action
+    [Any explicit CTAs, resource mentions, or directives from speaker - use exact words]
+    
+    ## Social Media Ready Content
+    [Most tweetable quotes, key takeaways, summary statements in speaker's voice]
+    
+    ## Summary/Takeaway Slides
+    [If speaker has summary slides, capture them verbatim - these are perfect for social media]
     
     ## Talk Structure
-    {Brief description of how speaker organized their presentation}
+    [Brief description of how speaker organized their presentation]
     
     IMPORTANT: Return ONLY the markdown content above. No additional commentary or JSON formatting.
   agent: transcript_analyzer_agent
@@ -133,18 +141,11 @@ final_assembly_task:
   expected_output: >
     {
       "coda_updates": {
-        "Resources": "Formatted resource list from research task (or blank if none found)",
         "Analysis": "Markdown transcript analysis from transcript task (or blank if no transcript)",
         "Webhook progress": "Analysis completed: X resources found, transcript analysis completed",
         "Webhook status": "Done"
       },
-      "processing_summary": {
-        "resources_found": "Number of resources found",
-        "transcript_analyzed": "true/false",
-        "total_processing_time": "Processing time"
-      }
     }
   agent: resource_researcher_agent
   context:
-    - research_resources_task
     - analyze_transcript_task
