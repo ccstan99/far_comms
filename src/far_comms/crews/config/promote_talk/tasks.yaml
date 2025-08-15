@@ -235,10 +235,19 @@ create_x_content_task:
 fact_check_content_task:
   description: >
     Verify all content claims against original transcript and provide corrected versions.
-    ===
-    {speaker} ({affiliation}) transcript from {event_name}: 
+    
+    <ORIGINAL TRANSCRIPT>
     {transcript}
-    ===
+    </ORIGINAL TRANSCRIPT>
+    
+    <LINKEDIN CONTENT>
+    {create_li_content_task}
+    </LINKEDIN CONTENT>
+    
+    <TWITTER/X CONTENT>
+    {create_x_content_task}
+    </TWITTER/X CONTENT>
+    
     PROCESS:
     1. Check every claim against transcript for accuracy
     2. Identify any exaggerations, unsupported claims, or technical errors
@@ -284,7 +293,23 @@ brand_voice_check_task:
   description: >
     Apply FAR.AI brand voice and maximum conciseness to fact-checked content 
     for social media posts for {speaker} ({affiliation}) talk from {event_name}.
-    ===
+    
+    <FACT-CHECKED CONTENT>
+    {fact_check_content_task}
+    </FACT-CHECKED CONTENT>
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+    
     PROCESS:
     1. Take the corrected content from fact_check_content_task (accuracy verified)
     2. Apply FAR.AI brand voice: conversational yet authoritative, maximally concise
