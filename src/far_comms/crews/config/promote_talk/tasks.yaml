@@ -5,32 +5,12 @@ data_orchestration_task:
   description: >
     Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
     
-    AVAILABLE CODA DATA (check and use existing or generate missing):
+    CODA DATA TO CHECK (use existing or delegate to generate):
     - Resources: {resources_existing}
     - Analysis: {analysis_existing} 
     - Summaries: {summaries_existing}
     - LI content: {li_content_existing}
     - X content: {x_content_existing}
-    
-    STATIC INPUT DATA (always from parameters):
-    - Speaker: {speaker} ({affiliation})
-    - Talk Title: {talk_title}
-    - Event: {event_name}
-    - Transcript: {transcript}
-    - Slides: {slides_content}
-    - YouTube Link: {yt_full_link}
-    
-    <GENERAL STYLE>
-    {style_shared}
-    </GENERAL STYLE>
-    
-    <LINKEDIN STYLE>
-    {style_li}
-    </LINKEDIN STYLE>
-    
-    <TWITTER STYLE>
-    {style_x}
-    </TWITTER STYLE>
     
     DATA LOADING WORKFLOW:
     
