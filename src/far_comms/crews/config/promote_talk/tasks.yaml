@@ -194,7 +194,7 @@ generate_summaries_task:
 
 generate_hooks_task:
   description: >
-    Generate compelling hooks for social media content for {speaker}'s ({affiliation}) research presentation.
+    Generate compelling hooks for social media content for YouTube recording.
     Create multiple hook options for both LinkedIn and Twitter/X platforms.
     
     DEPENDENCY CHECK: You will receive transcript analysis from previous tasks through context.
@@ -212,7 +212,9 @@ generate_hooks_task:
     - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
     - Generate 5 LinkedIn hooks: attention-grabbing openers for policymakers/industry leaders  
     - Generate 5 Twitter/X hooks: ultra-dense openers for ML researchers and tech journalists
-    - Lead with findings, not setup - eliminate corporate speak like "researchers discovered"
+    - **CRITICAL**: Lead with specific findings/numbers from transcript, not vague claims
+    - **NO ATTRIBUTION**: Hooks should be pure findings without researcher names or organizations
+    - **AVOID**: Generic statements like "AI struggles with X" - use exact research results/methods/numbers
     - Focus on surprising, counterintuitive results that make people stop scrolling
     - Each hook should be standalone and compelling within first 5 words
     
@@ -224,19 +226,23 @@ generate_hooks_task:
     - Output improved versions OR return originals if already excellent
     
   expected_output: >
-    ## LinkedIn Hooks (5 options)
-    1. [Compelling hook leading with key finding for policymakers]
-    2. [Alternative hook emphasizing business implications]  
-    3. [Hook focusing on surprising research result]
-    4. [Hook highlighting policy/industry relevance]
-    5. [Hook emphasizing broader AI safety implications]
+    ## LinkedIn Hooks (5 options with reasoning)
+    1. [Specific hook with exact finding/number] - REASON: [Why this finding is compelling for policymakers]
+    2. [Alternative hook with concrete result] - REASON: [Why this emphasizes real world impact]
+    3. [Hook with surprising research outcome] - REASON: [Why this result is counterintuitive]
+    4. [Hook with policy/industry relevance] - REASON: [Why this matters for decision-makers]
+    5. [Hook with AI safety implications] - REASON: [Why this is significant for safety community]
     
-    ## Twitter/X Hooks (5 options)
-    1. [Ultra-dense technical hook for ML researchers]
-    2. [Counterintuitive finding hook for tech audience]
-    3. [Precise methodology/results hook] 
-    4. [Technical breakthrough hook for AI practitioners]
-    5. [Research impact hook for academic community]
+    ## Twitter/X Hooks (5 options with reasoning)  
+    1. [Ultra-dense technical hook with specifics] - REASON: [Why ML researchers will engage]
+    2. [Counterintuitive finding with numbers] - REASON: [Why this challenges assumptions]
+    3. [Precise methodology/results hook] - REASON: [Why this technical detail matters]
+    4. [Technical breakthrough with metrics] - REASON: [Why practitioners need this]
+    5. [Research impact with concrete implications] - REASON: [Why academics will share]
+    
+    ## SELECTED HOOKS
+    **LinkedIn**: [Hook #X - state which number and why it's best]
+    **Twitter/X**: [Hook #X - state which number and why it's best]
   context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
   agent: hook_specialist_agent
 
@@ -265,11 +271,12 @@ create_li_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Select best LinkedIn hook from hooks generated in generate_hooks_task
+    - Use the SELECTED LinkedIn hook from generate_hooks_task (not the numbered list)
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
     - Incorporate "Core Thesis" and "Key Points" from transcript analysis
     - Ensure hook/paragraph cohesion (no repetitive phrases)
-    - Write 2-3 sentence paragraph starting with "@{speaker} ({affiliation}) [verb]" format
+    - Write 2-3 sentence paragraph starting with "{speaker} ({affiliation}) [verb]" format
+    - **ATTRIBUTION**: Credit research to speaker/team, not institution (e.g., "Deng's framework" not "Xi'an's framework")
     - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
 
@@ -317,7 +324,7 @@ create_x_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Select best Twitter/X hook from hooks generated in generate_hooks_task
+    - Use the SELECTED Twitter/X hook from generate_hooks_task (not the numbered list)
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
     - Include specific numbers, methods, results from "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
