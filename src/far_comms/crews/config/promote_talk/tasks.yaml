@@ -169,13 +169,19 @@ generate_summaries_task:
     DEPENDENCY CHECK: You will receive transcript analysis from the previous task through context.
     If the analysis is empty, incomplete, or failed, return error message: "Cannot generate summaries without transcript analysis. Analysis task failed or returned empty content."
     
+    <STYLE GUIDE>
+    {style_shared}
+    </STYLE GUIDE>
+    
     Requirements:
+    - **CRITICAL FORMAT**: Paragraph summary MUST start with "{speaker} ({affiliation}) [action verb]..."
     - Paragraph summary: ~100 words, comprehensive yet concise, suitable for busy professionals
     - Sentence summary: ~25 words, ultra-concise essence for executives 
+    - Follow FAR.AI voice: conversational yet authoritative, maximally concise
+    - **AVOID** overused adjectives: "groundbreaking", "exciting", "incredible", "eye-opening" 
     - Focus on findings, implications, and business relevance
     - Eliminate technical jargon while preserving accuracy
-    - Both summaries should complement each other and standalone
-    - Use clear, engaging language that makes complex topics accessible
+    - Use clear, accessible language that makes complex topics understandable
     
   expected_output: >
     ## Paragraph Summary
