@@ -125,33 +125,14 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         try:
             crew_output = result.raw if hasattr(result, 'raw') else str(result)
             
-            # Try to parse the crew output to include structured data
+            # Try to parse the crew output for easier access
             from far_comms.utils.json_repair import json_repair
-            parsed_crew_output = json_repair(crew_output, fallback_value={"content": crew_output})
+            parsed_output = json_repair(crew_output, fallback_value={"content": crew_output})
             
             output_data = {
-                "metadata": {
-                    "speaker": speaker,
-                    "title": title,
-                    "event": function_data.get("event", ""),
-                    "affiliation": function_data.get("affiliation", ""),
-                    "timestamp": datetime.now().isoformat(),
-                    "crew_result_type": type(result).__name__
-                },
-                "crew_output_raw": crew_output,
-                "crew_output_parsed": parsed_crew_output,
-                "input_data_summary": {
-                    "transcript_length": len(function_data.get("transcript", "")),
-                    "has_slides": bool(function_data.get("slides_content", "")),
-                    "existing_coda_data": {
-                        "resources": bool(function_data.get("coda_resources", "")),
-                        "analysis": bool(function_data.get("coda_analysis", "")), 
-                        "summaries": bool(function_data.get("coda_summaries", "")),
-                        "hooks": bool(function_data.get("coda_hooks", "")),
-                        "li_content": bool(function_data.get("coda_li_content", "")),
-                        "x_content": bool(function_data.get("coda_x_content", ""))
-                    }
-                }
+                "speaker": speaker,
+                "timestamp": datetime.now().isoformat(),
+                "parsed_output": parsed_output
             }
             
             with open(output_file, 'w') as f:
