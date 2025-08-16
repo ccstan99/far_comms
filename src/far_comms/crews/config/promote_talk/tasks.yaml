@@ -177,9 +177,7 @@ generate_summaries_task:
   description: >
     Generate executive summaries from the transcript analysis for {speaker} ({affiliation}).
     Create both paragraph and sentence summaries that capture the essence for different audiences.
-    
-    ANALYSIS INPUT (from analyze_transcript_task):
-    {analysis}
+    You will receive the transcript analysis from the previous task through context.
     
     Requirements:
     - Paragraph summary: ~100 words, comprehensive yet concise, suitable for busy professionals
