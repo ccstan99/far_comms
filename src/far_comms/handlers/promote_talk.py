@@ -187,14 +187,14 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 coda_status = status_mapping.get(publication_decision, "Error")  # Default to Error for system failures
                 logger.info(f"Setting Coda status: {coda_status}")
                 
-                # Prepare comprehensive Coda updates
+                # Prepare comprehensive Coda updates (excluding formula-bound columns)
                 coda_updates = {
                     "Webhook status": coda_status,
                     "Webhook progress": webhook_progress,
                     # Content outputs
                     "LI content": li_content,
                     "X content": x_content, 
-                    "Summary": summary,  # Updated column name
+                    # Note: Summary is formula-bound and cannot be updated directly
                     # Always update preprocessing results
                     "Resources": resources_result,
                     "Analysis": analysis_result,
