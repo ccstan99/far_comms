@@ -26,9 +26,9 @@ class PromoteTalkCrew():
       max_retries=3
     )
     
-    # Claude 4 Haiku for simple/mechanical tasks (cost optimization)
+    # Claude 3.5 Haiku for simple/mechanical tasks (cost optimization)
     self.haiku_llm = LLM(
-      model="anthropic/claude-haiku-4-20250514",
+      model="anthropic/claude-3-5-haiku-20241022",
       max_retries=3
     )
 
