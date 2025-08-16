@@ -204,8 +204,9 @@ create_li_content_task:
     Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
     You will receive transcript analysis and summaries from previous tasks through context.
     
-    EXISTING CODA CONTENT (if any):
+    <CODA CONTENT>
     {coda_li_content}
+    </CODA CONTENT>
     
     <GENERAL STYLE>
     {style_shared}
@@ -216,8 +217,8 @@ create_li_content_task:
     </LINKEDIN STYLE>
 
     MODE DETERMINATION:
-    - If {coda_li_content} is empty/blank → CREATE MODE: Create new LinkedIn post from scratch
-    - If {coda_li_content} has content → REFINE MODE: Assess and improve existing content
+    - If <CODA CONTENT> is empty/blank → CREATE MODE: Create new LinkedIn post from scratch
+    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
     - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
@@ -254,8 +255,9 @@ create_x_content_task:
     Audience is primarily ML researchers and AI/tech journalists.
     You will receive transcript analysis and summaries from previous tasks through context.
     
-    EXISTING CODA CONTENT (if any):
+    <CODA CONTENT>
     {coda_x_content}
+    </CODA CONTENT>
     
     <GENERAL STYLE>
     {style_shared}
@@ -266,8 +268,8 @@ create_x_content_task:
     </TWITTER STYLE>
 
     MODE DETERMINATION:
-    - If {coda_x_content} is empty/blank → CREATE MODE: Create new Twitter/X content from scratch
-    - If {coda_x_content} has content → REFINE MODE: Assess and improve existing content
+    - If <CODA CONTENT> is empty/blank → CREATE MODE: Create new Twitter/X content from scratch
+    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
     - Use "Notable Quotes" and "Social Media Ready Content" from transcript analysis for technical precision
