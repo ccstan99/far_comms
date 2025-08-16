@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from far_comms.crews.promote_talk_crew import PromoteTalkCrew
 from far_comms.utils.coda_client import CodaClient
@@ -113,6 +114,54 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
         logger.info("Crew completed successfully!")
         
+        # Save crew output to file before attempting Coda updates
+        from far_comms.utils.project_paths import get_output_dir
+        output_dir = get_output_dir() / "promote_talk"
+        output_dir.mkdir(exist_ok=True)
+        
+        speaker_clean = speaker.replace(" ", "_").replace(".", "").lower()
+        output_file = output_dir / f"{speaker_clean}_crew_output.json"
+        
+        try:
+            crew_output = result.raw if hasattr(result, 'raw') else str(result)
+            
+            # Try to parse the crew output to include structured data
+            from far_comms.utils.json_repair import json_repair
+            parsed_crew_output = json_repair(crew_output, fallback_value={"content": crew_output})
+            
+            output_data = {
+                "metadata": {
+                    "speaker": speaker,
+                    "title": title,
+                    "event": function_data.get("event", ""),
+                    "affiliation": function_data.get("affiliation", ""),
+                    "timestamp": datetime.now().isoformat(),
+                    "crew_result_type": type(result).__name__
+                },
+                "crew_output_raw": crew_output,
+                "crew_output_parsed": parsed_crew_output,
+                "input_data_summary": {
+                    "transcript_length": len(function_data.get("transcript", "")),
+                    "has_slides": bool(function_data.get("slides_content", "")),
+                    "existing_coda_data": {
+                        "resources": bool(function_data.get("coda_resources", "")),
+                        "analysis": bool(function_data.get("coda_analysis", "")), 
+                        "summaries": bool(function_data.get("coda_summaries", "")),
+                        "hooks": bool(function_data.get("coda_hooks", "")),
+                        "li_content": bool(function_data.get("coda_li_content", "")),
+                        "x_content": bool(function_data.get("coda_x_content", ""))
+                    }
+                }
+            }
+            
+            with open(output_file, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            logger.info(f"Saved crew output to: {output_file}")
+            
+        except Exception as save_error:
+            logger.warning(f"Failed to save crew output to file: {save_error}")
+            # Continue processing - this shouldn't block Coda updates
+        
         # Update Coda with final results if Coda IDs provided
         if coda_ids and result:
             coda_client = CodaClient()
@@ -188,12 +237,13 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 
             except Exception as update_error:
                 logger.error(f"Failed to update Coda with results: {update_error}")
+                logger.error(f"Crew output was saved to: {output_file}")
                 # Mark as error and put details in Progress
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": {
                         "Webhook status": "Error",
-                        "Webhook progress": f"Update error: {str(update_error)}"
+                        "Webhook progress": f"Coda update failed: {str(update_error)}. Crew output saved to file for recovery."
                     }
                 }]
                 coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
