@@ -160,7 +160,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 # Extract content directly from Coda column structure
                 li_content = parsed_output.get("LI content", "")
                 x_content = parsed_output.get("X content", "")
-                summary = parsed_output.get("Summary", "")  # Updated to match Coda column name
+                paragraph_summary = parsed_output.get("Paragraph", "")  # Updated to match crew output
                 webhook_progress = parsed_output.get("Webhook progress", "")
                 
                 # Extract preprocessing results
@@ -194,7 +194,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     # Content outputs
                     "LI content": li_content,
                     "X content": x_content, 
-                    # Note: Summary is formula-bound and cannot be updated directly
+                    "Paragraph": paragraph_summary,  # Paragraph summary for Coda
                     # Always update preprocessing results
                     "Resources": resources_result,
                     "Analysis": analysis_result,
