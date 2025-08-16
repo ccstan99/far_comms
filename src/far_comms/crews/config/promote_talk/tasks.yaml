@@ -6,11 +6,11 @@ data_orchestration_task:
     Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
     
     CODA DATA TO CHECK (use existing or delegate to generate):
-    - Resources: {resources_existing}
-    - Analysis: {analysis_existing} 
-    - Summaries: {summaries_existing}
-    - LI content: {li_content_existing}
-    - X content: {x_content_existing}
+    - Resources: {coda_resources}
+    - Analysis: {coda_analysis} 
+    - Summaries: {coda_summaries}
+    - LI content: {coda_li_content}
+    - X content: {coda_x_content}
     
     DATA LOADING WORKFLOW:
     

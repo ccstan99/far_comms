@@ -27,11 +27,11 @@ def get_promote_talk_input(raw_data: dict) -> dict:
         "slides_content": raw_data.get("Slides", ""),
         "resource_url": raw_data.get("Resource URL", ""),
         # Existing Coda data for conditional processing
-        "resources_existing": raw_data.get("Resources", ""),
-        "analysis_existing": raw_data.get("Analysis", ""),
-        "summaries_existing": raw_data.get("Summaries", ""),
-        "li_content_existing": raw_data.get("LI content", ""),
-        "x_content_existing": raw_data.get("X content", ""),
+        "coda_resources": raw_data.get("Resources", ""),
+        "coda_analysis": raw_data.get("Analysis", ""),
+        "coda_summaries": raw_data.get("Summaries", ""),
+        "coda_li_content": raw_data.get("LI content", ""),
+        "coda_x_content": raw_data.get("X content", ""),
         "speaker_x_handle": raw_data.get("X handle", ""),
     }
 
@@ -41,7 +41,7 @@ def display_promote_talk_input(function_data: dict) -> dict:
     display_data = function_data.copy()
     
     # Truncate long fields for display
-    for field in ["transcript", "transcript_content", "slides_content", "analysis_existing"]:
+    for field in ["transcript", "transcript_content", "slides_content", "coda_analysis"]:
         if len(display_data.get(field, "")) > 100:
             display_data[field] = display_data[field][:100] + "..."
     
