@@ -248,9 +248,16 @@ class PromoteTalkCrew():
 
 
   @task
-  def qa_orchestration_task(self) -> Task:
+  def data_orchestration_task(self) -> Task:
     return Task(
-      config=self.tasks_config['qa_orchestration_task'],
+      config=self.tasks_config['data_orchestration_task'],
+      agent=self.qa_orchestrator_agent()
+    )
+
+  @task
+  def final_qa_task(self) -> Task:
+    return Task(
+      config=self.tasks_config['final_qa_task'],
       agent=self.qa_orchestrator_agent()
     )
 
@@ -270,15 +277,19 @@ class PromoteTalkCrew():
         self.qa_orchestrator_agent()
       ],
       tasks=[
-        # Note: QA orchestrator will conditionally delegate to these based on Coda data
+        # Data orchestrator loads/generates all content first
+        self.data_orchestration_task(),
+        # Content generation tasks (only run if delegated by data orchestrator)
         self.research_resources_task(),
         self.analyze_transcript_task(),
         self.generate_summaries_task(),
         self.create_li_content_task(),
         self.create_x_content_task(),
+        # Evaluation pipeline (always runs)
         self.fact_check_content_task(),
         self.brand_voice_check_task(),
-        self.qa_orchestration_task()
+        # Final QA and assembly
+        self.final_qa_task()
       ],
       process=Process.sequential,
       verbose=True

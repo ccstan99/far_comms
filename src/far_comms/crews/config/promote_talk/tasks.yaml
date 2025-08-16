@@ -149,7 +149,7 @@ generate_summaries_task:
     
     ## Sentence Summary
     [Ultra-concise 1-sentence summary in ~25 words capturing the essence]
-  # Context managed by qa_orchestrator_agent
+  context: ["data_orchestration_task"]
   agent: summarizer_agent
 
 create_li_content_task:
@@ -184,7 +184,7 @@ create_li_content_task:
     ▸ [≤8 word bullet 1]
     ▸ [≤8 word bullet 2] 
     ▸ [≤8 word bullet 3]
-  # Context managed by qa_orchestrator_agent
+  context: ["data_orchestration_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
@@ -213,7 +213,7 @@ create_x_content_task:
   expected_output: >
     ## Twitter/X Content
     [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
-  # Context managed by qa_orchestrator_agent
+  context: ["data_orchestration_task"]
   agent: x_content_writer_agent
 
 fact_check_content_task:
@@ -266,7 +266,7 @@ fact_check_content_task:
     - No major factual errors or misrepresentations of core findings
     - Content represents speaker's research fairly and accurately
     - Technical details are substantially correct (minor simplifications acceptable for platform constraints)
-  # Context managed by qa_orchestrator_agent
+  context: ["data_orchestration_task"]
   agent: fact_checker_agent
 
 
@@ -336,22 +336,22 @@ brand_voice_check_task:
     - Content sounds like FAR.AI, not speaker mimicry
     - LinkedIn <150 words, bullets ≤8 words each
     - 0 unnecessary words remain
-  # Context managed by qa_orchestrator_agent
+  context: ["data_orchestration_task"]
   agent: voice_checker_agent
 
 
-qa_orchestration_task:
+data_orchestration_task:
   description: >
-    Orchestrate the complete content generation pipeline by checking Coda data availability and conditionally delegating to agents for preprocessing, content generation, and quality assurance.
+    Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
     
-    AVAILABLE CODA DATA:
+    AVAILABLE CODA DATA (check and use existing or generate missing):
     - Resources: {resources_existing}
     - Analysis: {analysis_existing} 
     - Summaries: {summaries_existing}
     - LI content: {li_content_existing}
     - X content: {x_content_existing}
     
-    INPUT DATA FOR DELEGATION:
+    STATIC INPUT DATA (always from parameters):
     - Speaker: {speaker} ({affiliation})
     - Talk Title: {talk_title}
     - Event: {event_name}
@@ -371,44 +371,73 @@ qa_orchestration_task:
     {style_x}
     </TWITTER STYLE>
     
-    ORCHESTRATION WORKFLOW:
+    DATA LOADING WORKFLOW:
     
-    1. DATA LOADING & PREPROCESSING:
-       - Check Coda Resources → use existing OR delegate to resource_researcher_agent
-       - Check Coda Analysis → use existing OR delegate to transcript_analyzer_agent  
-       - Check Coda Summaries → use existing OR delegate to summarizer_agent
-       - Store loaded/generated data for downstream use
+    1. CHECK CODA DATA & DELEGATE AS NEEDED:
+       - If Resources empty/missing → delegate to resource_researcher_agent
+       - If Analysis empty/missing → delegate to transcript_analyzer_agent  
+       - If Summaries empty/missing → delegate to summarizer_agent
+       - If LinkedIn content empty/missing → delegate to li_content_writer_agent
+       - If X content empty/missing → delegate to x_content_writer_agent
     
-    2. CONTENT LOADING & GENERATION:
-       - Check Coda LinkedIn content → use existing OR delegate to li_content_writer_agent
-       - Check Coda X content → use existing OR delegate to x_content_writer_agent
-       - Pass final content (existing or generated) to evaluation pipeline
+    2. PASS ALL CONTENT VIA CONTEXT:
+       - All generated or loaded content flows to next tasks via context
+       - Downstream tasks receive consistent data regardless of source (Coda vs generated)
+       - Static data (transcript, speaker info) remains in parameters
     
-    3. QUALITY EVALUATION (always run regardless of content source):
-       - Delegate to fact_checker_agent for accuracy verification against transcript
-       - Delegate to voice_checker_agent for brand voice compliance
-       - Use evaluation results for final content assembly
+    DELEGATION AUTHORITY:
+    - Delegate to content generators only when Coda data is empty/missing
+    - Be specific about what data to generate
+    - Use existing Coda data when available (more efficient)
     
-    4. ITERATIVE REFINEMENT (if needed):
-       - Review evaluation results for accuracy and compliance scores
-       - If scores below threshold, delegate back to content writers for refinement
+  expected_output: >
+    ## Data Loading Summary
+    - Resources: [Used existing/Generated new]
+    - Analysis: [Used existing/Generated new] 
+    - Summaries: [Used existing/Generated new]
+    - LinkedIn Content: [Used existing/Generated new]
+    - X Content: [Used existing/Generated new]
+    
+    ## Content Ready for Pipeline
+    All required content loaded and ready for evaluation pipeline.
+  agent: qa_orchestrator_agent
+
+
+final_qa_task:
+  description: >
+    Final quality control, assembly, and approval for all content after evaluation pipeline.
+    You receive all content and evaluation results through context from previous tasks.
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+    
+    FINAL QA WORKFLOW:
+    
+    1. REVIEW EVALUATION RESULTS:
+       - Check fact-checker accuracy score (must be ≥4/5)
+       - Check brand voice compliance score (must be ≥4/5)
+       - Review any corrections or improvements made
+    
+    2. ITERATIVE REFINEMENT (if needed):
+       - If scores below threshold, identify specific issues
+       - Delegate back to appropriate agents for refinement
        - Re-run evaluation pipeline on refined content
-       - Continue until perfect quality achieved (accuracy ≥4/5, voice ≥4/5)
+       - Continue until perfect quality achieved
     
-    5. FINAL ASSEMBLY & APPROVAL:
+    3. FINAL ASSEMBLY & APPROVAL:
        - Assemble complete LinkedIn and Twitter/X posts with CTA templates
        - Include resources, video links, and proper attribution
        - Perform final compliance audit against 14-point rubric
        - Make go/no-go publication decision
-    
-    DELEGATION AUTHORITY & DATA MANAGEMENT:
-    - You are responsible for ALL data flow between agents
-    - Pass Coda data OR generated content to agents as needed
-    - You can delegate to ANY agent multiple times for iterative improvement
-    - Be specific about what needs refinement when delegating
-    - Provide agents with the exact data they need (no generic context passing)
-    - Continue until no further improvements possible
-    - Only approve when accuracy AND compliance both perfect
     
     CRITICAL PROHIBITIONS:
     - NEVER approve content with hashtags (immediate rejection)
@@ -428,8 +457,13 @@ qa_orchestration_task:
     [Final paragraph summary for Coda]
 
     ## Resources
+    [Final resources list]
+    
     ## Analysis
+    [Final analysis content]
+    
     ## Summaries
+    [Final summaries content]
     
     ## Webhook progress
     - Accuracy Score: [1-10 based on transcript accuracy]
@@ -437,6 +471,6 @@ qa_orchestration_task:
     - Status: [APPROVED/NEEDS_REVISION/REJECTED]
     - Issues: [List any blocking issues if not approved]
     - Revision Notes: [Specific feedback if revision needed]
-  context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
-  output_file: "output/{speaker}_qa_orchestration.json"
+  context: ["data_orchestration_task", "fact_check_content_task", "brand_voice_check_task"]
+  output_file: "output/{speaker}_final_qa.json"
   agent: qa_orchestrator_agent
