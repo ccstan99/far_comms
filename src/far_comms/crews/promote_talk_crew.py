@@ -25,6 +25,12 @@ class PromoteTalkCrew():
       model="anthropic/claude-sonnet-4-20250514",
       max_retries=3
     )
+    
+    # Claude 4 Haiku for simple/mechanical tasks (cost optimization)
+    self.haiku_llm = LLM(
+      model="anthropic/claude-haiku-4-20250514",
+      max_retries=3
+    )
 
   # Multi-Agent Architecture 
 
@@ -119,7 +125,7 @@ class PromoteTalkCrew():
     
     return Agent(
         config=self.agents_config['resource_researcher_agent'],
-        llm=self.sonnet_llm,
+        llm=self.haiku_llm,  # Simple web search task - Haiku
         verbose=True,
         allow_delegation=False,
         tools=tools
@@ -138,7 +144,7 @@ class PromoteTalkCrew():
   def summarizer_agent(self) -> Agent:
     return Agent(
         config=self.agents_config['summarizer_agent'],
-        llm=self.sonnet_llm,
+        llm=self.haiku_llm,  # Straightforward summarization - Haiku
         verbose=True,
         allow_delegation=False
     )
