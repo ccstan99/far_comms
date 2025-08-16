@@ -319,10 +319,10 @@ create_x_content_task:
     CREATE MODE REQUIREMENTS:
     - Select best Twitter/X hook from hooks generated in generate_hooks_task
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
-    - Use "Technical Details" and "Core Thesis" from analysis as content foundation
     - Include specific numbers, methods, results from "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
     - Use abbreviations: w/, &, numbers not words
+    - **CRITICAL**: Count characters and ensure ≤280 - rewrite if over limit
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
 
@@ -331,12 +331,15 @@ create_x_content_task:
     - Identify improvement opportunities: stronger technical hooks, denser information, better precision
     - Enhance while preserving good elements and technical accuracy
     - Use transcript analysis to add missing technical details or precise quotes
-    - Ensure ultra-dense format and ≤280 character limit
+    - **CRITICAL**: Ensure ≤280 character limit - count characters and rewrite if over limit
     - Verify proper speaker attribution and technical terminology
     - Output improved version OR return original if already excellent
   expected_output: >
-    ## Twitter/X Content
-    [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
+    [Selected hook that will grab attention from ML researchers & technical audience]
+    
+    [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker full name if no handle] {speaker_x_handle}
+    
+    **CHARACTER COUNT**: [Actual character count - MUST be ≤280]
   context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
   agent: x_content_writer_agent
 
