@@ -125,7 +125,7 @@ class PromoteTalkCrew():
     
     return Agent(
         config=self.agents_config['resource_researcher_agent'],
-        llm=self.haiku_llm,  # Simple web search task - Haiku
+        llm=self.sonnet_llm,  # Complex validation needed - Sonnet
         verbose=True,
         allow_delegation=False,
         tools=tools
@@ -144,7 +144,7 @@ class PromoteTalkCrew():
   def summarizer_agent(self) -> Agent:
     return Agent(
         config=self.agents_config['summarizer_agent'],
-        llm=self.haiku_llm,  # Straightforward summarization - Haiku
+        llm=self.sonnet_llm,  # Style compliance crucial - Sonnet
         verbose=True,
         allow_delegation=False
     )
