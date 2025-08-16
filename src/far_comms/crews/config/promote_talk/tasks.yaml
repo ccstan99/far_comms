@@ -476,7 +476,7 @@ final_qa_task:
       "Paragraph (AI)": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X content": "[Complete assembled Twitter/X content ready for Coda]",
-      "Webhook progress": "Accuracy: [X/10], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION=Done (human review), REJECTED=Error"
+      "Webhook progress": "Accuracy: [X/10], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
     }
   context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"

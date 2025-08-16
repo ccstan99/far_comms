@@ -65,7 +65,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 try:
                     coda_client = CodaClient()
                     error_updates = {
-                        "Webhook status": "Failed", 
+                        "Webhook status": "Error", 
                         "Webhook progress": error_msg
                     }
                     coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
@@ -146,13 +146,13 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 logger.info(f"Publication decision: {publication_decision}")
                 logger.info(f"Webhook progress: {webhook_progress}")
                 
-                # Map publication decision to Coda status (valid options: Error, Done, Not started, In progress)
+                # Map publication decision to Coda status (valid options: Done, Error, Needs Review)
                 status_mapping = {
                     "APPROVED": "Done",
-                    "NEEDS_REVISION": "Done",  # Content generated but may need human review
-                    "REJECTED": "Error"  # Content failed quality standards
+                    "NEEDS_REVISION": "Needs Review",  # Content needs human review for quality
+                    "REJECTED": "Needs Review"  # Content failed quality standards
                 }
-                coda_status = status_mapping.get(publication_decision, "Error")
+                coda_status = status_mapping.get(publication_decision, "Error")  # Default to Error for system failures
                 logger.info(f"Setting Coda status: {coda_status}")
                 
                 # Prepare comprehensive Coda updates
