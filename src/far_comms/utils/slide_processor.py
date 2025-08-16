@@ -241,6 +241,10 @@ Format as JSON:
                         visual_desc = analysis.get("visual_elements", "")
                         if visual_desc:
                             visual_context += f"Slide {page_num + 1}: {visual_desc}\n"
+                    except Exception as je:
+                        logger.warning(f"JSON parsing failed for slide {page_num + 1}: {je}")
+                        # Fallback: use raw response as visual context
+                        visual_context += f"Slide {page_num + 1}: {response_text[:100]}\n"
                 
             except Exception as e:
                 logger.warning(f"Visual analysis failed: {e}")
