@@ -16,11 +16,6 @@ from far_comms.handlers.prepare_talk import (
     get_input as get_prepare_talk_input, 
     display_input as display_prepare_talk_input
 )
-from far_comms.handlers.analyze_talk import (
-    run_analyze_talk,
-    get_analyze_talk_input,
-    display_analyze_talk_input
-)
 from far_comms.handlers.analyze_research_handler import (
     run_analyze_research,
     get_analyze_research_input, 
@@ -313,11 +308,6 @@ FUNCTION_REGISTRY = {
         "runner": prepare_talk,
         "get_input": get_prepare_talk_input,
         "display_input": display_prepare_talk_input
-    },
-    FunctionName.ANALYZE_TALK: {
-        "runner": run_analyze_talk,
-        "get_input": get_analyze_talk_input,
-        "display_input": display_analyze_talk_input
     },
     FunctionName.PROMOTE_RESEARCH: {
         "runner": run_analyze_research,
