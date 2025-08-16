@@ -219,29 +219,32 @@ Format as JSON:
                     )
                     
                     response_text = response.content[0].text.strip()
-                    analysis = json_repair(response_text, fallback_value={})
                     
-                    if analysis:
-                        # Handle title slide speaker extraction
-                        if page_num == 0 and analysis.get("speaker_name") and not speaker_name_found:
-                            speaker_match = analysis.get("speaker_match", "not_found")
-                            validation_result = "exact_match" if speaker_match == "exact" else \
-                                              "minor_differences" if speaker_match == "variation" else \
-                                              "major_mismatch" if speaker_match == "different" else "major_mismatch"
-                            
-                            slide_1_metadata.update({
-                                "slide_speaker": analysis.get("speaker_name", ""),
-                                "slide_affiliation": analysis.get("affiliation", ""),
-                                "slide_title": analysis.get("talk_title", ""),
-                                "validation_result": validation_result,
-                                "validation_method": "haiku_visual_analysis"
-                            })
-                            logger.info(f"Title slide - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Title: {analysis.get('talk_title')}")
+                    # Parse JSON response
+                    try:
+                        analysis = json_repair(response_text, fallback_value={})
                         
-                        # Collect visual context for all slides
-                        visual_desc = analysis.get("visual_elements", "")
-                        if visual_desc:
-                            visual_context += f"Slide {page_num + 1}: {visual_desc}\n"
+                        if analysis:
+                            # Handle title slide speaker extraction
+                            if page_num == 0 and analysis.get("speaker_name") and not speaker_name_found:
+                                speaker_match = analysis.get("speaker_match", "not_found")
+                                validation_result = "exact_match" if speaker_match == "exact" else \
+                                                  "minor_differences" if speaker_match == "variation" else \
+                                                  "major_mismatch" if speaker_match == "different" else "major_mismatch"
+                                
+                                slide_1_metadata.update({
+                                    "slide_speaker": analysis.get("speaker_name", ""),
+                                    "slide_affiliation": analysis.get("affiliation", ""),
+                                    "slide_title": analysis.get("talk_title", ""),
+                                    "validation_result": validation_result,
+                                    "validation_method": "haiku_visual_analysis"
+                                })
+                                logger.info(f"Title slide - Speaker: {analysis.get('speaker_name')} ({speaker_match}), Title: {analysis.get('talk_title')}")
+                            
+                            # Collect visual context for all slides
+                            visual_desc = analysis.get("visual_elements", "")
+                            if visual_desc:
+                                visual_context += f"Slide {page_num + 1}: {visual_desc}\n"
                     except Exception as je:
                         logger.warning(f"JSON parsing failed for slide {page_num + 1}: {je}")
                         # Fallback: use raw response as visual context
