@@ -194,9 +194,9 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             logger.info("Processing transcript...")
             # Use slide context for transcript processing (from existing or newly processed slides)
             if slides_exist:
-                slide_context = existing_slides[:2000]  # Use existing slides for context
+                slide_context = existing_slides  # Use existing slides for context
             else:
-                slide_context = slides_result.get("cleaned_slides", "")[:2000]  # Use newly processed slides
+                slide_context = slides_result.get("cleaned_slides", "")  # Use newly processed slides
             transcript_result = process_transcript(speaker_name, yt_url, slide_context)
             
             # Update Coda immediately after transcript processing

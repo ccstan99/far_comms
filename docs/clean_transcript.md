@@ -64,6 +64,7 @@ Ensure correct spelling and formatting:
 - sysadmin (one word)
 - Redwood Research (proper noun, both words capitalized)
 - Execute Replace Audit Framework (all words capitalized)
+- arXiv (not "archive" - correct capitalization: arXiv)
 
 ### Common Transcription Errors to Watch For
 1. **Homophones**: "there/their/they're", "to/too/two", "your/you're"
