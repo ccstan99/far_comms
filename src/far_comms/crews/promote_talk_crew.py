@@ -170,11 +170,14 @@ class PromoteTalkCrew():
 
   @agent
   def x_content_writer_agent(self) -> Agent:
+    from far_comms.tools import CharacterCounterTool
+    
     return Agent(
       config=self.agents_config['x_content_writer_agent'],
       llm=self.opus_llm,  # Content creation - Opus
       verbose=True,
-      allow_delegation=False
+      allow_delegation=False,
+      tools=[CharacterCounterTool()]
     )
 
   # Phase 3: Quality Control
@@ -210,12 +213,15 @@ class PromoteTalkCrew():
 
   @agent
   def final_qa_agent(self) -> Agent:
+    from far_comms.tools import CharacterCounterTool
+    
     # Final QA assembles content from context and makes final decisions
     return Agent(
       config=self.agents_config['final_qa_agent'],
       llm=self.opus_llm,  # Complex final decisions - Opus
       verbose=True,
-      allow_delegation=True  # Allow targeted quality questions only
+      allow_delegation=True,  # Allow targeted quality questions only
+      tools=[CharacterCounterTool()]
     )
 
   # Tasks - Sequential Multi-Agent Workflow with QA Orchestration
