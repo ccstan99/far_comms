@@ -126,27 +126,21 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 
                 logger.info(f"QA Orchestrator output keys: {list(parsed_output.keys()) if isinstance(parsed_output, dict) else 'Not a dict'}")
                 
-                # Extract from QA orchestrator structure
-                preprocessing_completed = parsed_output.get("preprocessing_completed", {})
-                content_generated = parsed_output.get("content_generated", {})
-                quality_assurance = parsed_output.get("quality_assurance", {})
-                final_decision = parsed_output.get("final_decision", {})
+                # Extract content directly from Coda column structure
+                li_content = parsed_output.get("LI content", "")
+                x_content = parsed_output.get("X content", "")
+                paragraph_summary = parsed_output.get("Paragraph (AI)", "")
+                webhook_progress = parsed_output.get("Webhook progress", "")
                 
-                # Extract content for Coda
-                li_content = content_generated.get("li_content", "")
-                x_content = content_generated.get("x_content", "")
-                paragraph_summary = content_generated.get("paragraph_summary", "")
-                
-                # Extract preprocessing results
-                resources_result = preprocessing_completed.get("resources", "")
-                analysis_result = preprocessing_completed.get("analysis", "")
-                summaries_result = preprocessing_completed.get("summaries", "")
+                # Extract preprocessing results (only if generated)
+                resources_result = parsed_output.get("Resources", "")
+                analysis_result = parsed_output.get("Analysis", "")
                 
                 # Extract final decision
-                publication_decision = final_decision.get("publication_decision", "NEEDS_REVISION")
+                publication_decision = parsed_output.get("publication_decision", "NEEDS_REVISION")
                 
                 logger.info(f"Publication decision: {publication_decision}")
-                logger.info(f"QA scores - Accuracy: {quality_assurance.get('accuracy_score')}, Compliance: {quality_assurance.get('compliance_score')}")
+                logger.info(f"Webhook progress: {webhook_progress}")
                 
                 # Map publication decision to Coda status
                 status_mapping = {
@@ -160,22 +154,18 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 # Prepare comprehensive Coda updates
                 coda_updates = {
                     "Webhook status": coda_status,
-                    "Webhook progress": f"QA Orchestration completed - {quality_assurance.get('refinement_rounds', 0)} refinement rounds",
+                    "Webhook progress": webhook_progress,
                     # Content outputs
                     "LI content": li_content,
                     "X content": x_content, 
-                    "Paragraph (AI)": paragraph_summary,
-                    # Preprocessing results (only update if generated)
-                    "Eval notes": f"Accuracy: {quality_assurance.get('accuracy_score', 'N/A')}, Compliance: {quality_assurance.get('compliance_score', 'N/A')}"
+                    "Paragraph (AI)": paragraph_summary
                 }
                 
                 # Only update preprocessing columns if they were generated (not existing)
-                if resources_result and not function_data.get("resources_existing"):
+                if resources_result and not function_data.get("coda_resources"):
                     coda_updates["Resources"] = resources_result
-                if analysis_result and not function_data.get("analysis_existing"):
+                if analysis_result and not function_data.get("coda_analysis"):
                     coda_updates["Analysis"] = analysis_result
-                if summaries_result and not function_data.get("summaries_existing"):
-                    coda_updates["Summaries"] = summaries_result
                 
                 updates = [{
                     "row_id": coda_ids.row_id,

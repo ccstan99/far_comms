@@ -471,25 +471,13 @@ final_qa_task:
     
   expected_output: >
     {
-      "content_generated": {
-        "li_content": "[Complete assembled LinkedIn post ready for Coda]",
-        "x_content": "[Complete assembled Twitter/X content ready for Coda]",
-        "paragraph_summary": "[Final paragraph summary for Coda]"
-      },
-      "preprocessing_completed": {
-        "resources": "[Final resources list]",
-        "analysis": "[Final analysis content]", 
-        "summaries": "[Final summaries content]"
-      },
-      "quality_assurance": {
-        "accuracy_score": "[1-10 based on transcript accuracy]",
-        "compliance_score": "[X/14 based on style guide compliance]"
-      },
-      "final_decision": {
-        "publication_decision": "[APPROVED/NEEDS_REVISION/REJECTED]",
-        "issues": "[List any blocking issues if not approved]",
-        "revision_notes": "[Specific feedback if revision needed]"
-      }
+      "Resources": "[Final resources list - only if generated, not if using existing Coda data]",
+      "Analysis": "[Final analysis content - only if generated, not if using existing Coda data]", 
+      "Paragraph (AI)": "[Final paragraph summary for Coda]",
+      "LI content": "[Complete assembled LinkedIn post ready for Coda]",
+      "X content": "[Complete assembled Twitter/X content ready for Coda]",
+      "Webhook progress": "[Evaluation summary with accuracy score, compliance score, and final decision notes]",
+      "publication_decision": "[APPROVED/NEEDS_REVISION/REJECTED for handler processing]"
     }
   context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"
