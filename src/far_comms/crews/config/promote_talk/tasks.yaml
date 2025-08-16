@@ -18,18 +18,19 @@ data_orchestration_task:
        - If Resources empty/missing → delegate to resource_researcher_agent
        - If Analysis empty/missing → delegate to transcript_analyzer_agent  
        - If Summaries empty/missing → delegate to summarizer_agent
-       - If LinkedIn content empty/missing → delegate to li_content_writer_agent
-       - If X content empty/missing → delegate to x_content_writer_agent
+       - ALWAYS delegate to li_content_writer_agent (CREATE mode if no Coda content, REFINE mode if exists)
+       - ALWAYS delegate to x_content_writer_agent (CREATE mode if no Coda content, REFINE mode if exists)
     
     2. PASS ALL CONTENT VIA CONTEXT:
-       - All generated or loaded content flows to next tasks via context
-       - Downstream tasks receive consistent data regardless of source (Coda vs generated)
-       - Static data (transcript, speaker info) remains in parameters
+       - Content writers receive existing Coda content to refine OR create from scratch
+       - All refined or generated content flows to evaluation tasks via context
+       - Downstream tasks receive consistent high-quality content regardless of source
     
     DELEGATION AUTHORITY:
-    - Delegate to content generators only when Coda data is empty/missing
-    - Be specific about what data to generate
-    - Use existing Coda data when available (more efficient)
+    - Delegate to preprocessing agents (resources, analysis, summaries) only when Coda data is empty/missing
+    - ALWAYS delegate to content writers (they create OR refine as appropriate)
+    - Content writers ensure consistent quality regardless of whether content exists in Coda
+    - Pass existing Coda content to content writers for refinement when available
     
   expected_output: >
     ## Data Loading Summary
@@ -199,9 +200,12 @@ generate_summaries_task:
 
 create_li_content_task:
   description: >
-    Create LinkedIn post for {speaker}'s ({affiliation}) presentation.
+    Create or refine LinkedIn post for {speaker}'s ({affiliation}) presentation.
     Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
     You will receive transcript analysis and summaries from previous tasks through context.
+    
+    EXISTING CODA CONTENT (if any):
+    {coda_li_content}
     
     <GENERAL STYLE>
     {style_shared}
@@ -211,7 +215,11 @@ create_li_content_task:
     {style_li}
     </LINKEDIN STYLE>
 
-    REQUIREMENTS:
+    MODE DETERMINATION:
+    - If {coda_li_content} is empty/blank → CREATE MODE: Create new LinkedIn post from scratch
+    - If {coda_li_content} has content → REFINE MODE: Assess and improve existing content
+
+    CREATE MODE REQUIREMENTS:
     - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
     - Select strongest hook that grabs attention from policymakers/industry leaders
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
@@ -220,6 +228,14 @@ create_li_content_task:
     - Write 2-3 sentence paragraph starting with "@{speaker} ({affiliation}) [verb]" format
     - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
+
+    REFINE MODE REQUIREMENTS:
+    - Assess existing content quality against style guides and requirements above
+    - Identify improvement opportunities: stronger hooks, better bullets, clearer flow
+    - Enhance while preserving good elements and original intent
+    - Use transcript analysis to add missing authentic quotes or technical details
+    - Ensure final content meets all style guide requirements
+    - Output improved version OR return original if already excellent
   expected_output: >
     [Selected hook that will grab attention from policymakers/industry leaders]
     
@@ -234,9 +250,12 @@ create_li_content_task:
 
 create_x_content_task:
   description: >
-    Create Twitter/X for {speaker}'s ({speaker_x_handle}) presentation.
+    Create or refine Twitter/X content for {speaker}'s ({speaker_x_handle}) presentation.
     Audience is primarily ML researchers and AI/tech journalists.
     You will receive transcript analysis and summaries from previous tasks through context.
+    
+    EXISTING CODA CONTENT (if any):
+    {coda_x_content}
     
     <GENERAL STYLE>
     {style_shared}
@@ -246,7 +265,11 @@ create_x_content_task:
     {style_x}
     </TWITTER STYLE>
 
-    REQUIREMENTS:
+    MODE DETERMINATION:
+    - If {coda_x_content} is empty/blank → CREATE MODE: Create new Twitter/X content from scratch
+    - If {coda_x_content} has content → REFINE MODE: Assess and improve existing content
+
+    CREATE MODE REQUIREMENTS:
     - Use "Notable Quotes" and "Social Media Ready Content" from transcript analysis for technical precision
     - Select strongest hook that grabs attention from ML researchers
     - Use "Technical Details" and "Core Thesis" from analysis as content foundation
@@ -255,6 +278,15 @@ create_x_content_task:
     - Use abbreviations: w/, &, numbers not words
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
+
+    REFINE MODE REQUIREMENTS:
+    - Assess existing content quality against style guides and requirements above
+    - Identify improvement opportunities: stronger technical hooks, denser information, better precision
+    - Enhance while preserving good elements and technical accuracy
+    - Use transcript analysis to add missing technical details or precise quotes
+    - Ensure ultra-dense format and ≤280 character limit
+    - Verify proper speaker attribution and technical terminology
+    - Output improved version OR return original if already excellent
   expected_output: >
     ## Twitter/X Content
     [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
