@@ -179,6 +179,7 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
 If this is a title slide, extract speaker information:
 Expected speaker: {coda_speaker}
 - Extract speaker name, compare using rules: "exact"|"variation"|"different"|"not_found"
+- If you can't find 1 clear author, leave author blank
 - Extract affiliation and talk title
 
 Also describe any visual elements briefly for accessibility:
