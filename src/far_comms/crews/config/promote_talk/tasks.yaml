@@ -41,7 +41,7 @@ data_orchestration_task:
     
     ## Content Ready for Pipeline
     All required content loaded and ready for evaluation pipeline.
-  agent: qa_orchestrator_agent
+  agent: data_orchestrator_agent
 
 
 # CONTENT GENERATION TASKS (conditionally called by data orchestrator)
@@ -460,4 +460,4 @@ final_qa_task:
     - Revision Notes: [Specific feedback if revision needed]
   context: ["data_orchestration_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"
-  agent: qa_orchestrator_agent
+  agent: final_qa_agent

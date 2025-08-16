@@ -187,16 +187,26 @@ class PromoteTalkCrew():
       allow_delegation=False
     )
 
-  # Phase 4: QA Orchestration
+  # Phase 4: Data Orchestration & Final QA
 
   @agent
-  def qa_orchestrator_agent(self) -> Agent:
-    # QA orchestrator can delegate to any agent for refinements
+  def data_orchestrator_agent(self) -> Agent:
+    # Data orchestrator checks Coda and delegates to generators
     return Agent(
-      config=self.agents_config['qa_orchestrator_agent'],
-      llm=self.opus_llm,  # Final quality control - Opus
+      config=self.agents_config['data_orchestrator_agent'],
+      llm=self.sonnet_llm,  # Systematic data checking - Sonnet
       verbose=True,
-      allow_delegation=True  # Can delegate back to agents for refinements
+      allow_delegation=True  # Can delegate to content generators
+    )
+
+  @agent
+  def final_qa_agent(self) -> Agent:
+    # Final QA can delegate back for refinements and makes final decisions
+    return Agent(
+      config=self.agents_config['final_qa_agent'],
+      llm=self.opus_llm,  # Complex final decisions - Opus
+      verbose=True,
+      allow_delegation=True  # Can delegate back for refinements
     )
 
   # Tasks - Sequential Multi-Agent Workflow with QA Orchestration
@@ -257,14 +267,14 @@ class PromoteTalkCrew():
   def data_orchestration_task(self) -> Task:
     return Task(
       config=self.tasks_config['data_orchestration_task'],
-      agent=self.qa_orchestrator_agent()
+      agent=self.data_orchestrator_agent()
     )
 
   @task
   def final_qa_task(self) -> Task:
     return Task(
       config=self.tasks_config['final_qa_task'],
-      agent=self.qa_orchestrator_agent()
+      agent=self.final_qa_agent()
     )
 
   @crew
@@ -280,7 +290,8 @@ class PromoteTalkCrew():
         self.x_content_writer_agent(),
         self.fact_checker_agent(),
         self.voice_checker_agent(),
-        self.qa_orchestrator_agent()
+        self.data_orchestrator_agent(),
+        self.final_qa_agent()
       ],
       tasks=[
         # Data orchestrator loads/generates all content first
