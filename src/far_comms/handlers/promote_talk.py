@@ -146,13 +146,13 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 logger.info(f"Publication decision: {publication_decision}")
                 logger.info(f"Webhook progress: {webhook_progress}")
                 
-                # Map publication decision to Coda status
+                # Map publication decision to Coda status (valid options: Error, Done, Not started, In progress)
                 status_mapping = {
                     "APPROVED": "Done",
-                    "NEEDS_REVISION": "Needs review", 
-                    "REJECTED": "Error"
+                    "NEEDS_REVISION": "Done",  # Content generated but may need human review
+                    "REJECTED": "Error"  # Content failed quality standards
                 }
-                coda_status = status_mapping.get(publication_decision, "Needs review")
+                coda_status = status_mapping.get(publication_decision, "Error")
                 logger.info(f"Setting Coda status: {coda_status}")
                 
                 # Prepare comprehensive Coda updates
