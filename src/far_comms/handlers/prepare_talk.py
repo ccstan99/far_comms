@@ -24,6 +24,25 @@ def get_input(raw_data: dict) -> dict:
     }
 
 
+def clean_slide_formatting(slides_content: str) -> str:
+    """Clean up excessive newlines in slides content.
+    
+    Rules:
+    - Replace all \\n\\n with \\n 
+    - Add back extra \\n before headers (\\n#)
+    """
+    if not slides_content or not slides_content.strip():
+        return slides_content
+    
+    # Replace all double newlines with single newlines
+    cleaned = slides_content.replace('\n\n', '\n')
+    
+    # Add back extra newline before headers
+    cleaned = cleaned.replace('\n#', '\n\n#')
+    
+    return cleaned
+
+
 def display_input(function_data: dict) -> dict:
     """Format function input for webhook display - no long fields to truncate"""
     return function_data
@@ -107,7 +126,9 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
             # Update Coda immediately after slides processing
             if slides_result.get("success"):
                 logger.info("Updating Coda with slides results immediately...")
-                slides_updates = {"Slides": slides_result.get("cleaned_slides", "")}
+                raw_slides = slides_result.get("cleaned_slides", "")
+                cleaned_slides_formatted = clean_slide_formatting(raw_slides)
+                slides_updates = {"Slides": cleaned_slides_formatted}
                 
                 # Handle speaker validation immediately
                 speaker_validation = slides_result.get("speaker_validation", {})
@@ -192,13 +213,21 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                 if original_srt and formatted_transcript:
                     reconstructed_srt = _reconstruct_srt(original_srt, formatted_transcript)
                     if reconstructed_srt:
-                        transcript_updates["SRT"] = reconstructed_srt
-                        logger.info(f"Reconstructed SRT with original timestamps")
+                        # Combine every 2 lines for better readability
+                        from far_comms.utils.transcript_processor import combine_srt_lines
+                        combined_srt = combine_srt_lines(reconstructed_srt)
+                        transcript_updates["SRT"] = combined_srt
+                        logger.info(f"Reconstructed and combined SRT lines")
                     else:
-                        logger.warning("SRT reconstruction failed, using original SRT")
-                        transcript_updates["SRT"] = original_srt
+                        logger.warning("SRT reconstruction failed, using original SRT with line combining")
+                        from far_comms.utils.transcript_processor import combine_srt_lines
+                        combined_srt = combine_srt_lines(original_srt)
+                        transcript_updates["SRT"] = combined_srt
                 elif original_srt:
-                    transcript_updates["SRT"] = original_srt
+                    # Apply line combining even to original SRT
+                    from far_comms.utils.transcript_processor import combine_srt_lines
+                    combined_srt = combine_srt_lines(original_srt)
+                    transcript_updates["SRT"] = combined_srt
                 
                 # Update transcript in Coda immediately
                 updates = [{"row_id": coda_ids.row_id, "updates": transcript_updates}]

@@ -161,6 +161,63 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
         }
 
 
+def combine_srt_lines(srt_content: str) -> str:
+    """
+    Combine every 2 SRT entries into 1 to create longer, more readable subtitles.
+    Adjusts timestamps to span from first entry start to second entry end.
+    """
+    try:
+        # Parse SRT entries
+        srt_pattern = r'(\d+)\n([\d:,]+ --> [\d:,]+)\n(.*?)(?=\n\d+\n|\n*$)'
+        srt_matches = re.findall(srt_pattern, srt_content, re.DOTALL)
+        
+        if not srt_matches:
+            logger.warning("No SRT segments found")
+            return srt_content
+            
+        combined_srt = []
+        new_seq_num = 1
+        
+        # Process entries in pairs
+        for i in range(0, len(srt_matches), 2):
+            first_entry = srt_matches[i]
+            
+            # If there's a second entry, combine them
+            if i + 1 < len(srt_matches):
+                second_entry = srt_matches[i + 1]
+                
+                # Extract timestamps
+                first_timestamp = first_entry[1]  # "00:00:05,200 --> 00:00:08,640"
+                second_timestamp = second_entry[1]
+                
+                # Get start time from first entry and end time from second entry
+                first_start = first_timestamp.split(' --> ')[0]
+                second_end = second_timestamp.split(' --> ')[1]
+                combined_timestamp = f"{first_start} --> {second_end}"
+                
+                # Combine text content
+                first_text = first_entry[2].strip()
+                second_text = second_entry[2].strip()
+                combined_text = f"{first_text} {second_text}"
+                
+                combined_srt.append(f"{new_seq_num}\n{combined_timestamp}\n{combined_text}\n")
+                
+            else:
+                # Odd number of entries, keep the last one as-is
+                seq_num, timestamp, text = first_entry
+                combined_srt.append(f"{new_seq_num}\n{timestamp}\n{text.strip()}\n")
+            
+            new_seq_num += 1
+        
+        result = '\n'.join(combined_srt)
+        logger.info(f"Combined {len(srt_matches)} entries into {len(combined_srt)} entries")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error combining SRT lines: {e}")
+        return srt_content
+
+
 def _reconstruct_srt(original_srt: str, cleaned_text: str) -> str:
     """
     Reconstruct SRT format using original timestamps with cleaned text content.
