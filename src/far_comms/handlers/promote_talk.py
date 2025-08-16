@@ -160,10 +160,10 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 # Extract content directly from Coda column structure
                 li_content = parsed_output.get("LI content", "")
                 x_content = parsed_output.get("X content", "")
-                paragraph_summary = parsed_output.get("Paragraph (AI)", "")
+                summary = parsed_output.get("Summary", "")  # Updated to match Coda column name
                 webhook_progress = parsed_output.get("Webhook progress", "")
                 
-                # Extract preprocessing results (only if generated)
+                # Extract preprocessing results
                 resources_result = parsed_output.get("Resources", "")
                 analysis_result = parsed_output.get("Analysis", "")
                 hooks_result = parsed_output.get("Hooks", "")
@@ -194,16 +194,12 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     # Content outputs
                     "LI content": li_content,
                     "X content": x_content, 
-                    "Paragraph (AI)": paragraph_summary
+                    "Summary": summary,  # Updated column name
+                    # Always update preprocessing results
+                    "Resources": resources_result,
+                    "Analysis": analysis_result,
+                    "Hooks": hooks_result
                 }
-                
-                # Only update preprocessing columns if they were generated (not existing)
-                if resources_result and not function_data.get("coda_resources"):
-                    coda_updates["Resources"] = resources_result
-                if analysis_result and not function_data.get("coda_analysis"):
-                    coda_updates["Analysis"] = analysis_result
-                if hooks_result and not function_data.get("coda_hooks"):
-                    coda_updates["Hooks"] = hooks_result
                 
                 updates = [{
                     "row_id": coda_ids.row_id,

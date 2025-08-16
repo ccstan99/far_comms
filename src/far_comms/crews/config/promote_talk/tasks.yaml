@@ -521,7 +521,7 @@ final_qa_task:
       "Resources": "[Final resources list - only if generated, not if using existing Coda data]",
       "Analysis": "[Final analysis content - only if generated, not if using existing Coda data]", 
       "Hooks": "[Final hooks list - only if generated, not if using existing Coda data]",
-      "Paragraph (AI)": "[Final paragraph summary for Coda]",
+      "Summary": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X content": "[Complete assembled Twitter/X content ready for Coda]",
       "Webhook progress": "Accuracy: [X/10], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
