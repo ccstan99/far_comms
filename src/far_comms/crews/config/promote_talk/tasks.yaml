@@ -3,34 +3,20 @@
 
 data_orchestration_task:
   description: >
-    Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
+    Check Coda data availability and provide data status report for the content pipeline.
+    All subsequent tasks will run in sequence and handle existing/missing data appropriately.
     
-    CODA DATA TO CHECK (use existing or delegate to generate):
+    CODA DATA TO REVIEW:
     - Resources: {coda_resources}
     - Analysis: {coda_analysis} 
     - Summaries: {coda_summaries}
     - LI content: {coda_li_content}
     - X content: {coda_x_content}
     
-    DATA LOADING WORKFLOW:
-    
-    1. CHECK CODA DATA & DELEGATE AS NEEDED:
-       - If Resources empty/missing → delegate to resource_researcher_agent
-       - If Analysis empty/missing → delegate to transcript_analyzer_agent  
-       - If Summaries empty/missing → delegate to summarizer_agent
-       - ALWAYS delegate to li_content_writer_agent (CREATE mode if no Coda content, REFINE mode if exists)
-       - ALWAYS delegate to x_content_writer_agent (CREATE mode if no Coda content, REFINE mode if exists)
-    
-    2. PASS ALL CONTENT VIA CONTEXT:
-       - Content writers receive existing Coda content to refine OR create from scratch
-       - All refined or generated content flows to evaluation tasks via context
-       - Downstream tasks receive consistent high-quality content regardless of source
-    
-    DELEGATION AUTHORITY:
-    - Delegate to preprocessing agents (resources, analysis, summaries) only when Coda data is empty/missing
-    - ALWAYS delegate to content writers (they create OR refine as appropriate)
-    - Content writers ensure consistent quality regardless of whether content exists in Coda
-    - Pass existing Coda content to content writers for refinement when available
+    INSTRUCTIONS:
+    Simply report what Coda data exists and what needs to be generated. 
+    All preprocessing and content tasks will run in sequence.
+    Each task will handle existing/missing data as appropriate.
     
   expected_output: >
     ## Data Loading Summary

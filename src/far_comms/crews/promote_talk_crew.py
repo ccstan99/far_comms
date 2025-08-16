@@ -191,12 +191,12 @@ class PromoteTalkCrew():
 
   @agent
   def data_orchestrator_agent(self) -> Agent:
-    # Data orchestrator checks Coda and delegates to generators
+    # Data orchestrator checks Coda data availability and sets up pipeline
     return Agent(
       config=self.agents_config['data_orchestrator_agent'],
       llm=self.sonnet_llm,  # Systematic data checking - Sonnet
       verbose=True,
-      allow_delegation=True  # Can delegate to content generators
+      allow_delegation=False  # No delegation - tasks run in sequence
     )
 
   @agent
