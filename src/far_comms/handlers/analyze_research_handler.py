@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from far_comms.models.requests import ResearchRequest, ResearchAnalysisOutput
-from far_comms.analyze_research import analyze_research_paper
+from far_comms.handlers.analyze_research import analyze_research_paper
 
 logger = logging.getLogger(__name__)
 

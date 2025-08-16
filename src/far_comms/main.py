@@ -224,7 +224,6 @@ async def promote_talk_endpoint(
     summary="Analyze ML Research Paper",
     description="Analyze an ML research paper with PhD-level AI safety expertise using Claude 4.1 Opus. Saves results as Markdown file for human review. Accepts local file paths or URLs.",
     response_description="Detailed technical analysis saved as Markdown file, optimized for human review and subsequent LLM processing",
-    tags=["Research Analysis"]
 )
 async def analyze_research_endpoint(research_request: ResearchRequest):
     """
