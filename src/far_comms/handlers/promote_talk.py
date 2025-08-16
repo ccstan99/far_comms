@@ -30,6 +30,7 @@ def get_promote_talk_input(raw_data: dict) -> dict:
         "coda_resources": raw_data.get("Resources", ""),
         "coda_analysis": raw_data.get("Analysis", ""),
         "coda_summaries": raw_data.get("Summaries", ""),
+        "coda_hooks": raw_data.get("Hooks", ""),
         "coda_li_content": raw_data.get("LI content", ""),
         "coda_x_content": raw_data.get("X content", ""),
         "speaker_x_handle": raw_data.get("X handle", ""),
@@ -135,6 +136,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 # Extract preprocessing results (only if generated)
                 resources_result = parsed_output.get("Resources", "")
                 analysis_result = parsed_output.get("Analysis", "")
+                hooks_result = parsed_output.get("Hooks", "")
                 
                 # Extract final decision from webhook progress text
                 publication_decision = "NEEDS_REVISION"  # Default
@@ -170,6 +172,8 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     coda_updates["Resources"] = resources_result
                 if analysis_result and not function_data.get("coda_analysis"):
                     coda_updates["Analysis"] = analysis_result
+                if hooks_result and not function_data.get("coda_hooks"):
+                    coda_updates["Hooks"] = hooks_result
                 
                 updates = [{
                     "row_id": coda_ids.row_id,

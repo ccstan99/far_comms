@@ -186,6 +186,54 @@ generate_summaries_task:
   context: ["data_orchestration_task", "analyze_transcript_task"]
   agent: summarizer_agent
 
+generate_hooks_task:
+  description: >
+    Generate compelling hooks for social media content for {speaker}'s ({affiliation}) research presentation.
+    Create multiple hook options for both LinkedIn and Twitter/X platforms.
+    
+    DEPENDENCY CHECK: You will receive transcript analysis from previous tasks through context.
+    If analysis is empty/failed, return error message: "Cannot generate hooks without transcript analysis. Analysis task failed or returned empty content."
+    
+    <CODA CONTENT>
+    {coda_hooks}
+    </CODA CONTENT>
+    
+    MODE DETERMINATION:
+    - If <CODA CONTENT> is empty/blank → CREATE MODE: Generate new hooks from scratch
+    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing hooks
+    
+    CREATE MODE REQUIREMENTS:
+    - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
+    - Generate 5 LinkedIn hooks: attention-grabbing openers for policymakers/industry leaders  
+    - Generate 5 Twitter/X hooks: ultra-dense openers for ML researchers and tech journalists
+    - Lead with findings, not setup - eliminate corporate speak like "researchers discovered"
+    - Focus on surprising, counterintuitive results that make people stop scrolling
+    - Each hook should be standalone and compelling within first 5 words
+    
+    REFINE MODE REQUIREMENTS:
+    - Assess existing hooks against requirements above
+    - Identify improvement opportunities: stronger impact, clearer findings, better audience targeting
+    - Enhance while preserving good elements
+    - Ensure hooks lead with most important insights, not generic introductions
+    - Output improved versions OR return originals if already excellent
+    
+  expected_output: >
+    ## LinkedIn Hooks (5 options)
+    1. [Compelling hook leading with key finding for policymakers]
+    2. [Alternative hook emphasizing business implications]  
+    3. [Hook focusing on surprising research result]
+    4. [Hook highlighting policy/industry relevance]
+    5. [Hook emphasizing broader AI safety implications]
+    
+    ## Twitter/X Hooks (5 options)
+    1. [Ultra-dense technical hook for ML researchers]
+    2. [Counterintuitive finding hook for tech audience]
+    3. [Precise methodology/results hook] 
+    4. [Technical breakthrough hook for AI practitioners]
+    5. [Research impact hook for academic community]
+  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
+  agent: hook_specialist_agent
+
 create_li_content_task:
   description: >
     Create or refine LinkedIn post for {speaker}'s ({affiliation}) presentation.
@@ -211,8 +259,7 @@ create_li_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
-    - Select strongest hook that grabs attention from policymakers/industry leaders
+    - Select best LinkedIn hook from hooks generated in generate_hooks_task
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
     - Incorporate "Core Thesis" and "Key Points" from transcript analysis
     - Ensure hook/paragraph cohesion (no repetitive phrases)
@@ -236,7 +283,7 @@ create_li_content_task:
     ▸ [≤8 word bullet 1]
     ▸ [≤8 word bullet 2] 
     ▸ [≤8 word bullet 3]
-  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
+  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
@@ -264,8 +311,8 @@ create_x_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Use "Notable Quotes" and "Social Media Ready Content" from transcript analysis for technical precision
-    - Select strongest hook that grabs attention from ML researchers
+    - Select best Twitter/X hook from hooks generated in generate_hooks_task
+    - Use "Technical Details" and "Core Thesis" from analysis for technical precision
     - Use "Technical Details" and "Core Thesis" from analysis as content foundation
     - Include specific numbers, methods, results from "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
@@ -284,7 +331,7 @@ create_x_content_task:
   expected_output: >
     ## Twitter/X Content
     [Ultra-dense tweet ≤280 characters with selected hook, technical precision, and speaker attribution]
-  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
+  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
   agent: x_content_writer_agent
 
 
@@ -473,11 +520,12 @@ final_qa_task:
     {
       "Resources": "[Final resources list - only if generated, not if using existing Coda data]",
       "Analysis": "[Final analysis content - only if generated, not if using existing Coda data]", 
+      "Hooks": "[Final hooks list - only if generated, not if using existing Coda data]",
       "Paragraph (AI)": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X content": "[Complete assembled Twitter/X content ready for Coda]",
       "Webhook progress": "Accuracy: [X/10], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
     }
-  context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
+  context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"
   agent: final_qa_agent
