@@ -1,5 +1,70 @@
 # All tasks follow style_shared.md, style_li.md, and style_x.md requirements
-# QA Orchestrator manages conditional execution of preprocessing tasks
+# Data Orchestrator kicks off pipeline and manages conditional execution
+
+data_orchestration_task:
+  description: >
+    Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
+    
+    AVAILABLE CODA DATA (check and use existing or generate missing):
+    - Resources: {resources_existing}
+    - Analysis: {analysis_existing} 
+    - Summaries: {summaries_existing}
+    - LI content: {li_content_existing}
+    - X content: {x_content_existing}
+    
+    STATIC INPUT DATA (always from parameters):
+    - Speaker: {speaker} ({affiliation})
+    - Talk Title: {talk_title}
+    - Event: {event_name}
+    - Transcript: {transcript}
+    - Slides: {slides_content}
+    - YouTube Link: {yt_full_link}
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+    
+    DATA LOADING WORKFLOW:
+    
+    1. CHECK CODA DATA & DELEGATE AS NEEDED:
+       - If Resources empty/missing → delegate to resource_researcher_agent
+       - If Analysis empty/missing → delegate to transcript_analyzer_agent  
+       - If Summaries empty/missing → delegate to summarizer_agent
+       - If LinkedIn content empty/missing → delegate to li_content_writer_agent
+       - If X content empty/missing → delegate to x_content_writer_agent
+    
+    2. PASS ALL CONTENT VIA CONTEXT:
+       - All generated or loaded content flows to next tasks via context
+       - Downstream tasks receive consistent data regardless of source (Coda vs generated)
+       - Static data (transcript, speaker info) remains in parameters
+    
+    DELEGATION AUTHORITY:
+    - Delegate to content generators only when Coda data is empty/missing
+    - Be specific about what data to generate
+    - Use existing Coda data when available (more efficient)
+    
+  expected_output: >
+    ## Data Loading Summary
+    - Resources: [Used existing/Generated new]
+    - Analysis: [Used existing/Generated new] 
+    - Summaries: [Used existing/Generated new]
+    - LinkedIn Content: [Used existing/Generated new]
+    - X Content: [Used existing/Generated new]
+    
+    ## Content Ready for Pipeline
+    All required content loaded and ready for evaluation pipeline.
+  agent: qa_orchestrator_agent
+
+
+# CONTENT GENERATION TASKS (conditionally called by data orchestrator)
 
 research_resources_task:
   description: >
@@ -216,6 +281,9 @@ create_x_content_task:
   context: ["data_orchestration_task"]
   agent: x_content_writer_agent
 
+
+# EVALUATION TASKS (always run on final content)
+
 fact_check_content_task:
   description: >
     Verify all content claims against original transcript and provide corrected versions.
@@ -340,68 +408,7 @@ brand_voice_check_task:
   agent: voice_checker_agent
 
 
-data_orchestration_task:
-  description: >
-    Smart data loader that checks Coda data availability and ensures all required content is ready for the content pipeline.
-    
-    AVAILABLE CODA DATA (check and use existing or generate missing):
-    - Resources: {resources_existing}
-    - Analysis: {analysis_existing} 
-    - Summaries: {summaries_existing}
-    - LI content: {li_content_existing}
-    - X content: {x_content_existing}
-    
-    STATIC INPUT DATA (always from parameters):
-    - Speaker: {speaker} ({affiliation})
-    - Talk Title: {talk_title}
-    - Event: {event_name}
-    - Transcript: {transcript}
-    - Slides: {slides_content}
-    - YouTube Link: {yt_full_link}
-    
-    <GENERAL STYLE>
-    {style_shared}
-    </GENERAL STYLE>
-    
-    <LINKEDIN STYLE>
-    {style_li}
-    </LINKEDIN STYLE>
-    
-    <TWITTER STYLE>
-    {style_x}
-    </TWITTER STYLE>
-    
-    DATA LOADING WORKFLOW:
-    
-    1. CHECK CODA DATA & DELEGATE AS NEEDED:
-       - If Resources empty/missing → delegate to resource_researcher_agent
-       - If Analysis empty/missing → delegate to transcript_analyzer_agent  
-       - If Summaries empty/missing → delegate to summarizer_agent
-       - If LinkedIn content empty/missing → delegate to li_content_writer_agent
-       - If X content empty/missing → delegate to x_content_writer_agent
-    
-    2. PASS ALL CONTENT VIA CONTEXT:
-       - All generated or loaded content flows to next tasks via context
-       - Downstream tasks receive consistent data regardless of source (Coda vs generated)
-       - Static data (transcript, speaker info) remains in parameters
-    
-    DELEGATION AUTHORITY:
-    - Delegate to content generators only when Coda data is empty/missing
-    - Be specific about what data to generate
-    - Use existing Coda data when available (more efficient)
-    
-  expected_output: >
-    ## Data Loading Summary
-    - Resources: [Used existing/Generated new]
-    - Analysis: [Used existing/Generated new] 
-    - Summaries: [Used existing/Generated new]
-    - LinkedIn Content: [Used existing/Generated new]
-    - X Content: [Used existing/Generated new]
-    
-    ## Content Ready for Pipeline
-    All required content loaded and ready for evaluation pipeline.
-  agent: qa_orchestrator_agent
-
+# FINAL QUALITY CONTROL & ASSEMBLY
 
 final_qa_task:
   description: >
