@@ -52,8 +52,9 @@ Your processing should:
 - Clean up the raw markdown from pymupdf4llm - fix formatting and improve structure
 - Standardize bullet points - use `-` bullets consistently for clean markdown formatting  
 - Improve section headers - use proper `#` and `##` markdown headers
-- Preserve all original text - keep exact wording from the raw markdown, just enhance formatting
+- **CRITICAL**: Preserve all original text verbatim - keep exact wording from the raw markdown, DO NOT paraphrase or rewrite content, just enhance formatting
 - Add brief alt text for important visual elements: `[diagram: brief description]`, `[table: brief description]`, `[chart: brief description]` 
+- Format QR codes as: `[QR - url]` (e.g., `[QR - https://arxiv.org/abs/2412.03235]`) 
 - Organize content into logical sections with clear headers
 - IMPORTANT: Avoid ** bold ** and * italic * formatting - use only clean text with `#` and `##` headings
 - Do NOT use **bold** or *italic* for emphasis - plain text is preferred

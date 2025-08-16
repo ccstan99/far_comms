@@ -157,13 +157,14 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
             except Exception as e:
                 logger.warning(f"Slide 1 metadata extraction failed: {e}")
         
-        # Generate lightweight visual context for key slides (just first few slides for efficiency)
+        # Generate comprehensive visual context for ALL slides 
         visual_context = ""
+        qr_codes = []
         if client and len(doc) > 0:
-            logger.info("Analyzing key slides for visual context")
+            logger.info("Analyzing all slides for visual context")
             try:
-                # Analyze first slide for speaker info + first 2-3 slides for visual elements
-                slides_to_analyze = min(3, len(doc))
+                # Analyze ALL slides for comprehensive visual analysis
+                slides_to_analyze = len(doc)
                 
                 for page_num in range(slides_to_analyze):
                     page = doc[page_num]
@@ -299,7 +300,7 @@ Format as JSON:
                         "resources_found": [],
                         "technical_terms": [],
                         "qr_codes": qr_codes or [],
-                        "visual_elements": visual_elements or []
+                        "visual_elements": []
                     }
                     return fallback_result
                 import time
