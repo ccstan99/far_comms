@@ -20,9 +20,7 @@ These guidelines apply across **all platforms**.
 
 ## Content Style
 - **Human writing**: Natural and conversational, NOT AI-generated or robotic
-- **Platform attribution**: LinkedIn uses @speaker (affiliation), Twitter/X uses speaker name only
-- **Neutrality**: Present research findings objectively, do not advocate for positions or artificially promote viewpoints
-- **Accessibility**: Clear and accessible to non-technical audiences while preserving technical accuracy
+- **Accessibility**: Clear and accessible while preserving technical accuracy
 
 ## Character Limits
 - **Twitter/X**: Tweet 1 must be ≤280 characters

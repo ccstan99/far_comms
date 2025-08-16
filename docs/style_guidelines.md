@@ -21,7 +21,7 @@ Generic content creation guidelines for when specialized crews aren't available.
 - **Standard format**: "Name (Affiliation) [verb]..."
 - **Examples**: 
   - "Sarah Chen (Stanford AI Lab) found..."
-  - "Marcus Rodriguez (DeepMind) demonstrated..."
+  - "Marcus Rodriguez (Google DeepMind) demonstrated..."
   - "The team at MIT revealed..."
 
 ## LinkedIn Content Template
@@ -88,7 +88,7 @@ Name (Affiliation) discovered [key finding]. [Technical concept explained simply
 - [ ] Content elevates both FAR.AI and speaker/research
 
 ### Platform Optimization
-- [ ] **LinkedIn**: Accessible to business audience, <150 words
+- [ ] **LinkedIn**: Accessible to governance & general audience, <150 words
 - [ ] **Twitter/X**: Technical precision, <280 chars, abbreviations used
 - [ ] Content encourages engagement through insight, not controversy
 - [ ] Respects platform norms and audience expectations
