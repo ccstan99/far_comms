@@ -136,8 +136,12 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 resources_result = parsed_output.get("Resources", "")
                 analysis_result = parsed_output.get("Analysis", "")
                 
-                # Extract final decision
-                publication_decision = parsed_output.get("publication_decision", "NEEDS_REVISION")
+                # Extract final decision from webhook progress text
+                publication_decision = "NEEDS_REVISION"  # Default
+                if "Status: APPROVED" in webhook_progress:
+                    publication_decision = "APPROVED"
+                elif "Status: REJECTED" in webhook_progress:
+                    publication_decision = "REJECTED"
                 
                 logger.info(f"Publication decision: {publication_decision}")
                 logger.info(f"Webhook progress: {webhook_progress}")
