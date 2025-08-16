@@ -424,8 +424,14 @@ final_qa_task:
   description: >
     Final quality control, assembly, and approval for all content after evaluation pipeline.
     
-    IMPORTANT: You receive ALL content through context from previous tasks - do NOT ask questions to coworkers.
+    CONTEXT FIRST APPROACH: You receive ALL content through context from previous tasks.
     Extract content directly from the context provided by: resources, analysis, summaries, LinkedIn content, X content, fact-checking results, and brand voice results.
+    
+    STRATEGIC QUESTIONS ONLY: Only ask questions to coworkers if you need:
+    - Quality improvements or refinements to existing content
+    - Clarification of technical accuracy concerns
+    - Brand voice adjustments
+    DO NOT ask for content that should already be available through context (resources, analysis, summaries, etc.)
     
     <GENERAL STYLE>
     {style_shared}

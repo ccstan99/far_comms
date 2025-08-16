@@ -206,7 +206,7 @@ class PromoteTalkCrew():
       config=self.agents_config['final_qa_agent'],
       llm=self.opus_llm,  # Complex final decisions - Opus
       verbose=True,
-      allow_delegation=False  # Assembles from context only
+      allow_delegation=True  # Allow targeted quality questions only
     )
 
   # Tasks - Sequential Multi-Agent Workflow with QA Orchestration
