@@ -423,7 +423,9 @@ brand_voice_check_task:
 final_qa_task:
   description: >
     Final quality control, assembly, and approval for all content after evaluation pipeline.
-    You receive all content and evaluation results through context from previous tasks.
+    
+    IMPORTANT: You receive ALL content through context from previous tasks - do NOT ask questions to coworkers.
+    Extract content directly from the context provided by: resources, analysis, summaries, LinkedIn content, X content, fact-checking results, and brand voice results.
     
     <GENERAL STYLE>
     {style_shared}
@@ -462,29 +464,27 @@ final_qa_task:
     - All claims must match original transcript exactly
     
   expected_output: >
-    # Final Outputs for Coda
-    
-    ## LinkedIn Content
-    [Complete assembled LinkedIn post ready for Coda]
-    
-    ## X Content
-    [Complete assembled Twitter/X content ready for Coda]
-    
-    ## Paragraph (AI)
-    [Final paragraph summary for Coda]
-
-    ## Analysis
-    [Final analysis content]
-    
-    ## Resources
-    [Final resources list]
-    
-    ## Webhook progress
-    - Accuracy Score: [1-10 based on transcript accuracy]
-    - Compliance Score: [X/14 based on style guide compliance]
-    - Status: [APPROVED/NEEDS_REVISION/REJECTED]
-    - Issues: [List any blocking issues if not approved]
-    - Revision Notes: [Specific feedback if revision needed]
-  context: ["data_orchestration_task", "fact_check_content_task", "brand_voice_check_task"]
+    {
+      "content_generated": {
+        "li_content": "[Complete assembled LinkedIn post ready for Coda]",
+        "x_content": "[Complete assembled Twitter/X content ready for Coda]",
+        "paragraph_summary": "[Final paragraph summary for Coda]"
+      },
+      "preprocessing_completed": {
+        "resources": "[Final resources list]",
+        "analysis": "[Final analysis content]", 
+        "summaries": "[Final summaries content]"
+      },
+      "quality_assurance": {
+        "accuracy_score": "[1-10 based on transcript accuracy]",
+        "compliance_score": "[X/14 based on style guide compliance]"
+      },
+      "final_decision": {
+        "publication_decision": "[APPROVED/NEEDS_REVISION/REJECTED]",
+        "issues": "[List any blocking issues if not approved]",
+        "revision_notes": "[Specific feedback if revision needed]"
+      }
+    }
+  context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"
   agent: final_qa_agent

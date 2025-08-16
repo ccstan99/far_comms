@@ -201,12 +201,12 @@ class PromoteTalkCrew():
 
   @agent
   def final_qa_agent(self) -> Agent:
-    # Final QA can delegate back for refinements and makes final decisions
+    # Final QA assembles content from context and makes final decisions
     return Agent(
       config=self.agents_config['final_qa_agent'],
       llm=self.opus_llm,  # Complex final decisions - Opus
       verbose=True,
-      allow_delegation=True  # Can delegate back for refinements
+      allow_delegation=False  # Assembles from context only
     )
 
   # Tasks - Sequential Multi-Agent Workflow with QA Orchestration
