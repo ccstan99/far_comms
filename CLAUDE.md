@@ -176,3 +176,4 @@ Style guides include high-performing content examples and technical formatting s
 - When error encountered, webhook status in coda should be "Error" not Failed. Valid options: Error, Done, Not started, In progress
 - don't overcomplicate or overengineer code
 - all api keys in .env
+- tasks.yaml instruction markers around long input with XML tags <CONTENT>{...}</CONTENT}

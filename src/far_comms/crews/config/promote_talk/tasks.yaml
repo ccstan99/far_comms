@@ -477,14 +477,11 @@ final_qa_task:
     ## Paragraph (AI)
     [Final paragraph summary for Coda]
 
-    ## Resources
-    [Final resources list]
-    
     ## Analysis
     [Final analysis content]
     
-    ## Summaries
-    [Final summaries content]
+    ## Resources
+    [Final resources list]
     
     ## Webhook progress
     - Accuracy Score: [1-10 based on transcript accuracy]
