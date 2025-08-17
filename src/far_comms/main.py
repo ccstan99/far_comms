@@ -21,6 +21,7 @@ from far_comms.handlers.analyze_research_handler import (
     get_analyze_research_input, 
     display_analyze_research_input
 )
+from far_comms.utils.social_assembler import assemble_socials
 import uvicorn
 import os
 import json
@@ -410,6 +411,102 @@ async def get_input(function_name: FunctionName, this_row: str, doc_id: str) -> 
     return coda_ids, function_data
 
 # Function registry - maps function names to their input/display handlers and runners
+# Simple handler for assemble_socials
+async def run_assemble_socials(function_data: dict, coda_ids: CodaIds = None):
+    """Standalone function to assemble social media posts from existing Coda data"""
+    try:
+        logger.info(f"Assemble socials called for speaker: {function_data.get('speaker', 'Unknown')}")
+        
+        # Extract the data we need for assembly
+        crew_output = {
+            "LI content": function_data.get("LI content", ""),
+            "X + Bsky content": function_data.get("X + Bsky content", ""), 
+            "Resources": function_data.get("Resources", "")
+        }
+        
+        coda_data = {
+            "event_name": function_data.get("event_name", ""),
+            "yt_full_link": function_data.get("yt_full_link", ""),
+            "speaker": function_data.get("speaker", "")
+        }
+        
+        # Assemble the social media posts
+        assembled_posts = assemble_socials(crew_output, coda_data)
+        
+        # Update Coda with assembled posts
+        if coda_ids:
+            coda_client = CodaClient()
+            # Try different possible column names for Bluesky
+            bsky_column_names = ["Bsky post", "Bluesky post", "BlueSky post"]
+            
+            updates = [{
+                "row_id": coda_ids.row_id,
+                "updates": {
+                    "LI post": assembled_posts.get("LI post", ""),
+                    "X post": assembled_posts.get("X post", ""),
+                    "Webhook status": "Done",
+                    "Webhook progress": f"Social media posts assembled successfully from existing content"
+                }
+            }]
+            
+            # Add Bluesky post with first available column name (will be filtered by CodaClient)
+            for col_name in bsky_column_names:
+                updates[0]["updates"][col_name] = assembled_posts.get("Bsky post", "")
+                break  # Only add one version
+            
+            result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
+            logger.info(f"Updated Coda with assembled posts: {result}")
+        
+        return {
+            "status": "success",
+            "message": f"Assembled social media posts for {coda_data['speaker']}",
+            "assembled_posts": assembled_posts
+        }
+        
+    except Exception as e:
+        logger.error(f"Assemble socials error: {e}", exc_info=True)
+        
+        # Try to update Coda with error status
+        if coda_ids:
+            try:
+                coda_client = CodaClient()
+                error_updates = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": {
+                        "Webhook status": "Error",
+                        "Webhook progress": f"Failed to assemble social posts: {str(e)}"
+                    }
+                }]
+                coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, error_updates)
+            except Exception as update_error:
+                logger.error(f"Failed to update error status: {update_error}")
+        
+        return {"status": "failed", "message": f"Failed to assemble social posts: {e}"}
+
+
+def get_assemble_socials_input(raw_data: dict) -> dict:
+    """Parse raw Coda data for assemble_socials function"""
+    return {
+        "speaker": raw_data.get("Speaker", ""),
+        "event_name": raw_data.get("Event", ""),
+        "yt_full_link": raw_data.get("YT full link", ""),
+        "LI content": raw_data.get("LI content", ""),
+        "X + Bsky content": raw_data.get("X + Bsky content", ""),
+        "Resources": raw_data.get("Resources", "")
+    }
+
+
+def display_assemble_socials_input(function_data: dict) -> dict:
+    """Format function input for webhook display"""
+    return {
+        "speaker": function_data.get("speaker", ""),
+        "event_name": function_data.get("event_name", ""),
+        "has_li_content": bool(function_data.get("LI content", "").strip()),
+        "has_x_content": bool(function_data.get("X + Bsky content", "").strip()),
+        "has_resources": bool(function_data.get("Resources", "").strip())
+    }
+
+
 FUNCTION_REGISTRY = {
     FunctionName.PROMOTE_TALK: {
         "runner": run_promote_talk,
@@ -425,6 +522,11 @@ FUNCTION_REGISTRY = {
         "runner": run_analyze_research,
         "get_input": get_analyze_research_input,
         "display_input": display_analyze_research_input
+    },
+    FunctionName.ASSEMBLE_SOCIALS: {
+        "runner": run_assemble_socials,
+        "get_input": get_assemble_socials_input,
+        "display_input": display_assemble_socials_input
     }
     # Add new functions here as they're implemented
 }

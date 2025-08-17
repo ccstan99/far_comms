@@ -9,6 +9,7 @@ from far_comms.utils.coda_client import CodaClient
 from far_comms.models.requests import TalkRequest, CodaIds
 from far_comms.utils.project_paths import get_docs_dir
 from far_comms.utils.json_repair import json_repair
+from far_comms.utils.social_assembler import assemble_socials
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,9 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 coda_status = status_mapping.get(publication_decision, "Error")  # Default to Error for system failures
                 logger.info(f"Setting Coda status: {coda_status}")
                 
+                # Assemble platform-specific social media posts
+                assembled_posts = assemble_socials(parsed_output, function_data)
+                
                 # Prepare comprehensive Coda updates (excluding formula-bound columns)
                 coda_updates = {
                     "Webhook status": coda_status,
@@ -187,6 +191,10 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     "LI content": li_content,
                     "X + Bsky content": x_content, 
                     "Paragraph": paragraph_summary,  # Paragraph summary for Coda
+                    # Assembled social media posts
+                    "LI post": assembled_posts.get("LI post", ""),
+                    "X post": assembled_posts.get("X post", ""),
+                    "Bsky post": assembled_posts.get("Bsky post", ""),
                     # Always update preprocessing results
                     "Resources": resources_result,
                     "Analysis": analysis_result
