@@ -173,9 +173,9 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                         # Only update if slide data is valid and different (never replace good data with placeholders)
                         if slide_speaker and slide_speaker != speaker_name and not is_placeholder_text(slide_speaker):
                             slides_updates["Speaker"] = f"{prefix}{slide_speaker}"
-                        original_affiliation = row_values.get("Affiliation", "")
-                        if slide_affiliation and slide_affiliation != original_affiliation and not is_placeholder_text(slide_affiliation):
-                            slides_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
+                        # original_affiliation = row_values.get("Affiliation", "")
+                        # if slide_affiliation and slide_affiliation != original_affiliation and not is_placeholder_text(slide_affiliation):
+                        #     slides_updates["Affiliation"] = f"{prefix}{slide_affiliation}"
                         original_title = row_values.get("Title", "")
                         # Only update title if there are meaningful differences beyond case and it's not placeholder text
                         if slide_title and not titles_equivalent(slide_title, original_title) and not is_placeholder_text(slide_title):

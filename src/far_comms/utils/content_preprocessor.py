@@ -391,8 +391,8 @@ def find_presentation(speaker_name: str) -> tuple[str, str]:
             if word in filename:
                 score += len(word)
         
-        # Prefer PDF files by adding a small bonus (they process more reliably)
-        if file_type == 'pdf':
+        # Only add PDF preference bonus if we found at least some speaker words
+        if score > 0 and file_type == 'pdf':
             score += 0.5
         
         if score > best_score:
