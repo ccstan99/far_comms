@@ -62,15 +62,22 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         # Convert PPTX to PDF if necessary
         if file_type == 'pptx':
             try:
-                logger.info(f"Converting PPTX to PDF for processing: {presentation_path}")
-                # Create output directory for converted files
+                # Check if converted PDF already exists in data/slides
                 from pathlib import Path
-                output_base = Path(__file__).parent.parent.parent.parent / "output" 
-                speaker_output_dir = output_base / table_id / speaker_name.replace(" ", "_")
-                speaker_output_dir.mkdir(parents=True, exist_ok=True)
+                slides_dir = Path(__file__).parent.parent.parent.parent / "data" / "slides"
+                slides_dir.mkdir(parents=True, exist_ok=True)
                 
-                pdf_path = convert_pptx_to_pdf(presentation_path, str(speaker_output_dir))
-                logger.info(f"Successfully converted PPTX to PDF: {pdf_path}")
+                # Generate expected PDF filename
+                pptx_name = Path(presentation_path).stem
+                expected_pdf_path = slides_dir / f"{pptx_name}_converted.pdf"
+                
+                if expected_pdf_path.exists():
+                    logger.info(f"Using existing converted PDF: {expected_pdf_path}")
+                    pdf_path = str(expected_pdf_path)
+                else:
+                    logger.info(f"Converting PPTX to PDF for processing: {presentation_path}")
+                    pdf_path = convert_pptx_to_pdf(presentation_path, str(slides_dir))
+                    logger.info(f"Successfully converted PPTX to PDF: {pdf_path}")
             except Exception as e:
                 logger.error(f"Failed to convert PPTX to PDF: {e}")
                 return {
