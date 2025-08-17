@@ -177,3 +177,4 @@ Style guides include high-performing content examples and technical formatting s
 - don't overcomplicate or overengineer code
 - all api keys in .env
 - tasks.yaml instruction markers around long input with XML tags <CONTENT>{...}</CONTENT}
+- LinkedIn audience not really business. Focus on real world or practical implications.
