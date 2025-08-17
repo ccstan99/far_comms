@@ -1,37 +1,5 @@
 # All tasks follow style_shared.md, style_li.md, and style_x.md requirements
-# Data Orchestrator kicks off pipeline and manages conditional execution
-
-data_orchestration_task:
-  description: >
-    Check Coda data availability and provide data status report for the content pipeline.
-    All subsequent tasks will run in sequence and handle existing/missing data appropriately.
-    
-    CODA DATA TO REVIEW:
-    - Resources: {coda_resources}
-    - Analysis: {coda_analysis} 
-    - Summaries: {coda_summaries}
-    - LI content: {coda_li_content}
-    - X + Bsky content: {coda_x_content}
-    
-    INSTRUCTIONS:
-    Simply report what Coda data exists and what needs to be generated. 
-    All preprocessing and content tasks will run in sequence.
-    Each task will handle existing/missing data as appropriate.
-    
-  expected_output: >
-    ## Data Loading Summary
-    - Resources: [Used existing/Generated new]
-    - Analysis: [Used existing/Generated new] 
-    - Summaries: [Used existing/Generated new]
-    - LinkedIn Content: [Used existing/Generated new]
-    - X Content: [Used existing/Generated new]
-    
-    ## Content Ready for Pipeline
-    All required content loaded and ready for evaluation pipeline.
-  agent: data_orchestrator_agent
-
-
-# CONTENT GENERATION TASKS (conditionally called by data orchestrator)
+# Linear workflow - all tasks run in sequence from scratch
 
 research_resources_task:
   description: >
@@ -189,7 +157,7 @@ generate_summaries_task:
     
     ## Sentence Summary
     [Ultra-concise 1-sentence summary in ~25 words capturing the essence]
-  context: ["data_orchestration_task", "analyze_transcript_task"]
+  context: ["analyze_transcript_task"]
   agent: summarizer_agent
 
 generate_hooks_task:
@@ -200,15 +168,7 @@ generate_hooks_task:
     DEPENDENCY CHECK: You will receive transcript analysis from previous tasks through context.
     If analysis is empty/failed, return error message: "Cannot generate hooks without transcript analysis. Analysis task failed or returned empty content."
     
-    <CODA CONTENT>
-    {coda_hooks}
-    </CODA CONTENT>
-    
-    MODE DETERMINATION:
-    - If <CODA CONTENT> is empty/blank → CREATE MODE: Generate new hooks from scratch
-    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing hooks
-    
-    CREATE MODE REQUIREMENTS:
+    REQUIREMENTS:
     - Use transcript analysis "Notable Quotes" and "Social Media Ready Content" for authentic hooks
     - Generate 5 LinkedIn hooks: attention-grabbing openers for policymakers/industry leaders  
     - Generate 5 Twitter/X hooks: ultra-dense openers for ML researchers and tech journalists
@@ -217,13 +177,6 @@ generate_hooks_task:
     - **AVOID**: Generic statements like "AI struggles with X" - use exact research results/methods/numbers
     - Focus on surprising, counterintuitive results that make people stop scrolling
     - Each hook should be standalone and compelling within first 5 words
-    
-    REFINE MODE REQUIREMENTS:
-    - Assess existing hooks against requirements above
-    - Identify improvement opportunities: stronger impact, clearer findings, better audience targeting
-    - Enhance while preserving good elements
-    - Ensure hooks lead with most important insights, not generic introductions
-    - Output improved versions OR return originals if already excellent
     
   expected_output: >
     ## LinkedIn Hooks (5 options with reasoning)
@@ -239,7 +192,7 @@ generate_hooks_task:
     3. [Precise methodology/results hook] - REASON: [Why this technical detail matters]
     4. [Technical breakthrough with metrics] - REASON: [Why practitioners need this]
     5. [Research impact with concrete implications] - REASON: [Why academics will share]
-  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
+  context: ["analyze_transcript_task", "generate_summaries_task"]
   agent: hook_specialist_agent
 
 create_li_content_task:
@@ -250,10 +203,6 @@ create_li_content_task:
     DEPENDENCY CHECK: You will receive transcript analysis and summaries from previous tasks through context.
     If analysis or summaries are empty/failed, return error message: "Cannot create LinkedIn content without transcript analysis and summaries. Upstream tasks failed."
     
-    <CODA CONTENT>
-    {coda_li_content}
-    </CODA CONTENT>
-    
     <GENERAL STYLE>
     {style_shared}
     </GENERAL STYLE>
@@ -262,11 +211,7 @@ create_li_content_task:
     {style_li}
     </LINKEDIN STYLE>
 
-    MODE DETERMINATION:
-    - If <CODA CONTENT> is empty/blank → CREATE MODE: Create new LinkedIn post from scratch
-    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
-
-    CREATE MODE REQUIREMENTS:
+    REQUIREMENTS:
     - Review all 5 LinkedIn hooks from generate_hooks_task and select the best one for this content
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
     - Incorporate "Core Thesis" and "Key Points" from transcript analysis
@@ -276,14 +221,6 @@ create_li_content_task:
     - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
-
-    REFINE MODE REQUIREMENTS:
-    - Assess existing content quality against style guides and requirements above
-    - Identify improvement opportunities: stronger hooks, better bullets, clearer flow
-    - Enhance while preserving good elements and original intent
-    - Use transcript analysis to add missing authentic quotes or technical details
-    - Ensure final content meets all style guide requirements
-    - Output improved version OR return original if already excellent
   expected_output: >
     [Selected hook that will grab attention from policymakers/industry leaders]
     
@@ -293,7 +230,7 @@ create_li_content_task:
     ▸ [≤8 word bullet 1]
     ▸ [≤8 word bullet 2] 
     ▸ [≤8 word bullet 3]
-  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
+  context: ["analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
   agent: li_content_writer_agent
 
 create_x_content_task:
@@ -304,10 +241,6 @@ create_x_content_task:
     DEPENDENCY CHECK: You will receive transcript analysis and summaries from previous tasks through context.
     If analysis or summaries are empty/failed, return error message: "Cannot create X + Bsky content without transcript analysis and summaries. Upstream tasks failed."
     
-    <CODA CONTENT>
-    {coda_x_content}
-    </CODA CONTENT>
-    
     <GENERAL STYLE>
     {style_shared}
     </GENERAL STYLE>
@@ -316,11 +249,7 @@ create_x_content_task:
     {style_x}
     </TWITTER STYLE>
 
-    MODE DETERMINATION:
-    - If <CODA CONTENT> is empty/blank → CREATE MODE: Create new Twitter/X content from scratch
-    - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
-
-    CREATE MODE REQUIREMENTS:
+    REQUIREMENTS:
     - Review all 5 Twitter/X hooks from generate_hooks_task and select the best one for this content
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
     - Include specific numbers, methods, results from "Technical Details" section
@@ -330,22 +259,13 @@ create_x_content_task:
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
-
-    REFINE MODE REQUIREMENTS:
-    - Assess existing content quality against style guides and requirements above
-    - Identify improvement opportunities: stronger technical hooks, denser information, better precision
-    - Enhance while preserving good elements and technical accuracy
-    - Use transcript analysis to add missing technical details or precise quotes
-    - **CRITICAL**: Use character_counter tool to verify ≤280 chars - rewrite if over limit
-    - Verify proper speaker attribution and technical terminology
-    - Output improved version OR return original if already excellent
   expected_output: >
     [Hook: Selected hook that will grab attention from ML researchers & technical audience]
     
     [Body: Ultra-dense body with technical precision, and speaker full name if no handle] {speaker_x_handle}
     
     **CHARACTER COUNT**: [Use character_counter tool to verify hook + body combined - MUST be ≤280]
-  context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
+  context: ["analyze_transcript_task", "generate_summaries_task", "generate_hooks_task"]
   agent: x_content_writer_agent
 
 
@@ -403,7 +323,7 @@ fact_check_content_task:
     - No major factual errors or misrepresentations of core findings
     - Content represents speaker's research fairly and accurately
     - Technical details are substantially correct (minor simplifications acceptable for platform constraints)
-  context: ["data_orchestration_task", "create_li_content_task", "create_x_content_task"]
+  context: ["analyze_transcript_task", "create_li_content_task", "create_x_content_task"]
   agent: fact_checker_agent
 
 
@@ -475,7 +395,7 @@ brand_voice_check_task:
     - Content sounds like FAR.AI, not speaker mimicry
     - LinkedIn <150 words, bullets ≤8 words each
     - 0 unnecessary words remain
-  context: ["data_orchestration_task", "fact_check_content_task"]
+  context: ["fact_check_content_task"]
   agent: voice_checker_agent
 
 
@@ -538,6 +458,6 @@ final_qa_task:
       "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
       "Webhook progress": "Accuracy: [X/5], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
     }
-  context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
+  context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   output_file: "output/{speaker}_final_qa.json"
   agent: final_qa_agent

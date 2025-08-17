@@ -199,17 +199,7 @@ class PromoteTalkCrew():
       allow_delegation=False
     )
 
-  # Phase 4: Data Orchestration & Final QA
-
-  @agent
-  def data_orchestrator_agent(self) -> Agent:
-    # Data orchestrator checks Coda data availability and sets up pipeline
-    return Agent(
-      config=self.agents_config['data_orchestrator_agent'],
-      llm=self.sonnet_llm,  # Systematic data checking - Sonnet
-      verbose=True,
-      allow_delegation=False  # No delegation - tasks run in sequence
-    )
+  # Phase 4: Final QA
 
   @agent
   def final_qa_agent(self) -> Agent:
@@ -224,9 +214,9 @@ class PromoteTalkCrew():
       tools=[CharacterCounterTool()]
     )
 
-  # Tasks - Sequential Multi-Agent Workflow with QA Orchestration
+  # Tasks - Linear Sequential Workflow
   
-  # Phase 1: Preprocessing Tasks (conditional execution)
+  # Content Generation Tasks
   @task
   def research_resources_task(self) -> Task:
     return Task(
@@ -285,12 +275,6 @@ class PromoteTalkCrew():
 
 
 
-  @task
-  def data_orchestration_task(self) -> Task:
-    return Task(
-      config=self.tasks_config['data_orchestration_task'],
-      agent=self.data_orchestrator_agent()
-    )
 
   @task
   def final_qa_task(self) -> Task:
@@ -301,7 +285,7 @@ class PromoteTalkCrew():
 
   @crew
   def crew(self) -> Crew:
-    """Creates the comprehensive PromoteTalk crew with preprocessing and QA orchestration"""
+    """Creates the PromoteTalk crew with linear workflow from scratch"""
 
     return Crew(
       agents=[
@@ -313,20 +297,17 @@ class PromoteTalkCrew():
         self.x_content_writer_agent(),
         self.fact_checker_agent(),
         self.voice_checker_agent(),
-        self.data_orchestrator_agent(),
         self.final_qa_agent()
       ],
       tasks=[
-        # Data orchestrator loads/generates all content first
-        self.data_orchestration_task(),
-        # Content generation tasks (only run if delegated by data orchestrator)
+        # Linear workflow - all tasks run in sequence
         self.research_resources_task(),
         self.analyze_transcript_task(),
         self.generate_summaries_task(),
         self.generate_hooks_task(),
         self.create_li_content_task(),
         self.create_x_content_task(),
-        # Evaluation pipeline (always runs)
+        # Evaluation pipeline
         self.fact_check_content_task(),
         self.brand_voice_check_task(),
         # Final QA and assembly
