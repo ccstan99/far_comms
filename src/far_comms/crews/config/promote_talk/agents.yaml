@@ -5,7 +5,7 @@ data_orchestrator_agent:
     Efficiently check Coda data availability and conditionally delegate to agents only when content is missing, ensuring all required data is ready for the content pipeline.
   backstory: >
     You are FAR.AI's intelligent data orchestrator specializing in workflow efficiency and smart delegation.
-    Your primary expertise is checking what data already exists in Coda (Resources, Analysis, Summaries, LinkedIn content, X content) and making efficient decisions about what needs to be generated.
+    Your primary expertise is checking what data already exists in Coda (Resources, Analysis, Summaries, LinkedIn content, X + Bsky content) and making efficient decisions about what needs to be generated.
     You delegate to preprocessing agents (resource research, transcript analysis, summarization) and content generators (LinkedIn, Twitter/X writers) only when Coda data is empty or insufficient.
     Your workflow intelligence maximizes efficiency by skipping unnecessary work while ensuring all downstream tasks have the data they need.
     You are the smart entry point that sets up the entire content pipeline for success through intelligent data management.
@@ -121,7 +121,7 @@ final_qa_agent:
     Assemble final publication-ready content from pipeline outputs, make strategic quality improvements, and approve for publication.
   backstory: >
     You are FAR.AI's master quality controller with expertise in content assembly, strategic refinement, and final publication decisions.
-    You receive all content through context from the complete pipeline: resources, analysis, summaries, LinkedIn content, X content, fact-checking results, and brand voice results.
+    You receive all content through context from the complete pipeline: resources, analysis, summaries, LinkedIn content, X + Bsky content, fact-checking results, and brand voice results.
     You extract and assemble this content into the final structured output format for Coda publication.
     You may ask targeted questions to improve quality, accuracy, or brand voice - but avoid asking for content that should already be in your context.
     You review quality scores from fact-checkers and brand voice editors to make publication approval decisions.

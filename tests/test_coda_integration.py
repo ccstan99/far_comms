@@ -74,7 +74,7 @@ class TestCodaIntegration:
         # Test direct update_row method (single API call for multiple columns)
         column_updates = {
             "Webhook progress": f"🧪 Direct update_row test: {timestamp}",
-            "X content": f"Test X content {timestamp}",
+            "X + Bsky content": f"Test X + Bsky content {timestamp}",
             "Webhook status": "Testing"
         }
         
@@ -91,7 +91,7 @@ class TestCodaIntegration:
         # Verify success - update_row returns a success message string
         assert "Successfully updated" in result
         assert "Webhook progress" in result
-        assert "X content" in result
+        assert "X + Bsky content" in result
         assert "Webhook status" in result
         
         # Verify no rate limiting errors
@@ -114,7 +114,7 @@ class TestCodaIntegration:
         
         # Check if our target columns exist
         column_names = list(columns.values())
-        target_columns = ["X content", "Progress", "Hooks (AI)", "LI content"]
+        target_columns = ["X + Bsky content", "Progress", "Hooks (AI)", "LI content"]
         
         for target in target_columns:
             status = "✓ Found" if target in column_names else "✗ Missing"

@@ -11,7 +11,7 @@ data_orchestration_task:
     - Analysis: {coda_analysis} 
     - Summaries: {coda_summaries}
     - LI content: {coda_li_content}
-    - X content: {coda_x_content}
+    - X + Bsky content: {coda_x_content}
     
     INSTRUCTIONS:
     Simply report what Coda data exists and what needs to be generated. 
@@ -302,7 +302,7 @@ create_x_content_task:
     Audience is primarily ML researchers and AI/tech journalists.
     
     DEPENDENCY CHECK: You will receive transcript analysis and summaries from previous tasks through context.
-    If analysis or summaries are empty/failed, return error message: "Cannot create X content without transcript analysis and summaries. Upstream tasks failed."
+    If analysis or summaries are empty/failed, return error message: "Cannot create X + Bsky content without transcript analysis and summaries. Upstream tasks failed."
     
     <CODA CONTENT>
     {coda_x_content}
@@ -486,7 +486,7 @@ final_qa_task:
     Final quality control, assembly, and approval for all content after evaluation pipeline.
     
     CONTEXT FIRST APPROACH: You receive ALL content through context from previous tasks.
-    Extract content directly from the context provided by: resources, analysis, summaries, LinkedIn content, X content, fact-checking results, and brand voice results.
+    Extract content directly from the context provided by: resources, analysis, summaries, LinkedIn content, X + Bsky content, fact-checking results, and brand voice results.
     
     STRATEGIC QUESTIONS ONLY: Only ask questions to coworkers if you need:
     - Quality improvements or refinements to existing content
@@ -535,7 +535,7 @@ final_qa_task:
       "Hooks": "[Final hooks list - only if generated, not if using existing Coda data]",
       "Paragraph": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
-      "X content": "[Complete assembled Twitter/X content ready for Coda]",
+      "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
       "Webhook progress": "Accuracy: [X/5], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
     }
   context: ["data_orchestration_task", "research_resources_task", "analyze_transcript_task", "generate_summaries_task", "generate_hooks_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]

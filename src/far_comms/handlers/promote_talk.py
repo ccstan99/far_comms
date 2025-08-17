@@ -33,7 +33,7 @@ def get_promote_talk_input(raw_data: dict) -> dict:
         "coda_summaries": raw_data.get("Summaries", ""),
         "coda_hooks": raw_data.get("Hooks", ""),
         "coda_li_content": raw_data.get("LI content", ""),
-        "coda_x_content": raw_data.get("X content", ""),
+        "coda_x_content": raw_data.get("X + Bsky content", ""),
         "speaker_x_handle": raw_data.get("X handle", ""),
     }
 
@@ -82,7 +82,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         if function_data.get("analysis_existing"): available_data.append("Analysis") 
         if function_data.get("summaries_existing"): available_data.append("Summaries")
         if function_data.get("li_content_existing"): available_data.append("LI content")
-        if function_data.get("x_content_existing"): available_data.append("X content")
+        if function_data.get("x_content_existing"): available_data.append("X + Bsky content")
         
         logger.info(f"Available Coda data: {', '.join(available_data) if available_data else 'None - will generate all'}")
         
@@ -159,7 +159,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 
                 # Extract content directly from Coda column structure
                 li_content = parsed_output.get("LI content", "")
-                x_content = parsed_output.get("X content", "")
+                x_content = parsed_output.get("X + Bsky content", "")
                 paragraph_summary = parsed_output.get("Paragraph", "")  # Updated to match crew output
                 webhook_progress = parsed_output.get("Webhook progress", "")
                 
@@ -193,7 +193,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     "Webhook progress": webhook_progress,
                     # Content outputs
                     "LI content": li_content,
-                    "X content": x_content, 
+                    "X + Bsky content": x_content, 
                     "Paragraph": paragraph_summary,  # Paragraph summary for Coda
                     # Always update preprocessing results
                     "Resources": resources_result,

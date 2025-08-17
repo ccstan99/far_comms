@@ -39,7 +39,7 @@ class TalkPromotionOutput(BaseModel):
     paragraph_ai: str  # "Paragraph (AI)" column
     hooks_ai: list[str]  # "Hooks (AI)" column - 5 hooks 
     li_content: str  # "LI content" column
-    x_content: str  # "X content" column
+    x_content: str  # "X + Bsky content" column
     eval_notes: str  # Rubric breakdown and checklist with compliance notes
 
 # ============================================================================
