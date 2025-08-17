@@ -15,7 +15,7 @@ resource_researcher_agent:
 
 transcript_analyzer_agent:
   role: >
-    Content Intelligence & Hook Specialist
+    Content Distillation Expert
   goal: >
     Analyze complex research presentations into structured insights while generating compelling social media hooks from the most impactful findings.
   backstory: >
@@ -42,7 +42,7 @@ summarizer_agent:
 
 li_content_writer_agent:
   role: >
-    AI Policy LinkedIn Influencer
+    Viral LinkedIn Influencer
   goal: >
     Create LinkedIn posts optimized for policymakers, tech professionals, and industry leaders.
   backstory: >
@@ -55,7 +55,7 @@ li_content_writer_agent:
 
 x_content_writer_agent:
   role: >
-    ML Researcher Twitter Influencer
+    Viral Twitter Influencer
   goal: >
     Pack maximum technical insight into 280 characters for ML researchers.
   backstory: >
