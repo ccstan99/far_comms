@@ -93,109 +93,222 @@ async def validate_environment():
 def home():
     return RedirectResponse(url="/docs")
 
-def execute_prepare_event(table_id: str, doc_id: str):
-    """Background function that processes all speakers in the table"""
+# Function configurations for run_event functionality
+RUN_EVENT_CONFIG = {
+    "prepare_talk": {
+        "execution_mode": "row_based",
+        "description": "Process slides and transcripts for talks"
+    },
+    "promote_talk": {
+        "execution_mode": "row_based", 
+        "description": "Generate social media content for talks"
+    },
+    "promote_research": {
+        "execution_mode": "row_based",
+        "description": "Analyze research papers and generate insights"
+    },
+    # Future functions can be added here:
+    # "recap": {"execution_mode": "event_based", "description": "Generate event recap"}
+    # "blog": {"execution_mode": "event_based", "description": "Generate blog post"}  
+    # "announcement": {"execution_mode": "event_based", "description": "Generate event announcement"}
+}
+
+def execute_run_event(func_name: str, table_id: str, doc_id: str, row_ids: list = None):
+    """Generic background function that processes table rows with specified function"""
     try:
         import json
+        import asyncio
+        
+        # Validate function name exists in both registries
+        if func_name not in RUN_EVENT_CONFIG:
+            raise ValueError(f"Unknown function '{func_name}'. Available: {list(RUN_EVENT_CONFIG.keys())}")
+        
+        # Convert string function name to FunctionName enum for FUNCTION_REGISTRY lookup
+        func_name_enum = None
+        for enum_val in FUNCTION_REGISTRY:
+            if enum_val.value == func_name:
+                func_name_enum = enum_val
+                break
+        
+        if not func_name_enum:
+            raise ValueError(f"Function '{func_name}' not found in FUNCTION_REGISTRY")
+        
+        # Get configuration from both registries
+        run_config = RUN_EVENT_CONFIG[func_name]
+        func_config = FUNCTION_REGISTRY[func_name_enum]
+        
+        handler = func_config["runner"]
+        input_parser = func_config["get_input"]
+        execution_mode = run_config["execution_mode"]
+        
+        logger.info(f"Starting run_event: {func_name} ({execution_mode})")
         
         # Initialize Coda client
         coda_client = CodaClient()
         
-        # Get all rows from the table
-        table_data_str = coda_client.get_table(doc_id, table_id)
-        table_data = json.loads(table_data_str)
-        rows = table_data.get("rows", [])
-        
-        logger.info(f"Found {len(rows)} rows in table for background processing")
-        
-        if not rows:
-            logger.warning("No rows found in table")
-            return
-        
-        # Process each row and track results
-        successful_speakers = []
-        skipped_speakers = []
-        failed_speakers = []
-        
-        for row in rows:
-            row_id = row.get("row_id")
-            row_data = row.get("data", {})
-            speaker_name = row_data.get("Speaker", "")
+        # For row_based functions: iterate through table rows
+        if execution_mode == "row_based":
+            # Get all rows from the table
+            table_data_str = coda_client.get_table(doc_id, table_id)
+            table_data = json.loads(table_data_str)
+            rows = table_data.get("rows", [])
             
-            if not speaker_name or not row_id:
-                logger.warning(f"Skipping row {row_id} - missing speaker name or row_id")
-                failed_speakers.append(f"{row_id or 'unknown'} (missing data)")
-                continue
+            # Filter to specific row_ids if provided
+            if row_ids:
+                rows = [row for row in rows if row.get("row_id") in row_ids]
+                logger.info(f"Filtering to {len(rows)} specified rows: {row_ids}")
+            
+            logger.info(f"Found {len(rows)} rows to process with {func_name}")
+            
+            if not rows:
+                logger.warning("No rows found to process")
+                return {"status": "completed", "message": "No rows to process"}
+            
+            # Process each row and track results
+            successful_rows = []
+            skipped_rows = []
+            failed_rows = []
+            
+            for row in rows:
+                row_id = row.get("row_id")
+                row_data = row.get("data", {})
+                speaker_name = row_data.get("Speaker", "")
                 
-            logger.info(f"Background processing speaker: {speaker_name}")
+                if not speaker_name or not row_id:
+                    logger.warning(f"Skipping row {row_id} - missing speaker name or row_id")
+                    failed_rows.append(f"{row_id or 'unknown'} (missing data)")
+                    continue
+                    
+                logger.info(f"Processing {func_name} for speaker: {speaker_name}")
+                
+                # Parse input data using function-specific parser
+                function_data = input_parser(row_data)
+                
+                # Create CodaIds for this row
+                coda_ids = CodaIds(
+                    doc_id=doc_id,
+                    table_id=table_id,
+                    row_id=row_id
+                )
+                
+                # Call handler for this row (synchronously)
+                try:
+                    result = asyncio.run(handler(function_data, coda_ids))
+                    
+                    # Categorize based on handler's return status
+                    if result and result.get("status") == "success":
+                        successful_rows.append(f"{speaker_name}: {result.get('message', 'Success')}")
+                    elif result and result.get("status") == "skipped":
+                        skipped_rows.append(f"{speaker_name}: {result.get('message', 'Skipped')}")
+                    else:  # "failed" or any other status
+                        failed_rows.append(f"{speaker_name}: {result.get('message', 'Failed') if result else 'No result'}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to run {func_name} for {speaker_name}: {e}")
+                    failed_rows.append(f"{speaker_name} (exception: {str(e)[:50]}...)")
             
-            # Create function_data for prepare_talk  
-            yt_full_link = row_data.get("YT full link", "")
-            function_data = {
-                "speaker": speaker_name,
-                "yt_full_link": yt_full_link
+            # Create final summary
+            summary_parts = []
+            if successful_rows:
+                summary_parts.append(f"succeeded: {len(successful_rows)}")
+            if skipped_rows:
+                summary_parts.append(f"skipped: {len(skipped_rows)}")
+            if failed_rows:
+                summary_parts.append(f"failed: {len(failed_rows)}")
+            
+            summary = f"{func_name} event completed - {', '.join(summary_parts)}"
+            logger.info(f"Background run_event finished: {summary}")
+            
+            return {
+                "status": "completed",
+                "message": summary,
+                "successful": len(successful_rows),
+                "skipped": len(skipped_rows),
+                "failed": len(failed_rows)
             }
+        
+        # For event_based functions: single function call with table metadata
+        elif execution_mode == "event_based":
+            # Future implementation for recap, blog, announcement functions
+            # These don't iterate through rows but work with overall event data
+            logger.info(f"Event-based execution for {func_name} not yet implemented")
+            return {"status": "not_implemented", "message": f"Event-based execution for {func_name} coming soon"}
+        
+        else:
+            raise ValueError(f"Unknown execution mode: {execution_mode}")
             
-            # Create CodaIds for this row
-            coda_ids = CodaIds(
-                doc_id=doc_id,
-                table_id=table_id,
-                row_id=row_id
-            )
-            
-            # Call prepare_talk for this speaker (now runs synchronously)
-            try:
-                import asyncio
-                result = asyncio.run(prepare_talk(function_data, coda_ids))
-                
-                # Categorize based on prepare_talk's return status
-                if result.get("status") == "success":
-                    successful_speakers.append(f"{speaker_name}: {result.get('message', 'Success')}")
-                elif result.get("status") == "skipped":
-                    skipped_speakers.append(f"{speaker_name}: {result.get('message', 'Skipped')}")
-                else:  # "failed" or any other status
-                    failed_speakers.append(f"{speaker_name}: {result.get('message', 'Failed')}")
-                
-            except Exception as e:
-                logger.error(f"Failed to prepare {speaker_name}: {e}")
-                failed_speakers.append(f"{speaker_name} (exception: {str(e)[:50]}...)")
-        
-        # Create final summary message
-        summary_parts = []
-        if successful_speakers:
-            summary_parts.append(f"succeeded: {len(successful_speakers)}")
-        if skipped_speakers:
-            summary_parts.append(f"skipped: {len(skipped_speakers)}")
-        if failed_speakers:
-            summary_parts.append(f"failed: {len(failed_speakers)}")
-        
-        summary = f"Prepare event completed - {', '.join(summary_parts)}"
-        logger.info(f"Background prepare_event finished: {summary}")
-        
     except Exception as e:
-        logger.error(f"Background prepare_event error: {e}", exc_info=True)
+        logger.error(f"Background run_event error: {e}", exc_info=True)
+        return {"status": "failed", "message": f"Error: {str(e)}"}
 
 
-@app.get("/prepare_event")
-async def prepare_event(table_id: str, doc_id: str, background_tasks: BackgroundTasks):
-    """Prepare event endpoint - launches background processing for all speakers"""
+@app.get("/run_event/{func_name}")
+async def run_event(
+    func_name: str, 
+    table_id: str, 
+    doc_id: str, 
+    background_tasks: BackgroundTasks,
+    row_ids: str = None
+):
+    """Generic run event endpoint - launches background processing with specified function
+    
+    Args:
+        func_name: Function to run (prepare_talk, promote_talk, etc.)
+        table_id: Coda table ID
+        doc_id: Coda document ID  
+        row_ids: Optional comma-separated list of specific row IDs to process
+    """
     try:
-        logger.info(f"Prepare event called - doc_id: {doc_id}, table_id: {table_id}")
+        # Validate function name
+        if func_name not in RUN_EVENT_CONFIG:
+            available_functions = list(RUN_EVENT_CONFIG.keys())
+            return {
+                "error": f"Unknown function '{func_name}'. Available functions: {available_functions}"
+            }
+        
+        run_config = RUN_EVENT_CONFIG[func_name]
+        description = run_config["description"]
+        execution_mode = run_config["execution_mode"]
+        
+        logger.info(f"Run event called - func_name: {func_name}, doc_id: {doc_id}, table_id: {table_id}")
+        
+        # Parse row_ids if provided
+        parsed_row_ids = None
+        if row_ids:
+            parsed_row_ids = [rid.strip() for rid in row_ids.split(",") if rid.strip()]
+            logger.info(f"Processing specific rows: {parsed_row_ids}")
         
         # Launch background processing using FastAPI BackgroundTasks
-        background_tasks.add_task(execute_prepare_event, table_id, doc_id)
+        background_tasks.add_task(
+            execute_run_event, 
+            func_name, 
+            table_id, 
+            doc_id, 
+            parsed_row_ids
+        )
         
-        # Return immediately with status (row count will be determined in background)
+        # Return immediately with status
+        message = f"{func_name} event started. {description}."
+        if parsed_row_ids:
+            message += f" Processing {len(parsed_row_ids)} specific rows."
+        else:
+            message += " Processing all rows in background."
+            
         return {
             "status": "in_progress", 
-            "message": f"Prepare event started. Processing all speakers in background.",
+            "message": message,
+            "function": func_name,
+            "execution_mode": execution_mode,
             "doc_id": doc_id,
-            "table_id": table_id
+            "table_id": table_id,
+            "row_ids": parsed_row_ids
         }
         
     except Exception as e:
-        logger.error(f"Prepare event error: {e}", exc_info=True)
-        return {"error": f"Failed to start prepare event: {e}"}
+        logger.error(f"Run event error: {e}", exc_info=True)
+        return {"error": f"Failed to start {func_name} event: {e}"}
+
+
 
 # Handler functions imported from far_comms.handlers
 
