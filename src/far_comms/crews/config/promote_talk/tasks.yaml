@@ -196,13 +196,14 @@ create_li_content_task:
     </LINKEDIN STYLE>
 
     REQUIREMENTS:
-    - Review all 5 LinkedIn hooks from analyze_transcript_task and select the best one for this content
+    - **CRITICAL: COMPELLING HOOK**: Select and refine the most impactful hook from analyze_transcript_task - rewrite for authentic engagement using accessible language, avoid clickbait or sensationalism
+    - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Use these key takeaways as foundation for bullets when available
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
     - Incorporate "Core Thesis" and "Key Points" from transcript analysis
     - Ensure hook/paragraph cohesion (no repetitive phrases)
     - Write 2-3 sentence paragraph starting with "{speaker} ({affiliation}) [verb]" format
     - **ATTRIBUTION**: Credit research to speaker/team, not institution (e.g., "Deng's framework" not "Xi'an's framework")
-    - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
+    - Create 3-4 bullets ≤8 words each using summary/conclusion insights when available, otherwise "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
   expected_output: >
@@ -231,12 +232,14 @@ create_x_content_task:
     </TWITTER STYLE>
 
     REQUIREMENTS:
-    - Review all 5 Twitter/X hooks from analyze_transcript_task and select the best one for this content
+    - **CRITICAL: COMPELLING HOOK**: Select and refine the most impactful hook from analyze_transcript_task - rewrite for authentic shareability, avoid clickbait or hype
+    - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Extract the most compelling insight for the tweet when available
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
-    - Include specific numbers, methods, results from "Technical Details" section
+    - Include specific numbers, methods, results from summary sections when available, otherwise "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
     - Use abbreviations: w/, &, numbers not words
-    - **CRITICAL**: Use character_counter tool to verify ≤280 chars - rewrite if over limit
+    - **CRITICAL**: Use character_counter tool to verify 260-280 chars optimal range - under 260 chars is too short, 280 is hard limit
+    - **REWRITE IF NEEDED**: If content is <260 chars, add more technical detail; if >280 chars, compress ruthlessly
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
@@ -245,7 +248,7 @@ create_x_content_task:
     
     [Body: Ultra-dense body with technical precision, and speaker full name if no handle] {speaker_x_handle}
     
-    **CHARACTER COUNT**: [Use character_counter tool to verify hook + body combined - MUST be ≤280]
+    **CHARACTER COUNT**: [Use character_counter tool to verify hook + body combined - MUST be 260-280 chars for optimal info density]
   context: ["analyze_transcript_task", "generate_summaries_task"]
   agent: x_content_writer_agent
 
