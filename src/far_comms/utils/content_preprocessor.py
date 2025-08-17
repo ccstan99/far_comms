@@ -4,6 +4,7 @@ import logging
 import glob
 import os
 import base64
+from pathlib import Path
 from langchain_community.document_loaders import AssemblyAIAudioTranscriptLoader, PyPDFLoader
 from langchain_community.document_loaders.assemblyai import TranscriptFormat
 
@@ -259,20 +260,130 @@ Format your response as JSON:
         return {"qr_codes": [], "visual_elements": [], "page_analyses": [], "saved_images": []}
 
 
-def find_pdf(speaker_name: str) -> str:
-    """Find PDF file that best matches speaker name"""
+def convert_pptx_to_pdf(pptx_path: str, output_dir: str = None) -> str:
+    """
+    Convert PowerPoint (PPTX/PPT) to PDF using python-pptx and reportlab.
+    
+    Args:
+        pptx_path: Path to the PowerPoint file
+        output_dir: Directory to save the PDF (defaults to same dir as PPTX)
+    
+    Returns:
+        str: Path to the generated PDF file
+        
+    Raises:
+        Exception: If conversion fails
+    """
+    try:
+        from pptx import Presentation
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.units import inch
+        from reportlab.lib.utils import ImageReader
+        from io import BytesIO
+        import tempfile
+        
+        logger.info(f"Converting PPTX to PDF: {pptx_path}")
+        
+        # Load PowerPoint presentation
+        prs = Presentation(pptx_path)
+        
+        # Determine output path
+        if output_dir is None:
+            output_dir = os.path.dirname(pptx_path)
+        
+        output_filename = Path(pptx_path).stem + "_converted.pdf"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        # Create PDF canvas
+        c = canvas.Canvas(output_path, pagesize=A4)
+        width, height = A4
+        
+        for slide_idx, slide in enumerate(prs.slides):
+            logger.info(f"Processing slide {slide_idx + 1}/{len(prs.slides)}")
+            
+            # Add slide title if present
+            y_position = height - 72  # Start 1 inch from top
+            
+            # Extract text from slide
+            slide_texts = []
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    slide_texts.append(shape.text.strip())
+            
+            # Add slide number
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(72, y_position, f"Slide {slide_idx + 1}")
+            y_position -= 36
+            
+            # Add text content
+            c.setFont("Helvetica", 12)
+            for text in slide_texts:
+                if y_position < 72:  # If near bottom of page, start new page
+                    c.showPage()
+                    y_position = height - 72
+                
+                # Split long text into lines
+                lines = text.split('\n')
+                for line in lines:
+                    if len(line) > 80:  # Wrap long lines
+                        words = line.split(' ')
+                        current_line = ""
+                        for word in words:
+                            if len(current_line + " " + word) > 80:
+                                if current_line:
+                                    c.drawString(72, y_position, current_line)
+                                    y_position -= 18
+                                current_line = word
+                            else:
+                                current_line += (" " + word if current_line else word)
+                        if current_line:
+                            c.drawString(72, y_position, current_line)
+                            y_position -= 18
+                    else:
+                        c.drawString(72, y_position, line)
+                        y_position -= 18
+                
+                y_position -= 12  # Extra space between shapes
+            
+            # Start new page for next slide (except for last slide)
+            if slide_idx < len(prs.slides) - 1:
+                c.showPage()
+        
+        # Save PDF
+        c.save()
+        logger.info(f"Successfully converted PPTX to PDF: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"Failed to convert PPTX to PDF: {e}")
+        raise Exception(f"PPTX conversion failed: {str(e)}")
+
+
+def find_presentation(speaker_name: str) -> tuple[str, str]:
+    """Find PDF or PPTX file that best matches speaker name
+    
+    Returns:
+        tuple: (file_path, file_type) where file_type is 'pdf' or 'pptx'
+    """
+    # Search for both PDF and PPTX files
     pdf_files = glob.glob("data/slides/*.pdf")
-    if not pdf_files:
-        return None
+    pptx_files = glob.glob("data/slides/*.pptx") + glob.glob("data/slides/*.ppt")
+    
+    all_files = [(f, 'pdf') for f in pdf_files] + [(f, 'pptx') for f in pptx_files]
+    
+    if not all_files:
+        return None, None
         
     # Split speaker name into individual words
     speaker_words = [word.lower() for word in speaker_name.replace("-", " ").replace("_", " ").split() if len(word) > 2]
     
     best_match = None
+    best_type = None
     best_score = 0
     
-    for pdf_path in pdf_files:
-        filename = os.path.basename(pdf_path).lower()
+    for file_path, file_type in all_files:
+        filename = os.path.basename(file_path).lower()
         score = 0
         
         # Score based on how many speaker name words appear in filename
@@ -280,11 +391,22 @@ def find_pdf(speaker_name: str) -> str:
             if word in filename:
                 score += len(word)
         
+        # Prefer PDF files by adding a small bonus (they process more reliably)
+        if file_type == 'pdf':
+            score += 0.5
+        
         if score > best_score:
             best_score = score
-            best_match = pdf_path
+            best_match = file_path
+            best_type = file_type
     
-    return best_match if best_score > 0 else None
+    return (best_match, best_type) if best_score > 0 else (None, None)
+
+
+def find_pdf(speaker_name: str) -> str:
+    """Legacy function - find PDF file that best matches speaker name"""
+    file_path, file_type = find_presentation(speaker_name)
+    return file_path if file_type == 'pdf' else None
 
 
 def extract_pdf(pdf_path: str, speaker_name: str = None) -> dict:

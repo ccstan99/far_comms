@@ -41,22 +41,46 @@ def process_slides(speaker_name: str, affiliation: str = "", coda_speaker: str =
         logger.info(f"Processing slides for speaker: {speaker_name}")
         
         # Import here to avoid circular imports
-        from far_comms.utils.content_preprocessor import find_pdf, extract_pdf
+        from far_comms.utils.content_preprocessor import find_presentation, convert_pptx_to_pdf, extract_pdf
         from anthropic import Anthropic
         import os
+        import tempfile
         
-        # Find and extract PDF content
-        pdf_path = find_pdf(speaker_name)
-        if not pdf_path:
-            logger.warning(f"No matching PDF found for speaker: {speaker_name}")
+        # Find presentation file (PDF or PPTX)
+        presentation_path, file_type = find_presentation(speaker_name)
+        if not presentation_path:
+            logger.warning(f"No matching presentation found for speaker: {speaker_name}")
             return {
                 "success": False,
-                "error": f"No PDF found for {speaker_name}",
+                "error": f"No PDF or PPTX found for {speaker_name}",
                 "cleaned_slides": "",
                 "speaker_validation": {}
             }
         
-        logger.info(f"Found matching PDF: {pdf_path}")
+        logger.info(f"Found matching presentation: {presentation_path} (type: {file_type})")
+        
+        # Convert PPTX to PDF if necessary
+        if file_type == 'pptx':
+            try:
+                logger.info(f"Converting PPTX to PDF for processing: {presentation_path}")
+                # Create output directory for converted files
+                from pathlib import Path
+                output_base = Path(__file__).parent.parent.parent.parent / "output" 
+                speaker_output_dir = output_base / table_id / speaker_name.replace(" ", "_")
+                speaker_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                pdf_path = convert_pptx_to_pdf(presentation_path, str(speaker_output_dir))
+                logger.info(f"Successfully converted PPTX to PDF: {pdf_path}")
+            except Exception as e:
+                logger.error(f"Failed to convert PPTX to PDF: {e}")
+                return {
+                    "success": False,
+                    "error": f"PPTX conversion failed for {speaker_name}: {str(e)}",
+                    "cleaned_slides": "",
+                    "speaker_validation": {}
+                }
+        else:
+            pdf_path = presentation_path
         
         # Extract markdown and images using pymupdf4llm as primary method
         import pymupdf4llm
@@ -269,7 +293,7 @@ Format as JSON:
         slides_prompt = slides_prompt.replace("{slides_md_baseline}", slides_md_baseline)
         slides_prompt = slides_prompt.replace("{qr_codes}", "None detected")
         slides_prompt = slides_prompt.replace("{visual_elements}", visual_context if visual_context else "None processed")
-        slides_prompt = slides_prompt.replace("{pdf_path}", pdf_path)
+        slides_prompt = slides_prompt.replace("{pdf_path}", f"{presentation_path} (converted from {file_type})" if file_type == 'pptx' else pdf_path)
         slides_prompt = slides_prompt.replace("{coda_speaker}", coda_speaker)
         slides_prompt = slides_prompt.replace("{coda_affiliation}", coda_affiliation)
         slides_prompt = slides_prompt.replace("{coda_title}", coda_title)
@@ -356,7 +380,7 @@ Format as JSON:
         except Exception as e:
             logger.warning(f"Failed to save slides file: {e}")
             
-        logger.info(f"Successfully processed slides for {speaker_name}")
+        logger.info(f"Successfully processed {file_type.upper()} slides for {speaker_name}")
         
         doc.close()  # Close document at the very end
         return result
