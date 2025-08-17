@@ -10,6 +10,7 @@ from far_comms.models.requests import TalkRequest, CodaIds
 from far_comms.utils.project_paths import get_docs_dir
 from far_comms.utils.json_repair import json_repair
 from far_comms.utils.social_assembler import assemble_socials
+from far_comms.handlers.prepare_talk import prepare_talk, get_input as get_prepare_talk_input
 
 logger = logging.getLogger(__name__)
 
@@ -45,30 +46,124 @@ def display_promote_talk_input(function_data: dict) -> dict:
 
 
 async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
-    """Run integrated promote_talk crew with preprocessing capabilities"""
+    """Run integrated promote_talk crew with automatic prepare_talk and assemble_socials"""
     try:
         speaker = function_data.get("speaker", "")
         title = function_data.get("title", "")
         logger.info(f"Starting integrated PromoteTalk crew for {speaker}: {title}")
         
-        # Check minimum requirements - only transcript is essential
-        if not function_data.get("transcript") or not function_data.get("transcript").strip():
-            error_msg = f"Cannot generate social media content without transcript. Please run 'prepare_talk' first."
-            logger.error(error_msg)
+        # Check if slides/transcript are actually missing from Coda (not just input data)
+        slides_missing_in_coda = False
+        transcript_missing_in_coda = False
+        
+        if coda_ids:
+            # Check actual Coda values to see what's missing
+            try:
+                coda_client = CodaClient()
+                row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
+                row_data = json.loads(row_data_str)
+                coda_values = row_data.get("data", {})
+                
+                coda_slides = coda_values.get("Slides", "")
+                coda_transcript = coda_values.get("Transcript", "")
+                
+                slides_missing_in_coda = not coda_slides or not coda_slides.strip()
+                transcript_missing_in_coda = not coda_transcript or not coda_transcript.strip()
+                
+                logger.info(f"Coda content check - Slides missing: {slides_missing_in_coda}, Transcript missing: {transcript_missing_in_coda}")
+                
+                # If content exists in Coda but missing from function_data, use Coda values
+                if not slides_missing_in_coda and (not function_data.get("slides_content") or not function_data.get("slides_content").strip()):
+                    function_data["slides_content"] = coda_slides
+                    logger.info(f"Using existing Coda slides content ({len(coda_slides)} chars)")
+                
+                if not transcript_missing_in_coda and (not function_data.get("transcript") or not function_data.get("transcript").strip()):
+                    function_data["transcript"] = coda_transcript
+                    function_data["transcript_content"] = coda_transcript
+                    logger.info(f"Using existing Coda transcript content ({len(coda_transcript)} chars)")
+                    
+            except Exception as e:
+                logger.warning(f"Could not check Coda values: {e}, will proceed based on input data")
+                # Fall back to checking input data if Coda check fails
+                slides_content = function_data.get("slides_content", "")
+                transcript_content = function_data.get("transcript", "") or function_data.get("transcript_content", "")
+                slides_missing_in_coda = not slides_content or not slides_content.strip()
+                transcript_missing_in_coda = not transcript_content or not transcript_content.strip()
+        else:
+            # No Coda IDs, check input data directly
+            slides_content = function_data.get("slides_content", "")
+            transcript_content = function_data.get("transcript", "") or function_data.get("transcript_content", "")
+            slides_missing_in_coda = not slides_content or not slides_content.strip()
+            transcript_missing_in_coda = not transcript_content or not transcript_content.strip()
+        
+        if slides_missing_in_coda or transcript_missing_in_coda:
+            missing_items = []
+            if slides_missing_in_coda:
+                missing_items.append("slides")
+            if transcript_missing_in_coda:
+                missing_items.append("transcript")
+                
+            logger.info(f"Missing content detected: {', '.join(missing_items)}. Running prepare_talk first...")
             
-            # Update Coda with error status
             if coda_ids:
-                try:
-                    coda_client = CodaClient()
+                # Update status to show we're running prepare_talk
+                coda_client = CodaClient()
+                status_updates = {
+                    "Webhook status": "In progress",
+                    "Webhook progress": f"Missing {', '.join(missing_items)}, running prepare_talk first..."
+                }
+                coda_client.update_row(**coda_ids.model_dump(), column_updates=status_updates)
+            
+            # Run prepare_talk to get missing content
+            prepare_talk_data = get_prepare_talk_input({
+                "Speaker": speaker,
+                "YT full link": function_data.get("yt_full_link", "")
+            })
+            
+            prepare_result = await prepare_talk(prepare_talk_data, coda_ids)
+            
+            if prepare_result.get("status") != "success":
+                error_msg = f"prepare_talk failed: {prepare_result.get('message', 'Unknown error')}"
+                logger.error(error_msg)
+                
+                if coda_ids:
                     error_updates = {
                         "Webhook status": "Error", 
                         "Webhook progress": error_msg
                     }
                     coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
-                except Exception as update_error:
-                    logger.error(f"Failed to update Coda with error status: {update_error}")
+                
+                return {"status": "failed", "message": error_msg}
             
-            return  # Exit early - cannot proceed without transcript
+            # Use processed content directly from prepare_talk return values
+            processed_content = prepare_result.get("processed_content", {})
+            
+            if slides_missing_in_coda and "slides" in processed_content:
+                function_data["slides_content"] = processed_content["slides"]
+                logger.info(f"Updated function_data with slides from prepare_talk ({len(processed_content['slides'])} chars)")
+            
+            if transcript_missing_in_coda and "transcript" in processed_content:
+                function_data["transcript"] = processed_content["transcript"]
+                function_data["transcript_content"] = processed_content["transcript"]  # alias
+                logger.info(f"Updated function_data with transcript from prepare_talk ({len(processed_content['transcript'])} chars)")
+                
+            logger.info(f"Data flow corrected - using prepare_talk return values instead of Coda refresh")
+        
+        # Final check - we must have transcript to proceed
+        transcript_content = function_data.get("transcript", "") or function_data.get("transcript_content", "")
+        if not transcript_content or not transcript_content.strip():
+            error_msg = f"Still no transcript available after prepare_talk. Cannot generate social content."
+            logger.error(error_msg)
+            
+            if coda_ids:
+                coda_client = CodaClient()
+                error_updates = {
+                    "Webhook status": "Error", 
+                    "Webhook progress": error_msg
+                }
+                coda_client.update_row(**coda_ids.model_dump(), column_updates=error_updates)
+            
+            return {"status": "failed", "message": error_msg}
         
         # Log data availability - QA orchestrator will handle conditional processing
         available_data = []
@@ -108,13 +203,19 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
         logger.info("Crew completed successfully!")
         
-        # Save crew output to file before attempting Coda updates
+        # Save crew output to consistent directory structure
         from far_comms.utils.project_paths import get_output_dir
-        output_dir = get_output_dir() / "promote_talk"
-        output_dir.mkdir(exist_ok=True)
+        output_dir = get_output_dir()
+        speaker_clean = speaker.replace(" ", "_").replace(".", "")
         
-        speaker_clean = speaker.replace(" ", "_").replace(".", "").lower()
-        output_file = output_dir / f"{speaker_clean}_crew_output.json"
+        # Use consistent directory: output/grid-LcVoQIcUB2/{speaker}/
+        if coda_ids:
+            speaker_dir = output_dir / coda_ids.table_id / speaker_clean
+        else:
+            speaker_dir = output_dir / "grid-LcVoQIcUB2" / speaker_clean  # fallback
+        speaker_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_file = speaker_dir / f"{speaker_clean}_crew_output.json"
         
         try:
             crew_output = result.raw if hasattr(result, 'raw') else str(result)
@@ -180,9 +281,6 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 coda_status = status_mapping.get(publication_decision, "Error")  # Default to Error for system failures
                 logger.info(f"Setting Coda status: {coda_status}")
                 
-                # Assemble platform-specific social media posts
-                assembled_posts = assemble_socials(parsed_output, function_data)
-                
                 # Prepare comprehensive Coda updates (excluding formula-bound columns)
                 coda_updates = {
                     "Webhook status": coda_status,
@@ -191,25 +289,38 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     "LI content": li_content,
                     "X + Bsky content": x_content, 
                     "Paragraph": paragraph_summary,  # Paragraph summary for Coda
-                    # Assembled social media posts
-                    "LI post": assembled_posts.get("LI post", ""),
-                    "X post": assembled_posts.get("X post", ""),
-                    "Bsky post": assembled_posts.get("Bsky post", ""),
                     # Always update preprocessing results
                     "Resources": resources_result,
                     "Analysis": analysis_result
                 }
                 
+                # Update Coda with crew results first
                 updates = [{
                     "row_id": coda_ids.row_id,
                     "updates": coda_updates
                 }]
                 
-                logger.info(f"Updating Coda columns: {list(updates[0]['updates'].keys())}")
-                
+                logger.info(f"Updating Coda with crew results: {list(updates[0]['updates'].keys())}")
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
-                logger.info(f"Coda update result: {result}")
-                logger.info(f"Updated Coda with crew results")
+                logger.info(f"Crew results update result: {result}")
+                
+                # Now run assemble_socials to create platform-specific posts
+                logger.info("Running assemble_socials to create platform-specific posts...")
+                assembled_posts = assemble_socials(parsed_output, function_data)
+                
+                # Update Coda with assembled social media posts
+                social_updates = {
+                    "LI post": assembled_posts.get("LI post", ""),
+                    "X post": assembled_posts.get("X post", ""),
+                    "Bsky post": assembled_posts.get("Bsky post", "")
+                }
+                
+                logger.info(f"Updating Coda with assembled social posts: {list(social_updates.keys())}")
+                result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, social_update_list)
+                logger.info(f"Social posts update result: {result}")
+                logger.info(f"Successfully completed promote_talk with automatic assemble_socials")
+                
+                return {"status": "success", "message": f"Completed promote_talk workflow for {speaker}"}
                 
             except Exception as update_error:
                 logger.error(f"Failed to update Coda with results: {update_error}")

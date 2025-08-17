@@ -197,7 +197,7 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                 slide_context = existing_slides  # Use existing slides for context
             else:
                 slide_context = slides_result.get("cleaned_slides", "")  # Use newly processed slides
-            transcript_result = process_transcript(speaker_name, yt_url, slide_context)
+            transcript_result = process_transcript(speaker_name, yt_url, slide_context, coda_ids.table_id)
             
             # Update Coda immediately after transcript processing
             if transcript_result.get("success"):
@@ -286,7 +286,31 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
         ])
         
         if successful_processes > 0:
-            return {"status": "success", "message": status_msg, "speaker": speaker_name}
+            # Return processed content for immediate use by promote_talk
+            result_data = {
+                "status": "success", 
+                "message": status_msg, 
+                "speaker": speaker_name,
+                "processed_content": {}
+            }
+            
+            # Add processed slides content if available
+            if slides_result.get("success"):
+                slides_content = slides_result.get("cleaned_slides", "")
+                if slides_content:
+                    result_data["processed_content"]["slides"] = slides_content
+                    logger.info(f"Returning slides content ({len(slides_content)} chars)")
+            
+            # Add processed transcript content if available
+            if transcript_result.get("success"):
+                transcript_content = transcript_result.get("transcript_formatted", "")
+                if transcript_content:
+                    # Post-process: convert double newlines to single newlines
+                    transcript_content = transcript_content.replace("\n\n", "\n")
+                    result_data["processed_content"]["transcript"] = transcript_content
+                    logger.info(f"Returning transcript content ({len(transcript_content)} chars)")
+            
+            return result_data
         else:
             return {"status": "failed", "message": "No processing succeeded", "speaker": speaker_name}
             

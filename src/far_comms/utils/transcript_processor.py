@@ -10,7 +10,7 @@ from far_comms.utils.project_paths import get_output_dir
 logger = logging.getLogger(__name__)
 
 
-def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str = "") -> Dict[str, Any]:
+def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str = "", table_id: str = "grid-LcVoQIcUB2") -> Dict[str, Any]:
     """
     Process transcript independently - extract, clean with LLM, preserve verbatim content.
     Maintains current functionality without CrewAI.
@@ -138,10 +138,14 @@ def process_transcript(speaker_name: str, yt_url: str = "", slide_context: str =
             "transcript_srt": transcript_raw
         }
         
-        # Write cleaned transcript to file for easy inspection
+        # Write cleaned transcript to file using consistent directory structure
         try:
             output_dir = get_output_dir()
-            transcript_file = output_dir / f"{speaker_name.replace(' ', '_')}_transcript_cleaned.txt"
+            speaker_clean = speaker_name.replace(' ', '_').replace('.', '')
+            speaker_dir = output_dir / table_id / speaker_clean
+            speaker_dir.mkdir(parents=True, exist_ok=True)
+            
+            transcript_file = speaker_dir / f"{speaker_clean}_transcript_cleaned.txt"
             transcript_file.write_text(transcript_formatted, encoding='utf-8')
             logger.info(f"Cleaned transcript saved to: {transcript_file}")
         except Exception as e:
