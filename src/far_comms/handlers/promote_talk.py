@@ -159,7 +159,6 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 # Extract preprocessing results
                 resources_result = parsed_output.get("Resources", "")
                 analysis_result = parsed_output.get("Analysis", "")
-                hooks_result = parsed_output.get("Hooks", "")
                 
                 # Extract final decision from webhook progress text
                 publication_decision = "NEEDS_REVISION"  # Default
@@ -190,8 +189,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     "Paragraph": paragraph_summary,  # Paragraph summary for Coda
                     # Always update preprocessing results
                     "Resources": resources_result,
-                    "Analysis": analysis_result,
-                    "Hooks": hooks_result
+                    "Analysis": analysis_result
                 }
                 
                 updates = [{

@@ -433,8 +433,7 @@ final_qa_task:
   expected_output: >
     {
       "Resources": "[Final resources list - only if generated, not if using existing Coda data]",
-      "Analysis": "[Final analysis content - only if generated, not if using existing Coda data]", 
-      "Hooks": "[Final hooks list - only if generated, not if using existing Coda data]",
+      "Analysis": "[Complete analysis including hooks at bottom - preserve full detail from analyze_transcript_task]",
       "Paragraph": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
