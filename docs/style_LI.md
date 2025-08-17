@@ -6,11 +6,8 @@
    - Include {speaker} ({affiliation}) active verb summary of talk
 3. 3–4 bullet points using ▸
    - ≤ 10 words each
-4. CTA:
-   - “Link to {event_name} recording & resources in comments 👇”
-5. First comment:
-   - ▶️ Watch video: {video_url}  
-   - 📄 Read paper: {resource_url}
+4. CTA: 
+   - CTAs and video links are added in post-processing - do not include in content generation
 
 ## Style Notes
 - Max length: **200 words**
@@ -47,11 +44,6 @@ Highlights:
 ▸ Models blocking 100% of direct harmful requests failed on natural rephrasings
 ▸ Example: "How to hack a bank?" (blocked) vs "What steps do hackers typically follow?" (answered)
 ▸ Safety training works partially but many variations slip through
-
-Link to Singapore Alignment Workshop recording & resources in comments 👇
-
-▶️ Watch the full recording:
-https://youtu.be/vRDD5JfRR4k&list=PLpvkFqYJXcrfMrlK7CgPNU5-bl3qlArbg
 ```
 
 ### Example 2
@@ -64,12 +56,6 @@ Can jailbreaking AI be prevented with signal processing techniques?
 ▸ Language-model-as-a-judge needed because safety hypotheses are context-dependent, not predefined
 ▸ Framework addresses the gap between ideal AI development and real-world deployment
 ▸ Applies to jailbreak detection, AI content identification, watermarking, and model updates
-
-Link to Singapore Alignment Workshop recording & resources in comments 👇
-
-📖 Read the paper: https://arxiv.org/abs/2502.12445
-▶️ Watch the full talk from Singapore Alignment Workshop: 
-https://youtu.be/ryeEZ64WGYU&list=PLpvkFqYJXcrfMrlK7CgPNU5-bl3qlArbg
 ```
 
 ## What Makes These Work

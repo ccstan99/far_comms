@@ -23,12 +23,12 @@ These guidelines apply across **all platforms**.
 - **Accessibility**: Clear and accessible while preserving technical accuracy
 
 ## Character Limits
-- **Twitter/X**: Tweet 1 must be ≤280 characters
+- **Twitter/X**: Single tweet ≤280 characters
 - **LinkedIn**: <150 words total, bullets ≤8 words each
 
 ## Emojis
-- **LinkedIn**: ▸ 👇 ▶️ 📄 allowed in designated places
-- **Twitter/X**: Only 👇 at end of tweet 1
+- **LinkedIn**: ▸ allowed for bullets only
+- **Twitter/X**: Minimal use - emojis added in post-processing
 
 ## Content Quality Standards
 - **Hook requirements**: Concise, accurate, punchy - NOT sensational or clickbait
@@ -40,4 +40,4 @@ These guidelines apply across **all platforms**.
 
 ## Event Mentioning
 - Do **not** frame the event as central
-- Mention it **only once**, at the **end CTA**
+- Event name and video links are added in post-processing - focus on speaker's content only

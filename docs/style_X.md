@@ -1,22 +1,17 @@
 # FAR.AI Comms Style Guide — Twitter / Bluesky Threads
 
 ## Structure
-- **Tweet 1**:  
-  - Strong hook  
-  - Compressed summary of findings to fill 280-char tweet
-  - End with 👇
-
-- **Tweet 2**:  
-  - ▶️ Watch {event_name} recording: {yt_full_link}  
-  - 📄 Read paper: {resource_url}
+- Single ultra-dense tweet (≤280 characters)
+- Strong hook followed by compressed findings
+- Video links and paper references added in post-processing
 
 ## Formatting Instructions
-- Output both tweets separated by a line containing only `---`
-- Do **not** include labels like “Tweet 1:” or “Tweet 2:”
-- Do **not** wrap tweets in quotation marks
+- Output single tweet only
+- Do **not** include CTAs, video links, or paper references - these are added in post-processing
+- Do **not** wrap tweet in quotation marks
 
 ## Style Notes
-- Max: **280 characters per tweet**
+- Max: **280 characters total**
 - No hashtags or em dashes
 - Audience: ML researchers and technical readers
 - Use:
@@ -42,26 +37,19 @@
 
 ## High-Performing Examples
 
-### Example 1: [Add title here]
+### Example 1: Technical Research Finding
 ```
 "High-compute alignment is necessary for safe superintelligence."
-@polynoamial
-: integrate alignment into high-compute RL, not after
+@polynoamial: integrate alignment into high-compute RL, not after
 ▸ 3 approaches: adversarial training, scalable oversight, model organisms
 ▸ Process: train robust models → align during RL → monitor deployment
-👇
----
-▶️ Watch Noam discuss Stephen McAleer's research (with his own critical perspectives) from the Singapore Alignment Workshop:
-https://youtu.be/J6Q-ILqlFHc&list=PLpvkFqYJXcrfMrlK7CgPNU5-bl3qlArbg
 ```
 
-### Example 2: 
+### Example 2: Research Innovation
 ```
 You cannot really train all these models to cater to different preferences. Can you have one model that caters to all?
 
 @furongh unveils a technique to customize AI models on-the-fly to user goals, reducing the computational cost of tailoring AI systems to individual needs.
----
-▶️ Watch Singapore Alignment Workshop recording: https://www.youtube.com/watch?v=5kqsnAyyu8Q&list=PLpvkFqYJXcrfMrlK7CgPNU5-bl3qlArbg
 ```
 
 ## What Makes These Work

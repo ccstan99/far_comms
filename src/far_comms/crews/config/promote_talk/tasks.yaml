@@ -275,6 +275,7 @@ create_li_content_task:
     - **ATTRIBUTION**: Credit research to speaker/team, not institution (e.g., "Deng's framework" not "Xi'an's framework")
     - Create 3-4 bullets ≤8 words each using "Technical Details" from analysis
     - Focus on implications and broader significance for business audience
+    - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
 
     REFINE MODE REQUIREMENTS:
     - Assess existing content quality against style guides and requirements above
@@ -328,6 +329,7 @@ create_x_content_task:
     - **CRITICAL**: Use character_counter tool to verify ≤280 chars - rewrite if over limit
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
+    - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
 
     REFINE MODE REQUIREMENTS:
     - Assess existing content quality against style guides and requirements above
@@ -518,8 +520,7 @@ final_qa_task:
        - Continue until perfect quality achieved
     
     3. FINAL ASSEMBLY & APPROVAL:
-       - Assemble complete LinkedIn and Twitter/X posts with CTA templates
-       - Include resources, video links, and proper attribution
+       - Assemble complete LinkedIn and Twitter/X posts (content only - CTAs added in post-processing)
        - Perform final compliance audit against 14-point rubric
        - Make go/no-go publication decision
     
