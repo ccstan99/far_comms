@@ -4,10 +4,13 @@ import requests
 import json
 import os
 import time
+import logging
 from datetime import datetime
 from typing import Dict, List, Any
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 from far_comms.utils.project_paths import get_output_dir
 
 
@@ -297,6 +300,80 @@ class CodaClient:
         # Step 3: Safe fallback
         return speaker_name
 
+    def get_linkedin_profile(self, speaker_name: str, contacts_doc_id: str = "-igBsvSR-f", contacts_table_id: str = "grid-rDp4tK3BXf") -> str:
+        """
+        Find speaker's LinkedIn profile using the same approach as X handle lookup
+        Returns empty string if not found
+        """
+        if not speaker_name or not speaker_name.strip():
+            return ""
+        
+        speaker_name = speaker_name.strip()
+        
+        # Try cached fuzzy matching 
+        try:
+            contacts_cache = self._get_contacts_cache(contacts_doc_id, contacts_table_id)
+            return self._fuzzy_match_speaker_field(speaker_name, contacts_cache, "linkedin_profile")
+        except Exception as e:
+            print(f"LinkedIn lookup failed: {e}")
+        
+        return ""
+
+    def get_bsky_handle(self, speaker_name: str, contacts_doc_id: str = "-igBsvSR-f", contacts_table_id: str = "grid-rDp4tK3BXf") -> str:
+        """
+        Find speaker's Bluesky handle using the same approach as X handle lookup
+        Returns empty string if not found
+        """
+        if not speaker_name or not speaker_name.strip():
+            return ""
+        
+        speaker_name = speaker_name.strip()
+        
+        # Try cached fuzzy matching
+        try:
+            contacts_cache = self._get_contacts_cache(contacts_doc_id, contacts_table_id)
+            return self._fuzzy_match_speaker_field(speaker_name, contacts_cache, "bsky_handle")
+        except Exception as e:
+            print(f"Bluesky lookup failed: {e}")
+        
+        return ""
+
+    def _fuzzy_match_speaker_field(self, speaker_name: str, contacts_cache: list, field_name: str) -> str:
+        """
+        Enhanced version of _fuzzy_match_speaker that can return any field
+        """
+        # Step 1: Try exact match
+        for contact in contacts_cache:
+            if contact.get("name", "").strip().lower() == speaker_name.lower():
+                field_value = contact.get(field_name, "")
+                if field_value and field_value.strip():
+                    return field_value.strip()
+        
+        # Step 2: Try partial match (existing logic but for any field)
+        for contact in contacts_cache:
+            contact_name = contact.get("name", "").strip().lower()
+            if contact_name and speaker_name.lower() in contact_name:
+                field_value = contact.get(field_name, "")
+                if field_value and field_value.strip():
+                    return field_value.strip()
+        
+        # Step 3: Try fuzzy matching (same as x_handle logic)
+        from difflib import SequenceMatcher
+        best_match = None
+        best_ratio = 0.8  # Minimum threshold
+        
+        for contact in contacts_cache:
+            contact_name = contact.get("name", "").strip()
+            if contact_name:
+                ratio = SequenceMatcher(None, speaker_name.lower(), contact_name.lower()).ratio()
+                if ratio > best_ratio:
+                    field_value = contact.get(field_name, "")
+                    if field_value and field_value.strip():
+                        best_match = field_value.strip()
+                        best_ratio = ratio
+        
+        return best_match or ""
+
     def _get_contacts_cache(self, doc_id: str, table_id: str) -> list:
         """Get contacts cache, refresh if older than 24 hours"""
         cache_file = self.output_dir / f"contacts_cache_{doc_id}_{table_id}.json"
@@ -319,6 +396,34 @@ class CodaClient:
 
     def _refresh_contacts_cache(self, doc_id: str, table_id: str, cache_file) -> list:
         """Fetch all contacts and cache them"""
+        # Get column mapping using the same caching system as other tables
+        try:
+            columns_data = json.loads(self.get_columns(doc_id, table_id))
+            columns = columns_data.get("columns", {})
+            
+            # Find column IDs for known fields
+            name_col_id = "c-zL3WLW9EK1"  # Known Name column ID
+            x_handle_col_id = "c-eZzZN-hJYk"  # Known X handle column ID
+            linkedin_col_id = None
+            bsky_col_id = None
+            
+            # Search for LinkedIn and Bluesky columns by name
+            for col_id, col_name in columns.items():
+                col_name_lower = col_name.lower().strip()
+                if col_name_lower == "linkedin":
+                    linkedin_col_id = col_id
+                elif col_name_lower in ["bluesky", "bsky", "bluesky handle", "bsky handle"]:
+                    bsky_col_id = col_id
+                    
+            logger.info(f"Contacts table columns: LinkedIn={linkedin_col_id}, Bluesky={bsky_col_id}")
+            
+        except Exception as e:
+            logger.warning(f"Could not fetch columns for contacts lookup: {e}")
+            name_col_id = "c-zL3WLW9EK1"
+            x_handle_col_id = "c-eZzZN-hJYk" 
+            linkedin_col_id = None
+            bsky_col_id = None
+        
         uri = f'https://coda.io/apis/v1/docs/{doc_id}/tables/{table_id}/rows'
         params = {"limit": 500}  # Adjust as needed
         
@@ -331,8 +436,10 @@ class CodaClient:
         for item in data.get("items", []):
             values = item.get("values", {})
             contact = {
-                "name": values.get("c-zL3WLW9EK1", ""),  # Name column
-                "x_handle": values.get("c-eZzZN-hJYk", "")  # X handle column
+                "name": values.get(name_col_id, ""),
+                "x_handle": values.get(x_handle_col_id, ""),
+                "linkedin_profile": values.get(linkedin_col_id, "") if linkedin_col_id else "",
+                "bsky_handle": values.get(bsky_col_id, "") if bsky_col_id else ""
             }
             contacts.append(contact)
         

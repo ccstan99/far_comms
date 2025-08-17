@@ -2,6 +2,7 @@
 
 import logging
 from typing import Dict, Optional
+from far_comms.utils.coda_client import CodaClient
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ def assemble_socials(crew_output: dict, coda_data: dict) -> dict:
     
     Args:
         crew_output: Parsed output from promote_talk crew (contains li_content, x_content, resources)
-        coda_data: Input data from Coda (contains event_name, yt_full_link, etc.)
+        coda_data: Input data from Coda (contains event_name, yt_full_link, speaker, etc.)
     
     Returns:
         dict: {"LI post": str, "X post": str, "Bsky post": str}
@@ -26,17 +27,21 @@ def assemble_socials(crew_output: dict, coda_data: dict) -> dict:
         # Extract metadata from Coda data
         event_name = coda_data.get("event_name", coda_data.get("event", "")).strip()
         yt_full_link = coda_data.get("yt_full_link", "").strip()
+        speaker_name = coda_data.get("speaker", "").strip()
         
-        logger.info(f"Assembling socials - Event: {event_name}, Resources: {bool(resources)}, Video: {bool(yt_full_link)}")
+        logger.info(f"Assembling socials - Speaker: {speaker_name}, Event: {event_name}, Resources: {bool(resources)}, Video: {bool(yt_full_link)}")
+        
+        # Lookup speaker handles using CodaClient
+        speaker_handles = _lookup_speaker_handles(speaker_name) if speaker_name else {}
         
         # Assemble LinkedIn post
-        li_post = _assemble_linkedin_post(li_content, event_name, yt_full_link, resources)
+        li_post = _assemble_linkedin_post(li_content, event_name, yt_full_link, resources, speaker_name, speaker_handles)
         
         # Assemble X/Twitter post  
-        x_post = _assemble_x_post(x_content, event_name, yt_full_link, resources)
+        x_post = _assemble_x_post(x_content, event_name, yt_full_link, resources, speaker_name, speaker_handles)
         
         # Assemble Bluesky post (same format as X)
-        bsky_post = _assemble_bsky_post(x_content, event_name, yt_full_link, resources)
+        bsky_post = _assemble_bsky_post(x_content, event_name, yt_full_link, resources, speaker_name, speaker_handles)
         
         result = {
             "LI post": li_post,
@@ -57,12 +62,69 @@ def assemble_socials(crew_output: dict, coda_data: dict) -> dict:
         }
 
 
-def _assemble_linkedin_post(li_content: str, event_name: str, yt_full_link: str, resources: str) -> str:
+def _lookup_speaker_handles(speaker_name: str) -> dict:
+    """
+    Look up speaker's social media handles using CodaClient
+    
+    Returns:
+        dict: {"x_handle": str, "linkedin_profile": str, "bsky_handle": str}
+    """
+    try:
+        coda_client = CodaClient()
+        
+        handles = {
+            "x_handle": coda_client.get_x_handle(speaker_name),
+            "linkedin_profile": coda_client.get_linkedin_profile(speaker_name),
+            "bsky_handle": coda_client.get_bsky_handle(speaker_name)
+        }
+        
+        logger.debug(f"Found handles for {speaker_name}: {handles}")
+        return handles
+        
+    except Exception as e:
+        logger.warning(f"Failed to lookup handles for {speaker_name}: {e}")
+        return {"x_handle": "", "linkedin_profile": "", "bsky_handle": ""}
+
+
+def _format_speaker_name(speaker_name: str, handle: str, platform: str) -> str:
+    """
+    Format speaker name with handle according to platform requirements:
+    - LinkedIn: @{speaker_name}[{linkedin_profile}]
+    - X: @{x_handle}  
+    - Bluesky: @{bsky_handle}
+    """
+    if not handle or not handle.strip():
+        return speaker_name  # Fallback to plain name
+    
+    handle = handle.strip()
+    
+    if platform == "linkedin":
+        # LinkedIn format: @{speaker_name}[{linkedin_profile}]
+        return f"@{speaker_name}[{handle}]"
+    elif platform in ["x", "bsky"]:
+        # X and Bluesky format: @{handle}
+        # Ensure handle starts with @
+        if not handle.startswith("@"):
+            handle = f"@{handle}"
+        return handle
+    else:
+        return speaker_name  # Unknown platform, fallback
+
+
+def _assemble_linkedin_post(li_content: str, event_name: str, yt_full_link: str, resources: str, speaker_name: str = "", speaker_handles: dict = None) -> str:
     """Assemble LinkedIn post following template"""
     if not li_content:
         return ""
     
-    parts = [li_content]
+    # Format speaker name with LinkedIn profile if available
+    formatted_content = li_content
+    if speaker_name and speaker_handles:
+        linkedin_profile = speaker_handles.get("linkedin_profile", "")
+        formatted_speaker = _format_speaker_name(speaker_name, linkedin_profile, "linkedin")
+        # Replace speaker name mentions with formatted version
+        formatted_content = formatted_content.replace(speaker_name, formatted_speaker)
+    
+    parts = [formatted_content]
     
     # Add CTA and resources section
     if event_name or yt_full_link or resources:
@@ -80,12 +142,20 @@ def _assemble_linkedin_post(li_content: str, event_name: str, yt_full_link: str,
     return "\n".join(parts)
 
 
-def _assemble_x_post(x_content: str, event_name: str, yt_full_link: str, resources: str) -> str:
+def _assemble_x_post(x_content: str, event_name: str, yt_full_link: str, resources: str, speaker_name: str = "", speaker_handles: dict = None) -> str:
     """Assemble X/Twitter post following template"""
     if not x_content:
         return ""
     
-    parts = [f"{x_content} 👇"]
+    # Format speaker name with X handle if available
+    formatted_content = x_content
+    if speaker_name and speaker_handles:
+        x_handle = speaker_handles.get("x_handle", "")
+        formatted_speaker = _format_speaker_name(speaker_name, x_handle, "x")
+        # Replace speaker name mentions with formatted version
+        formatted_content = formatted_content.replace(speaker_name, formatted_speaker)
+    
+    parts = [f"{formatted_content} 👇"]
     
     # Add video and resources
     if yt_full_link:
@@ -99,10 +169,31 @@ def _assemble_x_post(x_content: str, event_name: str, yt_full_link: str, resourc
     return "\n".join(parts)
 
 
-def _assemble_bsky_post(x_content: str, event_name: str, yt_full_link: str, resources: str) -> str:
+def _assemble_bsky_post(x_content: str, event_name: str, yt_full_link: str, resources: str, speaker_name: str = "", speaker_handles: dict = None) -> str:
     """Assemble Bluesky post (same format as X/Twitter)"""
-    # Bluesky uses same format as X/Twitter
-    return _assemble_x_post(x_content, event_name, yt_full_link, resources)
+    if not x_content:
+        return ""
+    
+    # Format speaker name with Bluesky handle if available (currently not available, so will fall back to speaker name)
+    formatted_content = x_content
+    if speaker_name and speaker_handles:
+        bsky_handle = speaker_handles.get("bsky_handle", "")
+        formatted_speaker = _format_speaker_name(speaker_name, bsky_handle, "bsky")
+        # Replace speaker name mentions with formatted version
+        formatted_content = formatted_content.replace(speaker_name, formatted_speaker)
+    
+    parts = [f"{formatted_content} 👇"]
+    
+    # Add video and resources
+    if yt_full_link:
+        parts.append("")  # Empty line
+        parts.append(f"▶️ Watch {event_name} recording: {yt_full_link}")
+    
+    if resources:
+        parts.append("")  # Empty line  
+        parts.append(f"📄 {resources}")
+    
+    return "\n".join(parts)
 
 
 def format_resources_for_social(resources: str) -> str:
