@@ -169,7 +169,8 @@ async def prepare_talk(function_data: dict, coda_ids: CodaIds) -> dict:
                     elif validation_result == "major_mismatch":
                         logger.info(f"Speaker info not found in slides (not a mismatch): slide='{slide_speaker}' vs coda='{speaker_name}'")
                     elif validation_result in ["exact_match", "minor_differences"]:
-                        prefix = "" if validation_result == "exact_match" else "* "
+                        # Always prefix with "* " when updating to show something has changed
+                        prefix = "* "
                         # Only update if slide data is valid and different (never replace good data with placeholders)
                         if slide_speaker and slide_speaker != speaker_name and not is_placeholder_text(slide_speaker):
                             slides_updates["Speaker"] = f"{prefix}{slide_speaker}"
