@@ -239,10 +239,6 @@ generate_hooks_task:
     3. [Precise methodology/results hook] - REASON: [Why this technical detail matters]
     4. [Technical breakthrough with metrics] - REASON: [Why practitioners need this]
     5. [Research impact with concrete implications] - REASON: [Why academics will share]
-    
-    ## SELECTED HOOKS
-    **LinkedIn**: [Hook #X - state which number and why it's best]
-    **Twitter/X**: [Hook #X - state which number and why it's best]
   context: ["data_orchestration_task", "analyze_transcript_task", "generate_summaries_task"]
   agent: hook_specialist_agent
 
@@ -271,7 +267,7 @@ create_li_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Use the SELECTED LinkedIn hook from generate_hooks_task (not the numbered list)
+    - Review all 5 LinkedIn hooks from generate_hooks_task and select the best one for this content
     - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
     - Incorporate "Core Thesis" and "Key Points" from transcript analysis
     - Ensure hook/paragraph cohesion (no repetitive phrases)
@@ -324,7 +320,7 @@ create_x_content_task:
     - If <CODA CONTENT> has content → REFINE MODE: Assess and improve existing content
 
     CREATE MODE REQUIREMENTS:
-    - Use the SELECTED Twitter/X hook from generate_hooks_task (not the numbered list)
+    - Review all 5 Twitter/X hooks from generate_hooks_task and select the best one for this content
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
     - Include specific numbers, methods, results from "Technical Details" section
     - Write ULTRA-DENSE tweet, every character adds value
