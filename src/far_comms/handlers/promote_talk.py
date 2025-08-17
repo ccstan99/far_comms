@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from far_comms.crews.promote_talk_crew import PromoteTalkCrew
@@ -13,6 +14,64 @@ from far_comms.utils.social_assembler import assemble_socials
 from far_comms.handlers.prepare_talk import prepare_talk, get_input as get_prepare_talk_input
 
 logger = logging.getLogger(__name__)
+
+
+def _wait_for_coda_update(coda_client: CodaClient, coda_ids: CodaIds, expected_fields: list, max_retries: int = 2) -> dict:
+    """
+    Wait for Coda to propagate updates with sleep-retry pattern.
+    
+    Args:
+        coda_client: CodaClient instance
+        coda_ids: Coda document/table/row identifiers
+        expected_fields: List of field names that should have content
+        max_retries: Number of retry attempts (default: 2 for 10s + 20s)
+    
+    Returns:
+        dict: Fresh row data from Coda
+    """
+    retry_delays = [10, 20]  # 10 seconds, then 20 seconds
+    
+    for attempt in range(max_retries + 1):
+        try:
+            # Fetch fresh data from Coda
+            row_data_str = coda_client.get_row(coda_ids.doc_id, coda_ids.table_id, coda_ids.row_id)
+            row_data = json.loads(row_data_str)
+            coda_values = row_data.get("data", {})
+            
+            # Check if expected fields have content
+            fields_ready = []
+            fields_missing = []
+            
+            for field in expected_fields:
+                field_value = coda_values.get(field, "")
+                if field_value and field_value.strip():
+                    fields_ready.append(field)
+                else:
+                    fields_missing.append(field)
+            
+            if not fields_missing:
+                logger.info(f"Coda content ready after {attempt} retries: {fields_ready}")
+                return coda_values
+            
+            if attempt < max_retries:
+                delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                logger.info(f"Coda content not ready (missing: {fields_missing}), waiting {delay}s (attempt {attempt + 1}/{max_retries + 1})")
+                time.sleep(delay)
+            else:
+                logger.warning(f"Coda content still not ready after {max_retries} retries (missing: {fields_missing}), continuing anyway")
+                return coda_values
+                
+        except Exception as e:
+            logger.error(f"Error checking Coda content (attempt {attempt + 1}): {e}")
+            if attempt < max_retries:
+                delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                logger.info(f"Retrying Coda check in {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.error("Failed to verify Coda updates, continuing without verification")
+                return {}
+    
+    return {}
 
 
 def get_promote_talk_input(raw_data: dict) -> dict:
@@ -304,9 +363,27 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, updates)
                 logger.info(f"Crew results update result: {result}")
                 
-                # Now run assemble_socials to create platform-specific posts
-                logger.info("Running assemble_socials to create platform-specific posts...")
-                assembled_posts = assemble_socials(parsed_output, function_data)
+                # Wait for Coda to propagate updates, then fetch fresh data for assemble_socials
+                logger.info("Waiting for Coda updates to propagate before running assemble_socials...")
+                expected_fields = ["LI content", "X + Bsky content", "Resources"]
+                fresh_coda_data = _wait_for_coda_update(coda_client, coda_ids, expected_fields)
+                
+                # Prepare data for assemble_socials using fresh Coda data (consistent with standalone)
+                crew_output = {
+                    "LI content": fresh_coda_data.get("LI content", ""),
+                    "X + Bsky content": fresh_coda_data.get("X + Bsky content", ""), 
+                    "Resources": fresh_coda_data.get("Resources", "")
+                }
+                
+                coda_data = {
+                    "event_name": fresh_coda_data.get("Event", "") or function_data.get("event_name", ""),
+                    "yt_full_link": fresh_coda_data.get("YT full link", "") or function_data.get("yt_full_link", ""),
+                    "speaker": fresh_coda_data.get("Speaker", "") or function_data.get("speaker", "")
+                }
+                
+                # Now run assemble_socials using Coda as single source of truth
+                logger.info("Running assemble_socials with fresh Coda data (consistent with standalone)")
+                assembled_posts = assemble_socials(crew_output, coda_data)
                 
                 # Update Coda with assembled social media posts
                 social_updates = {
@@ -315,10 +392,15 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                     "Bsky post": assembled_posts.get("Bsky post", "")
                 }
                 
+                social_update_list = [{
+                    "row_id": coda_ids.row_id,
+                    "updates": social_updates
+                }]
+                
                 logger.info(f"Updating Coda with assembled social posts: {list(social_updates.keys())}")
                 result = coda_client.update_rows(coda_ids.doc_id, coda_ids.table_id, social_update_list)
                 logger.info(f"Social posts update result: {result}")
-                logger.info(f"Successfully completed promote_talk with automatic assemble_socials")
+                logger.info(f"Successfully completed promote_talk with automatic assemble_socials using Coda as single source of truth")
                 
                 return {"status": "success", "message": f"Completed promote_talk workflow for {speaker}"}
                 
