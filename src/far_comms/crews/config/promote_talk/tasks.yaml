@@ -236,10 +236,10 @@ create_x_content_task:
     - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Extract the most compelling insight for the tweet when available
     - Use "Technical Details" and "Core Thesis" from analysis for technical precision
     - Include specific numbers, methods, results from summary sections when available, otherwise "Technical Details" section
+    - **TARGET LENGTH**: Aim for 260-280 characters in your initial draft - count characters as you write
     - Write ULTRA-DENSE tweet, every character adds value
     - Use abbreviations: w/, &, numbers not words
-    - **CRITICAL**: Use character_counter tool to verify 260-280 chars optimal range - under 260 chars is too short, 280 is hard limit
-    - **REWRITE IF NEEDED**: If content is <260 chars, add more technical detail; if >280 chars, compress ruthlessly
+    - **VERIFY ONLY**: Use character_counter tool once to verify final content is 260-280 chars - make minimal adjustments if needed
     - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
     - Target ML researchers who appreciate precision and authenticity
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
