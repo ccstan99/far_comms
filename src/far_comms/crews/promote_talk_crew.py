@@ -135,7 +135,7 @@ class PromoteTalkCrew():
   def transcript_analyzer_agent(self) -> Agent:
     return Agent(
         config=self.agents_config['transcript_analyzer_agent'],
-        llm=self.sonnet_llm,
+        llm=self.opus_llm,  # Upgraded to Opus for combined analysis + creative hook generation
         verbose=True,
         allow_delegation=False
     )
@@ -149,14 +149,6 @@ class PromoteTalkCrew():
         allow_delegation=False
     )
 
-  @agent
-  def hook_specialist_agent(self) -> Agent:
-    return Agent(
-        config=self.agents_config['hook_specialist_agent'],
-        llm=self.opus_llm,  # Creative hook generation - Opus
-        verbose=True,
-        allow_delegation=False
-    )
 
   # Phase 2: Content Creation
   @agent
@@ -238,12 +230,6 @@ class PromoteTalkCrew():
         agent=self.summarizer_agent()
     )
 
-  @task
-  def generate_hooks_task(self) -> Task:
-    return Task(
-        config=self.tasks_config['generate_hooks_task'],
-        agent=self.hook_specialist_agent()
-    )
 
   @task
   def create_li_content_task(self) -> Task:
@@ -292,7 +278,6 @@ class PromoteTalkCrew():
         self.resource_researcher_agent(),
         self.transcript_analyzer_agent(),
         self.summarizer_agent(),
-        self.hook_specialist_agent(),
         self.li_content_writer_agent(),
         self.x_content_writer_agent(),
         self.fact_checker_agent(),
@@ -304,7 +289,6 @@ class PromoteTalkCrew():
         self.research_resources_task(),
         self.analyze_transcript_task(),
         self.generate_summaries_task(),
-        self.generate_hooks_task(),
         self.create_li_content_task(),
         self.create_x_content_task(),
         # Evaluation pipeline
