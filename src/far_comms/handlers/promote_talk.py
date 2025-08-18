@@ -258,9 +258,30 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
         logger.debug(f"Final crew data keys: {list(crew_data.keys())}")
         logger.debug(f"Final transcript length being sent to crew: {len(crew_data.get('transcript', ''))}")
         
-        # Run the crew and capture results
-        result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
-        logger.info("Crew completed successfully!")
+        # Run the crew with retry logic for API overload errors
+        max_retries = 3
+        retry_delays = [30, 60, 120]  # 30s, 1m, 2m delays
+        
+        for attempt in range(max_retries):
+            try:
+                result = PromoteTalkCrew().crew().kickoff(inputs=crew_data)
+                logger.info("Crew completed successfully!")
+                break
+            except Exception as e:
+                error_msg = str(e)
+                # Check for Anthropic overload errors
+                if "overloaded_error" in error_msg or "Overloaded" in error_msg or "529" in error_msg:
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                        logger.warning(f"Anthropic API overloaded (attempt {attempt + 1}/{max_retries}), retrying in {delay}s...")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"Anthropic API still overloaded after {max_retries} attempts, giving up")
+                        raise e
+                else:
+                    # Non-overload error, don't retry
+                    raise e
         
         # Save crew output to consistent directory structure
         from far_comms.utils.project_paths import get_output_dir
