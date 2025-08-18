@@ -108,6 +108,10 @@ RUN_EVENT_CONFIG = {
         "execution_mode": "row_based",
         "description": "Analyze research papers and generate insights"
     },
+    "assemble_socials": {
+        "execution_mode": "row_based",
+        "description": "Assemble final social media posts from generated content"
+    },
     # Future functions can be added here:
     # "recap": {"execution_mode": "event_based", "description": "Generate event recap"}
     # "blog": {"execution_mode": "event_based", "description": "Generate blog post"}  
