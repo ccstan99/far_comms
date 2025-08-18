@@ -27,6 +27,7 @@ promote_talk_crew:
 
 ### Backlog
 - [ ] **Image-rich slide detection** - Check how image-rich slides are identified and handled
+- [ ] **Google Drive API PPTX converter** - Replace manual Google Slides → PDF workflow with automated Google Drive API conversion (preserves graphics/charts). Setup: Google Cloud project + Drive API + service account credentials
 - [ ] **Human-in-the-loop social media** - Allow for iterating on drafted social media content to incorporate human feedback or additional LLM refinement
 - [ ] **Merge analyze_talk** - Integrate analyze_talk functionality into prepare_talk when preprocessing logic is stable
 - [ ] **Social media research agent** - Optional second agent for analyze_talk crew to find social media posts about discovered resources (Option A implementation)
