@@ -278,7 +278,7 @@ async def run_promote_talk(function_data: dict, coda_ids: CodaIds = None):
                         continue
                     else:
                         logger.error(f"Anthropic API still overloaded after {max_retries} attempts, giving up")
-                        raise e
+                        raise Exception(f"Anthropic API overloaded - failed after {max_retries} retry attempts over {sum(retry_delays[:max_retries-1])}s")
                 else:
                     # Non-overload error, don't retry
                     raise e
