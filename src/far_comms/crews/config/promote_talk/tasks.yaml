@@ -64,6 +64,8 @@ research_resources_task:
     
     Maximum 1-4 lines. Focus on main academic/research resources only.
     Skip GitHub unless no papers or project websites found.
+    
+    CRITICAL: If no resources found, return EMPTY/BLANK result. DO NOT return explanatory text like "no resources found".
   agent: resource_researcher_agent
 
 analyze_transcript_task:
@@ -393,6 +395,12 @@ final_qa_task:
     CONTEXT FIRST APPROACH: You receive ALL content through context from previous tasks.
     Extract content directly from the context provided by: resources, analysis, paragraph summary, LinkedIn content, X + Bsky content, fact-checking results, and brand voice results.
     
+    **CRITICAL: FIELD CONTENT REQUIREMENTS**:
+    - **Resources**: ONLY URLs, links, paper titles with URLs (e.g., "Paper: https://arxiv.org/abs/123, Code: https://github.com/...") OR empty string if no resources found
+    - **Analysis**: Full transcript analysis content with thesis, key points, hooks, technical details
+    - **NEVER put analysis text in Resources field** - Resources must be actionable links/URLs or empty
+    - **NEVER put explanatory text in Resources** - Use "" not "no resources found"
+    
     STRATEGIC QUESTIONS ONLY: Only ask questions to coworkers if you need:
     - Quality improvements or refinements to existing content
     - Clarification of technical accuracy concerns
@@ -435,8 +443,8 @@ final_qa_task:
     
   expected_output: >
     {
-      "Resources": "[Final resources list - only if generated, not if using existing Coda data]",
-      "Analysis": "[Complete analysis including hooks at bottom - preserve full detail from analyze_transcript_task]",
+      "Resources": "Paper: https://arxiv.org/abs/2301.12345, Code: https://github.com/author/repo, Tweet: https://x.com/handle/status/123",
+      "Analysis": "## Core Thesis\n[Main argument using speaker's exact words]\n## Key Points\n- [Key point 1]\n- [Key point 2]\n## Technical Details\n[Specific numbers, methods, metrics]\n## Notable Quotes\n> \"[Most impactful quote]\"\n## LinkedIn Hooks\n1. [Hook 1]\n2. [Hook 2]\n## Twitter/X Hooks\n1. [Hook 1]\n2. [Hook 2]",
       "Paragraph": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
