@@ -169,12 +169,12 @@ Style guides include high-performing content examples and technical formatting s
 - Verbatim content preservation (95-105% word count retention)
 
 ### Resource Research
-- Academic paper URL resolution from incomplete citations
-- arXiv, ACM Digital Library, IEEE Xplore database searching
-- Social media post discovery (Twitter/X, LinkedIn) for amplification opportunities
-- QR code URL validation and metadata extraction
-- When error encountered, webhook status in coda should be "Error" not Failed. Valid options: Error, Done, Not started, In progress
-- don't overcomplicate or overengineer code
-- all api keys in .env
-- tasks.yaml instruction markers around long input with XML tags <CONTENT>{...}</CONTENT}
-- LinkedIn audience not really business. Focus on real world or practical implications.
+- Find URLs for academic papers from partial citations
+- Search arXiv, ACM, IEEE databases for research papers
+- Discover social media posts (Twitter/X, LinkedIn) that amplify research
+- Extract and validate URLs from QR codes
+- Set webhook status to "Error" (not "Failed") when issues occur. Options: Error, Done, Not started, In progress
+- Keep code simple - avoid overengineering for small team maintainability
+- API keysare stored in .env file
+- Wrap long inputs in tasks.yaml with XML tags: <CONTENT>{...}</CONTENT>
+- LinkedIn audience: focus on real-world impact, not business jargon. Target policymakers and tech professionals, not business people.
