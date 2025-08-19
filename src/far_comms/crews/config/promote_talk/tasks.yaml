@@ -197,16 +197,34 @@ create_li_content_task:
     {style_li}
     </LINKEDIN STYLE>
 
-    REQUIREMENTS:
-    - **CRITICAL: COMPELLING HOOK**: Select and refine the most impactful hook from analyze_transcript_task - rewrite for authentic engagement using accessible language, avoid clickbait or sensationalism
-    - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Use these key takeaways as foundation for bullets when available
-    - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
-    - Incorporate "Core Thesis" and "Key Points" from transcript analysis
-    - Ensure hook/paragraph cohesion (no repetitive phrases)
-    - Write 2-3 sentence paragraph starting with "{speaker} ({affiliation}) [verb]" format
-    - **ATTRIBUTION**: Credit research to speaker/team, not institution (e.g., "Deng's framework" not "Xi'an's framework")
-    - Create 3-4 bullets ≤8 words each using summary/conclusion insights when available, otherwise "Technical Details" from analysis
-    - Focus on implications and broader significance for business audience
+    **CONTENT FLOW REQUIREMENTS - CRITICAL FOR READABILITY**:
+    
+    1. **HOOK SELECTION**: Choose hook from analysis that signals clear value to target audience
+       - What would make policymakers/tech professionals stop scrolling?
+       - Should feel like high-value content worth reading, not clickbait
+       - Can introduce problem, solution, or surprising finding - whatever resonates most
+    
+    2. **PARAGRAPH FLOW**: Start with "{speaker} ({affiliation})" then develop key insights
+       - Flexible structure based on content - can be 1-3 sentences as needed
+       - Should expand on or complement the hook, never repeat it
+       - Introduce main contributions/approaches in accessible language
+    
+    3. **BULLET STRATEGY - CRITICAL**: Each bullet adds NEW information not covered in hook/paragraph
+       - If hook mentions problem X, bullets discuss methodology, results, implications
+       - If paragraph explains approach Y, bullets cover applications, technical details, broader impact
+       - Goal: comprehensive overview where each element contributes unique value
+       - Reader should learn something new from each bullet
+    
+    4. **COHERENCE CHECK**: Hook → paragraph → bullets should feel like natural progression
+       - No repetitive phrases or concepts
+       - Each element builds understanding of speaker's contributions
+       - Complete picture for someone scrolling LinkedIn quickly
+
+    **REQUIREMENTS**:
+    - Use paragraph summary from summaries task as foundation but enhance for flow
+    - Incorporate "Core Thesis" and "Key Points" from transcript analysis strategically
+    - **ATTRIBUTION**: Credit research to speaker/team, not institution
+    - Create 3-4 bullets ≤8 words each covering methodology, results, applications, implications
     - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
   expected_output: >
     [Selected hook that will grab attention from policymakers/industry leaders]
@@ -434,7 +452,7 @@ final_qa_task:
     
     3. FINAL ASSEMBLY & APPROVAL:
        - Assemble complete LinkedIn and Twitter/X posts (content only - CTAs added in post-processing)
-       - Perform final compliance audit against 14-point rubric
+       - Perform final compliance audit against 16-point rubric
        - Make go/no-go publication decision
     
     CRITICAL PROHIBITIONS:
@@ -448,7 +466,7 @@ final_qa_task:
       "Paragraph": "[Final paragraph summary for Coda]",
       "LI content": "[Complete assembled LinkedIn post ready for Coda]",
       "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
-      "Webhook progress": "Accuracy: [X/5], Compliance: [X/14], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
+      "Webhook progress": "Accuracy: [X/5], Compliance: [X/16], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
     }
   context: ["research_resources_task", "analyze_transcript_task", "generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
   # output_file: removed - using custom handler file output in consistent location

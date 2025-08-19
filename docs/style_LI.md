@@ -19,18 +19,23 @@
   - Clarity
 - Audience: Policymakers, tech professionals, generalists
 
-## Evaluation Rubric (14 points)
+## Evaluation Rubric (16 points)
 
 ### Content Quality (8 pts)
-- **Hook Strength (2)** – Surprising or counterintuitive
+- **Hook Strength (2)** – Surprising or counterintuitive, signals clear value
 - **Evidence Specificity (2)** – Concrete data or numbers
 - **Clarity (2)** – Understandable to non-ML professionals
-- **Value (2)** – Actionable takeaways
+- **Value (2)** – Comprehensive coverage, actionable insights
 
-### Style Quality (6 pts)
+### Style Quality (8 pts)
 - **Voice (2)** – Conversational and human
-- **Conciseness (2)** – No fluff, tight writing
+- **Conciseness (2)** – No fluff, tight writing, avoids repetition
 - **Professional Tone (2)** – Polished and credible
+- **Logical Flow (2)** – Hook→paragraph→bullets build understanding naturally
+
+**Passing Score**: ≥14/16 points required for publication approval
+- Content Quality: minimum 7/8 points
+- Style Quality: minimum 7/8 points
 
 ## High-Performing Examples
 
