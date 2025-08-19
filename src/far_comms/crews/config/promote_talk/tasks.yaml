@@ -365,11 +365,18 @@ brand_voice_check_task:
     - 1: Robotic, corporate fluff, sounds obviously AI-generated
     
     Conciseness Score (1-5):
-    - 5: Every word adds value, maximum information density
+    - 5: Every word adds value, maximum information density, avoids repetition
     - 4: Highly concise with minimal waste
-    - 3: Generally tight with some unnecessary words
+    - 3: Generally tight with some unnecessary words or minor repetition
     - 2: Moderate wordiness, clear cuts possible
     - 1: Wordy and inefficient, significant trimming needed
+    
+    Flow & Clarity Score (1-5):
+    - 5: Makes perfect sense, flows logically, informative and clear
+    - 4: Good flow with minor issues, mostly clear
+    - 3: Generally coherent but some flow problems
+    - 2: Confusing transitions, unclear progression
+    - 1: Jarring flow, confusing content
   expected_output: >
     ## Final Paragraph Summary
     [FAR.AI-voiced paragraph summary in ~100 words]
@@ -390,16 +397,18 @@ brand_voice_check_task:
     ## Approval Status
     Brand Voice Score: [1-5 scale based on FAR.AI voice quality]
     Conciseness Score: [1-5 scale based on word efficiency]
-    Improvements Made: [Description of brand voice and conciseness improvements applied]
-    [APPROVED/NEEDS_REVISION - based on voice score ≥4/5 and conciseness score ≥4/5]
+    Flow & Clarity Score: [1-5 scale based on logical flow and informative clarity]
+    Improvements Made: [Description of brand voice, conciseness, and flow improvements applied]
+    [APPROVED/NEEDS_REVISION - based on all scores ≥4/5]
     
     APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
     - Brand voice score is 4/5 or higher (natural, engaging FAR.AI voice)
     - Conciseness score is 4/5 or higher (maximum tightness)
+    - Flow & clarity score is 4/5 or higher (logical, informative content)
     - FAR.AI would confidently publish this content
     - Content sounds like FAR.AI, not speaker mimicry
     - LinkedIn <150 words, bullets ≤8 words each
-    - 0 unnecessary words remain
+    - Content flows logically without jarring transitions
   context: ["fact_check_content_task"]
   agent: voice_checker_agent
 

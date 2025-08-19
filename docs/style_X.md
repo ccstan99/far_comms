@@ -12,6 +12,7 @@
 
 ## Style Notes
 - Max: **280 characters total**
+- **Ultra-dense content**: Pack maximum information while maintaining readability - not confusing gibberish
 - No hashtags or em dashes
 - Audience: ML researchers and technical readers
 - Use:
@@ -22,18 +23,23 @@
   - Shareability
   - Technical clarity
 
-## Evaluation Rubric (14 points)
+## Evaluation Rubric (16 points)
 
 ### Content Quality (8 pts)
-- **Hook Strength (2)** – Surprising or thought-provoking
+- **Hook Strength (2)** – Surprising or thought-provoking, signals clear value
 - **Evidence Specificity (2)** – Data or technical specificity
-- **Clarity (2)** – Understandable, yet sharp
-- **Value (2)** – Useful insight or framing
+- **Clarity (2)** – Understandable to ML researchers, yet sharp
+- **Value (2)** – Comprehensive insight within character limit
 
-### Style Quality (6 pts)
+### Style Quality (8 pts)
 - **Voice (2)** – Confident and precise
-- **Conciseness (2)** – Dense, no fluff
-- **Tone (2)** – Clear, non-sensational
+- **Conciseness (2)** – No fluff, avoids repetition
+- **Tone (2)** – Clear, non-sensational, professional
+- **Information Flow (2)** – Hook→body builds understanding naturally in 280 chars
+
+**Passing Score**: ≥14/16 points required for publication approval
+- Content Quality: minimum 7/8 points
+- Style Quality: minimum 7/8 points
 
 ## High-Performing Examples
 
