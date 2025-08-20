@@ -54,21 +54,15 @@ async def run_test_talk(coda_data: dict, coda_ids, output_dir: Path = None) -> d
         style_li = (docs_dir / 'style_LI.md').read_text() 
         style_x = (docs_dir / 'style_X.md').read_text()
         
-        # Prepare crew inputs - using existing Coda data
-        crew_inputs = {
-            'speaker': coda_data.get('speaker', ''),
-            'affiliation': coda_data.get('affiliation', ''),
-            'talk_title': coda_data.get('title', ''),
-            'event_name': coda_data.get('event_name', ''),
-            'speaker_x_handle': coda_data.get('x_handle', ''),
+        # Prepare crew inputs - using existing Coda data (match promote_talk pattern)
+        crew_inputs = coda_data.copy()
+        crew_inputs.update({
             'analysis_content': analysis_content,  # Use existing Coda Analysis
             'resources_content': resources_content,  # Use existing Coda Resources
-            'transcript_content': coda_data.get('transcript', ''),  # Still needed for fact-checker
-            'slides_content': coda_data.get('slides', ''),  # Still needed for fact-checker
             'style_shared': style_shared,
             'style_li': style_li,
             'style_x': style_x
-        }
+        })
         
         logger.info(f"Starting test_talk crew with Resources: {len(resources_content)} chars, Analysis: {len(analysis_content)} chars")
         
