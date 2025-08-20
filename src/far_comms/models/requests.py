@@ -15,6 +15,7 @@ class FunctionName(str, Enum):
     PROMOTE_RESEARCH = "promote_research" 
     PROMOTE_EVENT = "promote_event"
     ASSEMBLE_SOCIALS = "assemble_socials"
+    TEST_TALK = "test_talk"
 
 class CodaWebhookRequest(BaseModel):
     thisRow: str

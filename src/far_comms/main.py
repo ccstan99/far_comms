@@ -21,6 +21,11 @@ from far_comms.handlers.analyze_research_handler import (
     get_analyze_research_input, 
     display_analyze_research_input
 )
+from far_comms.handlers.test_talk import (
+    run_test_talk,
+    get_test_talk_input,
+    display_test_talk_input
+)
 from far_comms.utils.social_assembler import assemble_socials
 import uvicorn
 import os
@@ -103,6 +108,10 @@ RUN_EVENT_CONFIG = {
     "promote_talk": {
         "execution_mode": "row_based", 
         "description": "Generate social media content for talks"
+    },
+    "test_talk": {
+        "execution_mode": "row_based",
+        "description": "Test social content generation using existing Coda Analysis data"
     },
     "promote_research": {
         "execution_mode": "row_based",
@@ -526,6 +535,11 @@ FUNCTION_REGISTRY = {
         "runner": run_analyze_research,
         "get_input": get_analyze_research_input,
         "display_input": display_analyze_research_input
+    },
+    FunctionName.TEST_TALK: {
+        "runner": run_test_talk,
+        "get_input": get_test_talk_input,
+        "display_input": display_test_talk_input
     },
     FunctionName.ASSEMBLE_SOCIALS: {
         "runner": run_assemble_socials,

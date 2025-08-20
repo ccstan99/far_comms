@@ -1,0 +1,342 @@
+# All tasks follow style_shared.md, style_li.md, and style_x.md requirements
+# Test Talk workflow - IDENTICAL to promote_talk except uses Coda Analysis instead of analyze_transcript_task
+
+# COMMENTED OUT - Using Coda Resources field instead
+# research_resources_task:
+
+# COMMENTED OUT - Using Coda Analysis field instead  
+# analyze_transcript_task:
+
+generate_summaries_task:
+  description: >
+    Generate executive summaries from transcript analysis for {speaker} ({affiliation}).
+    Create both paragraph and sentence summaries that capture the essence for different audiences.
+    
+    <CODA ANALYSIS>
+    {analysis_content}
+    </CODA ANALYSIS>
+    
+    <STYLE GUIDE>
+    {style_shared}
+    </STYLE GUIDE>
+    
+    Requirements:
+    - **CRITICAL FORMAT**: Paragraph summary MUST start with "{speaker} ({affiliation}) [action verb]..."
+    - Paragraph summary: ~100 words, comprehensive yet concise, suitable for busy professionals
+    - Sentence summary: ~25 words, ultra-concise essence for executives 
+    - Follow FAR.AI voice: conversational yet authoritative, maximally concise
+    - **AVOID** overused adjectives: "groundbreaking", "exciting", "incredible", "eye-opening" 
+    - Focus on findings, implications, and business relevance
+    - Eliminate technical jargon while preserving accuracy
+    - Use clear, accessible language that makes complex topics understandable
+    
+  expected_output: >
+    ## Paragraph Summary
+    [Comprehensive 1-paragraph summary in ~100 words covering core findings and implications]
+    
+    ## Sentence Summary
+    [Ultra-concise 1-sentence summary in ~25 words capturing the essence]
+  agent: summarizer_agent
+
+
+create_li_content_task:
+  description: >
+    Create or refine LinkedIn post for {speaker}'s ({affiliation}) presentation.
+    Audience is policymakers and tech professionals, must be accessible to general, non-ML audience.
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+
+    **CONTENT FLOW REQUIREMENTS - CRITICAL FOR READABILITY**:
+    
+    1. **HOOK SELECTION**: Choose hook from analysis that signals clear value to target audience
+       - What would make policymakers/tech professionals stop scrolling?
+       - Should feel like high-value content worth reading, not clickbait
+       - Can introduce problem, solution, or surprising finding - whatever resonates most
+    
+    2. **PARAGRAPH FLOW**: Start with "{speaker} ({affiliation})" then develop key insights
+       - Flexible structure based on content - can be 1-3 sentences as needed
+       - Should expand on or complement the hook, never repeat it
+       - Introduce main contributions/approaches in accessible language
+    
+    3. **BULLET STRATEGY - CRITICAL**: Each bullet adds NEW information not covered in hook/paragraph
+       - If hook mentions problem X, bullets discuss methodology, results, implications
+       - If paragraph explains approach Y, bullets cover applications, technical details, broader impact
+       - Goal: comprehensive overview where each element contributes unique value
+       - Reader should learn something new from each bullet
+    
+    4. **COHERENCE CHECK**: Hook → paragraph → bullets should feel like natural progression
+       - No repetitive phrases or concepts
+       - Each element builds understanding of speaker's contributions
+       - Complete picture for someone scrolling LinkedIn quickly
+
+    **REQUIREMENTS**:
+    - **CRITICAL: COMPELLING HOOK**: Select and refine the most impactful hook from Coda Analysis - rewrite for authentic engagement using accessible language, avoid clickbait or sensationalism
+    - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Use these key takeaways as foundation for bullets when available
+    - Use paragraph summary from summaries task as foundation for LinkedIn paragraph
+    - Incorporate "Core Thesis" and "Key Points" from Coda Analysis
+    - Ensure hook/paragraph cohesion (no repetitive phrases)
+    - Write 2-3 sentence paragraph starting with "{speaker} ({affiliation}) [verb]" format
+    - **ATTRIBUTION**: Credit research to speaker/team, not institution (e.g., "Deng's framework" not "Xi'an's framework")
+    - Create 3-4 bullets ≤8 words each using summary/conclusion insights when available, otherwise "Technical Details" from analysis
+    - Focus on implications and broader significance for business audience
+    - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
+  expected_output: >
+    [Selected hook that will grab attention from policymakers/industry leaders]
+    
+    [2-3 sentence summary starting with "@{speaker} ({affiliation}) [verb]" format, explaining talk concepts in plain language]
+    
+    Hightlights:
+    ▸ [≤8 word bullet 1]
+    ▸ [≤8 word bullet 2] 
+    ▸ [≤8 word bullet 3]
+  context: ["generate_summaries_task"]
+  agent: li_content_writer_agent
+
+create_x_content_task:
+  description: >
+    Create or refine Twitter/X content for {speaker}'s ({speaker_x_handle}) presentation.
+    Audience is primarily ML researchers and AI/tech journalists.
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+
+    REQUIREMENTS:
+    - **CRITICAL: COMPELLING HOOK**: Select and refine the most impactful hook from Coda Analysis - rewrite for authentic shareability, avoid clickbait or hype
+    - **PRIORITIZE SUMMARY/CONCLUSION SECTIONS**: Extract the most compelling insight for the tweet when available
+    - Use "Technical Details" and "Core Thesis" from Coda Analysis for technical precision
+    - Include specific numbers, methods, results from summary sections when available, otherwise "Technical Details" section
+    - **TARGET LENGTH**: Aim for 260-280 characters in your initial draft - count characters as you write
+    - Write ULTRA-DENSE tweet, every character adds value
+    - Use abbreviations: w/, &, numbers not words
+    - **VERIFY ONLY**: Use character_counter tool once to verify final content is 260-280 chars - make minimal adjustments if needed
+    - MUST include speaker attribution: use {speaker_x_handle} if contains @ symbol, else speaker name
+    - Target ML researchers who appreciate precision and authenticity
+    - **CONTENT ONLY**: Do not include CTAs, video links, or calls-to-action - these will be added in post-processing
+  expected_output: >
+    [Hook: Selected hook that will grab attention from ML researchers & technical audience]
+    
+    [Body: Ultra-dense body with technical precision, and speaker full name if no handle] {speaker_x_handle}
+    
+    **CHARACTER COUNT**: [Use character_counter tool to verify hook + body combined - MUST be 260-280 chars for optimal info density]
+  context: ["generate_summaries_task"]
+  agent: x_content_writer_agent
+
+
+# EVALUATION TASKS (always run on final content)
+
+fact_check_content_task:
+  description: >
+    Verify all content claims against original transcript and provide corrected versions.
+    Review paragraph summary, LinkedIn content, and Twitter/X content for accuracy.
+    
+    <TRANSCRIPT>
+    {transcript_content}
+    </TRANSCRIPT>
+    
+    <SLIDES>
+    {slides_content}
+    </SLIDES>
+    
+    PROCESS:
+    1. Check every claim against transcript for accuracy
+    2. Identify any exaggerations, unsupported claims, or technical errors
+    3. If accuracy issues found, rewrite problematic sections using only verified transcript information
+    4. Ensure speaker would endorse all final content
+    5. Output corrected content versions
+    
+    ACCURACY SCORING CRITERIA (1-5):
+    - 5: Perfect accuracy - all claims directly supported by transcript
+    - 4: High accuracy with minor, acceptable simplifications for readability
+    - 3: Generally accurate but some claims need verification or correction
+    - 2: Multiple accuracy issues requiring significant corrections
+    - 1: Major factual errors, misrepresentations, or unsupported claims
+  expected_output: >
+    ## Fact-Checked Paragraph Summary
+    [Final accurate paragraph summary in ~100 words]
+    
+    ## Fact-Checked LinkedIn Content
+    [Final accurate LinkedIn hook]
+    
+    [Final accurate LinkedIn paragraph]
+    
+    Highlights:
+    ▸ [Accurate bullet 1]
+    ▸ [Accurate bullet 2]  
+    ▸ [Accurate bullet 3]
+    
+    ## Fact-Checked Twitter/X Content
+    [Final accurate Twitter/X content]
+    
+    ## Approval Status
+    Score: [1-5 scale based on factual correctness]
+    Corrections Made: [Description of any corrections applied to fix accuracy issues]
+    [APPROVED/NEEDS_REVISION - based on accuracy score ≥4/5]
+    
+    APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
+    - Accuracy score is 4/5 or higher (5/5 if perfect, 4/5 with minor simplifications acceptable)
+    - No major factual errors or misrepresentations of core findings
+    - Content represents speaker's research fairly and accurately
+    - Technical details are substantially correct (minor simplifications acceptable for platform constraints)
+  context: ["generate_summaries_task", "create_li_content_task", "create_x_content_task"]
+  agent: fact_checker_agent
+
+
+brand_voice_check_task:
+  description: >
+    Apply FAR.AI brand voice and maximum conciseness to fact-checked content 
+    for paragraph summary and social media posts for {speaker} ({affiliation}) talk from {event_name}.
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+    
+    PROCESS:
+    1. Take the corrected content from fact_check_content_task (accuracy verified)
+    2. Apply FAR.AI brand voice: conversational yet authoritative, maximally concise
+    3. Cut unnecessary words ruthlessly while preserving accuracy
+    4. Ensure professional tone and brand consistency
+    5. LinkedIn <150 words, bullets ≤8 words each
+    
+    SCORING CRITERIA:
+    Brand Voice Score (1-5):
+    - 5: Natural, engaging, authentic FAR.AI voice - conversational yet intelligent
+    - 4: Strong voice with minor improvements needed
+    - 3: Acceptable but somewhat generic or formulaic
+    - 2: Generic AI-generated tone, lacks personality
+    - 1: Robotic, corporate fluff, sounds obviously AI-generated
+    
+    Conciseness Score (1-5):
+    - 5: Every word adds value, maximum information density, avoids repetition
+    - 4: Highly concise with minimal waste
+    - 3: Generally tight with some unnecessary words or minor repetition
+    - 2: Moderate wordiness, clear cuts possible
+    - 1: Wordy and inefficient, significant trimming needed
+    
+    Flow & Clarity Score (1-5):
+    - 5: Makes perfect sense, flows logically, informative and clear
+    - 4: Good flow with minor issues, mostly clear
+    - 3: Generally coherent but some flow problems
+    - 2: Confusing transitions, unclear progression
+    - 1: Jarring flow, confusing content
+  expected_output: >
+    ## Final Paragraph Summary
+    [FAR.AI-voiced paragraph summary in ~100 words]
+    
+    ## Final LinkedIn Content
+    [FAR.AI-voiced LinkedIn hook]
+    
+    [FAR.AI-voiced LinkedIn paragraph]
+    
+    Highlights:
+    ▸ [FAR.AI-voiced bullet 1]
+    ▸ [FAR.AI-voiced bullet 2]
+    ▸ [FAR.AI-voiced bullet 3]
+    
+    ## Final Twitter/X Content
+    [FAR.AI-voiced Twitter/X content]
+    
+    ## Approval Status
+    Brand Voice Score: [1-5 scale based on FAR.AI voice quality]
+    Conciseness Score: [1-5 scale based on word efficiency]
+    Flow & Clarity Score: [1-5 scale based on logical flow and informative clarity]
+    Improvements Made: [Description of brand voice, conciseness, and flow improvements applied]
+    [APPROVED/NEEDS_REVISION - based on all scores ≥4/5]
+    
+    APPROVAL CRITERIA: Only approve (set approved_for_next_step: true) if:
+    - Brand voice score is 4/5 or higher (natural, engaging FAR.AI voice)
+    - Conciseness score is 4/5 or higher (maximum tightness)
+    - Flow & clarity score is 4/5 or higher (logical, informative content)
+    - FAR.AI would confidently publish this content
+    - Content sounds like FAR.AI, not speaker mimicry
+    - LinkedIn <150 words, bullets ≤8 words each
+    - Content flows logically without jarring transitions
+  context: ["fact_check_content_task"]
+  agent: voice_checker_agent
+
+
+# FINAL QUALITY CONTROL & ASSEMBLY
+
+final_qa_task:
+  description: >
+    Final quality control, assembly, and approval for all content after evaluation pipeline.
+    
+    CONTEXT FIRST APPROACH: You receive ALL content through context from previous tasks.
+    Extract content directly from the context provided by: resources, analysis, paragraph summary, LinkedIn content, X + Bsky content, fact-checking results, and brand voice results.
+    
+    **CRITICAL: FIELD CONTENT REQUIREMENTS**:
+    - **Resources**: ONLY URLs, links, paper titles with URLs (e.g., "Paper: https://arxiv.org/abs/123, Code: https://github.com/...") OR empty string if no resources found
+    - **Analysis**: Full transcript analysis content with thesis, key points, hooks, technical details
+    - **NEVER put analysis text in Resources field** - Resources must be actionable links/URLs or empty
+    - **NEVER put explanatory text in Resources** - Use "" not "no resources found"
+    
+    STRATEGIC QUESTIONS ONLY: Only ask questions to coworkers if you need:
+    - Quality improvements or refinements to existing content
+    - Clarification of technical accuracy concerns
+    - Brand voice adjustments
+    DO NOT ask for content that should already be available through context (resources, analysis, summaries, etc.)
+    
+    <GENERAL STYLE>
+    {style_shared}
+    </GENERAL STYLE>
+    
+    <LINKEDIN STYLE>
+    {style_li}
+    </LINKEDIN STYLE>
+    
+    <TWITTER STYLE>
+    {style_x}
+    </TWITTER STYLE>
+    
+    FINAL QA WORKFLOW:
+    
+    1. REVIEW EVALUATION RESULTS:
+       - Check fact-checker accuracy score (must be ≥4/5)
+       - Check brand voice compliance score (must be ≥4/5)
+       - Review any corrections or improvements made
+    
+    2. ITERATIVE REFINEMENT (if needed):
+       - If scores below threshold, identify specific issues
+       - Delegate back to appropriate agents for refinement
+       - Re-run evaluation pipeline on refined content
+       - Continue until perfect quality achieved
+    
+    3. FINAL ASSEMBLY & APPROVAL:
+       - Assemble complete LinkedIn and Twitter/X posts (content only - CTAs added in post-processing)
+       - Perform final compliance audit against 16-point rubric
+       - Make go/no-go publication decision
+    
+    CRITICAL PROHIBITIONS:
+    - NEVER approve content with hashtags (immediate rejection)
+    - All claims MUST match original transcript
+    
+  expected_output: >
+    {
+      "Resources": "Paper: https://arxiv.org/abs/2301.12345, Code: https://github.com/author/repo, Tweet: https://x.com/handle/status/123",
+      "Analysis": "## Core Thesis\n[Main argument using speaker's exact words]\n## Key Points\n- [Key point 1]\n- [Key point 2]\n## Technical Details\n[Specific numbers, methods, metrics]\n## Notable Quotes\n> \"[Most impactful quote]\"\n## LinkedIn Hooks\n1. [Hook 1]\n2. [Hook 2]\n## Twitter/X Hooks\n1. [Hook 1]\n2. [Hook 2]",
+      "Paragraph": "[Final paragraph summary for Coda]",
+      "LI content": "[Complete assembled LinkedIn post ready for Coda]",
+      "X + Bsky content": "[Complete assembled Twitter/X content ready for Coda]",
+      "Webhook progress": "Accuracy: [X/5], Compliance: [X/16], Status: [APPROVED/NEEDS_REVISION/REJECTED], Issues: [any blocking issues], Notes: [revision feedback if needed]. APPROVED=Done, NEEDS_REVISION/REJECTED=Needs Review"
+    }
+  context: ["generate_summaries_task", "create_li_content_task", "create_x_content_task", "fact_check_content_task", "brand_voice_check_task"]
+  # output_file: removed - using custom handler file output in consistent location
+  agent: final_qa_agent
