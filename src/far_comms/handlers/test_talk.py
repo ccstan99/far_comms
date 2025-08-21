@@ -253,12 +253,15 @@ def get_test_talk_input(raw_data: dict) -> dict:
         'speaker': raw_data.get('Speaker', ''),
         'affiliation': raw_data.get('Affiliation', ''),
         'title': raw_data.get('Title', ''),
+        'talk_title': raw_data.get('Title', ''),  # Alias for YAML compatibility
         'event_name': raw_data.get('Event name', ''),
-        'x_handle': raw_data.get('X handle', ''),
+        'speaker_x_handle': raw_data.get('X handle', ''),  # Match template variable name
         'analysis': raw_data.get('Analysis', ''),
         'resources': raw_data.get('Resources', ''),
         'transcript': raw_data.get('Transcript', ''),  # Still needed for fact-checker
-        'slides': raw_data.get('Slides', ''),  # Still needed for fact-checker  
+        'transcript_content': raw_data.get('Transcript', ''),  # Alias for YAML compatibility
+        'slides': raw_data.get('Slides', ''),  # Still needed for fact-checker
+        'slides_content': raw_data.get('Slides', ''),  # Alias for YAML compatibility
         'paragraph': raw_data.get('Paragraph', ''),
         'li_content': raw_data.get('LI content', ''),
         'x_+_bsky_content': raw_data.get('X + Bsky content', '')
