@@ -116,6 +116,8 @@ except ImportError:
     # dotenv not available, skip
     pass
 
+logger = logging.getLogger(__name__)
+
 # Try importing PyMuPDF4LLM for better markdown extraction
 try:
     import pymupdf4llm
@@ -123,8 +125,6 @@ try:
 except ImportError:
     PYMUPDF4LLM_AVAILABLE = False
     logger.warning("PyMuPDF4LLM not available, falling back to standard extraction")
-
-logger = logging.getLogger(__name__)
 
 def _filter_main_content(text_content: str) -> str:
     """

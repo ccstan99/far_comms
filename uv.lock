@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12.4'",
@@ -838,6 +838,7 @@ dependencies = [
     { name = "duckduckgo-search" },
     { name = "fastapi" },
     { name = "google-search-results" },
+    { name = "langchain-community" },
     { name = "opencv-python" },
     { name = "pymupdf" },
     { name = "pyzbar" },
@@ -853,6 +854,7 @@ requires-dist = [
     { name = "duckduckgo-search" },
     { name = "fastapi" },
     { name = "google-search-results" },
+    { name = "langchain-community", specifier = ">=0.3.0" },
     { name = "opencv-python" },
     { name = "pymupdf", specifier = ">=1.23.0" },
     { name = "pyzbar" },
